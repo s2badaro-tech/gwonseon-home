@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>⚙ 설정방</title>
+<!-- 깃허브판 설정방 v4 (2026-11-26): 화면은 깃허브, 자료는 설정방 Apps Script(doPost). 대문 로그인 한 번으로 들어옴. 운영자만 씀 -->
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<meta name="theme-color" content="#1f6fb2">
+<style>
+  :root{--bg:#f2f4f7;--ink:#1d2430;--sub:#5b6677;--line:#d5dae1;--blue:#1f6fb2;--org:#d9730d;--grn:#2e7d32;--red:#c62828;--card:#fff}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--ink);font-size:18px;
+    font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+  .wrap{max-width:560px;margin:0 auto;padding:16px 14px 40px}
+  h1{font-size:28px;margin:4px 0 2px;text-align:center}
+  .sub{color:var(--sub);text-align:center;font-size:15px;margin-bottom:16px}
+  .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  h2{font-size:20px;margin:0 0 12px}
+  label{display:block;font-size:16px;color:var(--sub);margin:10px 0 4px}
+  input{width:100%;font-size:22px;padding:12px;border:2px solid var(--line);border-radius:10px;font-family:inherit}
+  button{font:inherit;font-size:18px;border:0;border-radius:10px;padding:12px 14px;min-height:48px;cursor:pointer}
+  button:active{transform:scale(.97)}
+  .big{width:100%;background:var(--blue);color:#fff;font-weight:700;font-size:20px;margin-top:14px;min-height:56px}
+  .row{display:flex;gap:8px;align-items:center}
+  .row input{flex:1}
+  .row button{background:var(--grn);color:#fff;font-weight:700;white-space:nowrap}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
+  .top .who{font-size:17px}
+  .ghost{background:#e3e6eb;color:var(--ink);font-size:16px;min-height:44px;padding:8px 12px}
+  .person{border-top:1px solid var(--line);padding:14px 0}
+  .person:first-of-type{border-top:0;padding-top:0}
+  .pname{font-size:22px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+  .tag{font-size:14px;font-weight:400;border-radius:6px;padding:2px 8px;margin-left:6px;background:#eef1f5;color:var(--sub)}
+  .meta{font-size:14px;color:var(--sub);margin:2px 0 10px}
+  .chips{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+  .chip{background:#eef1f5;color:var(--sub);font-size:16px;line-height:1.2;padding:10px 4px;border:2px solid transparent}
+  .chip.on{color:#fff;font-weight:700}
+  .chip.wl.on{background:var(--blue)}
+  .chip.coil.on{background:var(--org)}
+  .chip.sup.on{background:#5b3fa8}
+  .acts{display:flex;gap:8px}
+  .acts button{flex:1;background:#eef1f5;color:var(--ink);font-size:16px}
+  .acts .danger{color:var(--red)}
+  .off{opacity:.55}
+  .off .chips{display:none}
+  .help{font-size:15px;color:var(--sub);line-height:1.5}
+  .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);max-width:92%;background:#1d2430;color:#fff;
+    padding:14px 18px;border-radius:12px;font-size:17px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+  .toast.on{opacity:1}
+  .toast.err{background:var(--red)}
+  .busy{position:fixed;inset:0;background:rgba(255,255,255,.5);display:none;z-index:8}
+  .busy.on{display:block}
+  .hide{display:none}
+  .links{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .links a{display:block;text-align:center;padding:12px;border-radius:10px;background:#eef1f5;color:var(--ink);text-decoration:none;font-size:16px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚙ 설정방</h1>
+  <div class="sub">권선 작업실 공통 설정 · 운영자만 씁니다</div>
+
+  <!-- 들어가기 -->
+  <div class="card" id="loginBox">
+    <h2>들어가기</h2>
+    <label>이름</label><input id="lName" autocomplete="username">
+    <label>PIN (숫자)</label><input id="lPin" type="password" inputmode="numeric" autocomplete="current-password">
+    <button class="big" id="lBtn">들어가기</button>
+    <p class="help">작업기록·코일 관리 앱과 같은 이름과 PIN입니다. 여기서 들어가면 두 앱도 함께 들어가집니다.</p>
+  </div>
+
+  <!-- 임시 PIN 바꾸기 -->
+  <div class="card hide" id="pinBox">
+    <h2 id="pinTitle">내 PIN 바꾸기</h2>
+    <label>지금 PIN</label><input id="pOld" type="password" inputmode="numeric">
+    <label>새 PIN (숫자 4~8자리)</label><input id="pNew" type="password" inputmode="numeric">
+    <label>새 PIN 한 번 더</label><input id="pNew2" type="password" inputmode="numeric">
+    <button class="big" id="pBtn">PIN 바꾸기</button>
+    <button class="ghost" id="pCancel" style="width:100%;margin-top:8px">닫기</button>
+  </div>
+
+  <div id="main" class="hide">
+    <div class="top">
+      <div class="who" id="who"></div>
+      <div><a class="ghost" id="out" href="../" style="display:inline-block;padding:12px 14px;border-radius:10px;text-decoration:none">🏠 대문으로</a></div>
+    </div>
+
+    <div class="card hide" id="userOnly">
+      <h2>운영자만 쓰는 방입니다</h2>
+      <p class="help">사람 등록·관리자 지정은 운영자만 할 수 있습니다. 내 PIN 바꾸기는 대문 왼쪽 위 <b>👤 내 이름</b>을 누르세요. PIN을 잊으면 운영자에게 초기화를 부탁하세요.</p>
+    </div>
+
+    <div id="adminOnly">
+    <div class="card">
+      <h2>➕ 사람 등록</h2>
+      <div class="row"><input id="newName" placeholder="이름"><button id="addBtn">등록</button></div>
+      <p class="help">등록하면 임시 PIN <b id="tp"></b>. 처음 들어갈 때 자기 PIN으로 바꾸게 됩니다.</p>
+    </div>
+
+    <div class="card">
+      <h2>👥 사람 명단</h2>
+      <p class="help" style="margin-top:-6px">버튼을 누르면 켜고 끕니다. <b style="color:var(--blue)">작업기록</b>·<b style="color:var(--org)">코일</b> = 그 방 관리자, <b style="color:#5b3fa8">운영자</b> = 이 설정방에 들어오는 사람 (작업기록 관리 전부)</p>
+      <div id="list"></div>
+    </div>
+    </div>
+
+    <div class="card">
+      <h2>🚪 방으로 가기</h2>
+      <div class="links" id="links"></div>
+      <p class="help">방 안의 나머지 설정(작업기록 통계·수정 권한, 코일 입고·실사 등)은 그 방 관리자가 그 방 안에서 합니다.</p>
+    </div>
+    <p class="help" style="text-align:center">바꾼 내용은 작업기록 시트 '설정방기록' 탭에 남습니다. <span id="ver"></span></p>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="busy" id="busy"></div>
+<script src="../auth.js"></script>
+<script>
+var $=function(id){return document.getElementById(id)};
+var token='', mustChange=false, users=[], isSup=false, pinTmp='';
+function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){return null}}
+var tmT;function toast(m,err){var t=$('toast');t.textContent=m;t.className='toast on'+(err?' err':'');clearTimeout(tmT);tmT=setTimeout(function(){t.className='toast'},err?4000:2600)}
+// 깃허브판: 설정방 서버(doPost)와 자료만 주고받음. 운영자 확인은 서버에서 함
+function call(fn,args,ok){
+  $('busy').className='busy on';
+  fetch('https://script.google.com/macros/s/AKfycbyxbx3u1GLO8q8ANDY3cVfcuDvkB7rdwe24DY3M8ribtqwOMx9-V6BA3I5BDmmyH5RT/exec',
+    {method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({fn:fn,args:args})})
+    .then(function(r){return r.json()})
+    .then(function(j){$('busy').className='busy';if(j&&j.ok)return ok&&ok(j.v);fail(String((j&&j.e)||'서버 응답이 이상합니다'))},
+          function(){$('busy').className='busy';fail('인터넷 연결을 확인해 주세요.')});
+}
+function fail(m){
+  if(m.indexOf('[로그인]')>=0){ls('st_token',null);token='';show('login')}
+  toast(m.replace('[로그인]','').trim(),true);
+}
+function show(w){
+  $('loginBox').className='card'+(w==='login'?'':' hide');
+  $('pinBox').className='card'+(w==='pin'?'':' hide');
+  $('main').className=w==='main'?'':'hide';
+}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function render(){
+  $('list').innerHTML=users.map(function(u,i){
+    return '<div class="person'+(u.off?' off':'')+'"><div class="pname"><span>'+esc(u.name)+
+      (u.off?'<span class="tag">사용 안 함</span>':'')+(u.temp&&!u.off?'<span class="tag">임시 PIN</span>':'')+'</span></div>'+
+      '<div class="meta">등록 '+esc(u.reg||'-')+' · 마지막 접속 '+esc(u.last||'-')+'</div>'+
+      '<div class="chips">'+
+        '<button class="chip wl'+(u.wl?' on':'')+'" data-i="'+i+'" data-a="setWorklogAdmin">작업기록<br>관리자</button>'+
+        '<button class="chip coil'+(u.coil?' on':'')+'" data-i="'+i+'" data-a="setCoilAdmin">코일<br>관리자</button>'+
+        '<button class="chip sup'+(u.sup?' on':'')+'" data-i="'+i+'" data-a="setSuper">전체<br>관리자</button>'+
+      '</div><div class="acts">'+
+        (u.off?'<button data-i="'+i+'" data-a="on">다시 사용</button>'
+              :'<button data-i="'+i+'" data-a="resetPin">PIN 초기화</button><button class="danger" data-i="'+i+'" data-a="off">사용 안 함</button>')+
+      '</div></div>';
+  }).join('')||'<p class="help">명단이 비어 있습니다.</p>';
+}
+$('list').addEventListener('click',function(e){
+  var b=e.target.closest('button');if(!b)return;
+  var u=users[+b.getAttribute('data-i')],a=b.getAttribute('data-a');
+  if(a==='resetPin'){if(!confirm(u.name+' 님 PIN을 임시 PIN으로 초기화할까요?'))return;return doAct('resetPin',{name:u.name})}
+  if(a==='off'){if(!confirm(u.name+' 님을 사용 안 함으로 바꿀까요?\n(기록은 그대로 남고, 두 앱 로그인만 막힙니다)'))return;return doAct('setOff',{name:u.name,off:true})}
+  if(a==='on'){if(!confirm(u.name+' 님을 다시 사용하게 할까요? (임시 PIN)'))return;return doAct('setOff',{name:u.name,off:false})}
+  var key={setWorklogAdmin:'wl',setCoilAdmin:'coil',setSuper:'sup'}[a];
+  var on=!u[key],nm={wl:'작업기록 관리자',coil:'코일 관리자',sup:'전체 관리자'}[key];
+  if(!confirm(u.name+' 님을 '+nm+(on?'로 정할까요?':'에서 뺄까요?')))return;
+  doAct(a,{name:u.name,on:on});
+});
+function doAct(a,args){call('act',[token,a,args],function(r){users=r.users;render();toast(r.msg||('바꿨습니다.'+(r.note?' '+r.note:'')))})}
+function load(){call('getAll',[token],function(r){
+  mustChange=r.me.mustChange;users=r.users;isSup=!!r.me.sup;
+  $('adminOnly').className=isSup?'':'hide';$('userOnly').className='card'+(isSup?' hide':'');$('who').textContent='👤 '+r.me.name+' 님';$('tp').textContent=r.tempPin;$('ver').textContent='('+r.version+')';
+  var L=function(u,t){return '<a href="'+u+'">'+t+'</a>'};
+  $('links').innerHTML=L(r.sites.home,'🏠 대문')+L(r.sites.worklog,'📒 작업기록')+L(r.sites.coil,'🧵 코일 관리');
+  render();
+  if(mustChange){$('pinTitle').textContent='임시 PIN이라 먼저 내 PIN을 정해 주세요';$('pCancel').style.display='none';$('pOld').value=pinTmp;show('pin')}else show('main');
+})}
+// 한 번 로그인: 여기서 들어가도 작업기록·코일 관리까지 함께 들어감
+$('lBtn').onclick=function(){
+  var n=$('lName').value.trim(),p=$('lPin').value.trim();
+  if(!n||!p)return toast('이름과 PIN을 적어주세요.',true);
+  $('busy').className='busy on';
+  GW.login(n,p).then(function(){$('busy').className='busy';token=GW.stToken();$('lPin').value='';pinTmp=p;
+    if(!token)return toast('설정방 서버에 들어가지 못했습니다. 잠시 뒤 다시 해 주세요.',true);load()},
+    function(e){$('busy').className='busy';toast(e.message,true)});
+};
+$('lPin').addEventListener('keydown',function(e){if(e.key==='Enter')$('lBtn').click()});
+// PIN 바꾸기 (임시 PIN일 때만 여기서): 세 곳 출입증을 새 PIN으로 함께 다시 받음
+$('pBtn').onclick=function(){
+  var o=$('pOld').value.trim(),a=$('pNew').value.trim(),a2=$('pNew2').value.trim();
+  if(!o)return toast('지금 PIN을 적어주세요.',true);
+  if(!/^\d{4,8}$/.test(a))return toast('새 PIN은 숫자 4~8자리로 적어주세요.',true);
+  if(a!==a2)return toast('새 PIN 두 번이 서로 다릅니다.',true);
+  if(a===o)return toast('지금 PIN과 다른 숫자로 정해 주세요.',true);
+  $('busy').className='busy on';
+  GW.changePin(GW.name(),o,a).then(function(){$('busy').className='busy';$('pOld').value=$('pNew').value=$('pNew2').value='';pinTmp='';
+    token=GW.stToken();toast('PIN을 바꿨습니다. 작업기록·코일 모두 새 PIN입니다.');mustChange=false;load()},
+    function(e){$('busy').className='busy';toast(e.message,true)});
+};
+$('pCancel').onclick=function(){show('main')};
+$('addBtn').onclick=function(){
+  var n=$('newName').value.trim();if(!n)return toast('이름을 적어주세요.',true);
+  if(!confirm(n+' 님을 등록할까요?'))return;
+  call('act',[token,'addUser',{name:n}],function(r){$('newName').value='';users=r.users;render();toast(r.msg)});
+};
+$('lName').value=GW.name();
+token=GW.stToken();
+if(token)load();else show('login');
+</script>
+</body>
+</html>

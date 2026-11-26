@@ -76,7 +76,7 @@
 </head>
 <body>
 <div class="wrap">
-  <button class="gear" data-url="https://sites.google.com/view/gwonseon-home/settings" aria-label="설정" title="설정">⚙</button>
+  <button class="gear" id="gear" data-url="./settings/" aria-label="설정" title="설정 (운영자)" style="display:none">⚙</button>
   <button class="me" id="meBtn">👤</button>
   <div class="brand">POSCO GY솔루션</div>
   <h1>🔧 권선 작업실</h1>
@@ -161,8 +161,9 @@
   document.getElementById('sheetOk').addEventListener('click', function () { sh.classList.remove('on'); });
   // ── v6: 한 번 로그인 ──
   var $=function(i){return document.getElementById(i);}, lg=$('lg'), pinTmp='';
-  function showMe(){ var nm=GW.name(); $('meBtn').textContent='👤 '+nm; $('meBtn').classList.add('on'); }
-  function showLogin(msg){ $('meBtn').classList.remove('on'); $('lgForm').style.display=''; $('pnForm').style.display='none';
+  // ⚙ 설정방은 운영자만 (아직 설정방 출입증이 없으면 일단 보여 줌 — 들어가면 설정방이 다시 확인)
+  function showMe(){ var nm=GW.name(); $('meBtn').textContent='👤 '+nm; $('meBtn').classList.add('on'); $('gear').style.display=(GW.isSup()||!GW.stToken())?'':'none'; }
+  function showLogin(msg){ $('meBtn').classList.remove('on'); $('gear').style.display='none'; $('lgForm').style.display=''; $('pnForm').style.display='none';
     $('lgName').value=GW.name(); $('lgPin').value=''; $('lgErr').textContent=msg||''; lg.classList.add('on'); }
   function showPin(force){ $('lgForm').style.display='none'; $('pnForm').style.display='';
     ['pnOld','pnNew','pnNew2'].forEach(function(i){$(i).value='';}); $('pnErr').textContent='';
