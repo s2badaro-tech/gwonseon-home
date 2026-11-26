@@ -738,7 +738,9 @@ function renderJobs(pre, spec) {
 function srcName(s) { return s === '코일' || s === '마그네틱코일' || s === '마그네틱 코일' ? '전자브레이크' : s; }
 function pickJob(pre, j) {
   $(pre + 'Job').value = j.no;
-  if (j.kw && isFinite(n(j.kw))) $(pre + 'Kw').value = n(j.kw);
+  var k = $(pre + 'Kw');
+  if (j.kw && isFinite(n(j.kw))) { k.value = n(j.kw); k.placeholder = '예: 37'; }
+  else { k.value = ''; k.placeholder = '이 작업엔 kW가 없어요. 직접 넣기'; } // v35: 앞 작업 kW가 남아 잘못 저장되지 않게
 }
 // 코일 규격에 맞는 작업이 있으면 자동 선택 (여러 개면 가장 최근). 사람이 직접 고르거나 쓴 뒤에는 건드리지 않음
 function autoJob(pre, spec) {
@@ -1062,7 +1064,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v34', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v35', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
