@@ -1,6 +1,6 @@
 // 권선 작업실 대문 (깃허브 시험판) - 화면 파일을 휴대폰에 저장해 두고 바로 띄움.
 // 화면을 먼저 보여주고, 뒤에서 새 버전을 받아 다음 번에 씀.
-var CACHE = 'gate-v1';
+var CACHE = 'gate-v2';
 var FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES); }));

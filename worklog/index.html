@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>권선 작업기록</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1f5fa8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<base target="_top">
+<style>
+  :root { --bg:#f3f5f8; --card:#fff; --ink:#1b2430; --sub:#5d6b7c; --line:#d5dce5;
+          --pri:#1f5fa8; --pri2:#e3edf9; --ok:#1d7a46; --warn:#b5541b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+         background:var(--bg); color:var(--ink); font-size:17px; }
+  header { position:sticky; top:0; z-index:5; background:var(--pri); color:#fff; padding:10px 14px; }
+  header h1 { margin:0; font-size:19px; padding-right:52px; }
+  .homebtn { position:absolute; right:12px; top:8px; width:42px; height:42px; display:flex; align-items:center; justify-content:center; font-size:24px; text-decoration:none; background:#ffffff22; border:1px solid #fff8; border-radius:10px; }
+  header .who { font-size:14px; opacity:.9; margin-top:2px; }
+  header .who button { background:none; border:1px solid #fff8; color:#fff; border-radius:6px; font-size:13px; padding:2px 8px; margin-left:6px; }
+  nav { display:flex; background:#fff; border-bottom:1px solid var(--line); position:sticky; top:58px; z-index:4; }
+  nav button { flex:1; padding:13px 2px; border:0; background:none; font-size:15px; white-space:nowrap; color:var(--sub); border-bottom:3px solid transparent; }
+  nav button.on { color:var(--pri); border-bottom-color:var(--pri); font-weight:700; }
+  main { padding:14px 14px 110px; max-width:640px; margin:0 auto; }
+  .seg { display:flex; gap:8px; margin-bottom:12px; }
+  .seg button { flex:1; padding:12px; border:1px solid var(--line); background:#fff; border-radius:10px; font-size:16px; }
+  .seg button.on { background:var(--pri2); border-color:var(--pri); color:var(--pri); font-weight:700; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 10px; }
+  .f { display:flex; flex-direction:column; }
+  .f.wide { grid-column:1 / -1; }
+  label { font-size:14px; color:var(--sub); margin:0 0 4px 2px; }
+  input, select, textarea { width:100%; font-size:18px; padding:11px 10px; border:1px solid var(--line); border-radius:9px; background:#fff; color:var(--ink); }
+  textarea { min-height:80px; resize:vertical; }
+  input:focus, textarea:focus { outline:2px solid var(--pri); border-color:var(--pri); }
+  .btn { display:block; width:100%; padding:15px; font-size:18px; font-weight:700; border:0; border-radius:11px; background:var(--pri); color:#fff; margin-top:14px; }
+  .btn.sub { background:#fff; color:var(--pri); border:1px solid var(--pri); }
+  .btn:disabled { opacity:.5; }
+  .photo { margin-top:12px; padding:10px; border:1px dashed var(--line); border-radius:10px; background:#fff; }
+  .photo img { max-width:100%; max-height:200px; display:block; margin-top:8px; border-radius:6px; }
+  .note { font-size:14px; color:var(--sub); }
+  .editbar { background:#fff4e5; border:1px solid #f0c48a; color:var(--warn); padding:10px; border-radius:9px; margin-bottom:12px; font-size:15px; }
+  .editbar button { float:right; border:0; background:none; color:var(--warn); text-decoration:underline; font-size:15px; }
+  .pending { background:#fff4e5; border:1px solid #f0c48a; padding:10px; border-radius:9px; margin-bottom:12px; font-size:15px; }
+  .pending button { margin-left:6px; }
+  .filters { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:8px; }
+  .filters .q { grid-column:1 / -1; }
+  .count { font-size:14px; color:var(--sub); margin:6px 2px 8px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:11px; padding:12px; margin-bottom:10px; }
+  .card .t { font-weight:700; font-size:17px; }
+  .card .s { font-size:15px; color:var(--ink); margin-top:4px; line-height:1.45; }
+  .card .m { font-size:13px; color:var(--sub); margin-top:6px; }
+  .card table { width:100%; border-collapse:collapse; margin-top:10px; font-size:15px; }
+  .card td { padding:5px 4px; border-top:1px solid #eef1f5; vertical-align:top; }
+  .card td:first-child { color:var(--sub); width:44%; }
+  .card .acts { display:flex; gap:8px; margin-top:10px; }
+  .card .acts button { flex:1; padding:10px; font-size:15px; border-radius:8px; border:1px solid var(--pri); background:#fff; color:var(--pri); }
+  .card .ebtn { float:right; margin:-2px 0 4px 8px; padding:7px 12px; font-size:15px; border-radius:8px; border:1px solid var(--pri); background:#fff; color:var(--pri); }
+  .toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#222d; color:#fff; padding:12px 18px; border-radius:10px; font-size:16px; z-index:20; display:none; max-width:90%; text-align:center; }
+  .modal { position:fixed; inset:0; background:#0007; display:flex; align-items:center; justify-content:center; z-index:30; }
+  .modal .box { background:#fff; border-radius:14px; padding:20px; width:88%; max-width:380px; }
+  .modal h2 { margin:0 0 10px; font-size:19px; }
+  .hide { display:none !important; }
+  .rday { position:sticky; top:106px; z-index:2; background:var(--bg,#f4f6f9); font-weight:700; font-size:16px; padding:10px 2px 6px; color:var(--ink); }
+  .rday small { font-weight:400; color:var(--sub); margin-left:6px; }
+  .rrow { display:block; width:100%; text-align:left; background:var(--card,#fff); border:1px solid var(--line); border-radius:11px; padding:12px; margin-bottom:8px; font-size:16px; color:var(--ink); }
+  .rrow:active { background:var(--pri2); }
+  .rrow .rt { font-weight:700; font-size:17px; }
+  .rrow .rm { font-size:14px; color:var(--sub); margin-top:4px; }
+  .rrow .go { float:right; color:var(--pri); font-size:14px; margin-top:2px; }
+  .rtools { display:flex; gap:8px; margin-bottom:10px; align-items:stretch; }
+  .rtools button, .rtools input { flex:1; padding:12px 6px; font-size:16px; border-radius:10px; border:1px solid var(--line); background:#fff; color:var(--ink); }
+  .rtools button.on { background:var(--pri2); border-color:var(--pri); color:var(--pri); font-weight:700; }
+  .focusbar { background:var(--pri2); border:1px solid var(--pri); border-radius:10px; padding:10px; margin-bottom:10px; font-size:15px; }
+  .focusbar button { float:right; padding:6px 12px; font-size:15px; border-radius:8px; border:1px solid var(--pri); background:#fff; color:var(--pri); margin:-3px 0 0 8px; }
+  .gbtn { width:100%; padding:11px; font-size:16px; border-radius:10px; border:1px dashed var(--pri); background:var(--pri2); color:var(--pri); font-weight:700; }
+  .fbox .gbtn { margin-top:10px; }
+  #guideModal .box { max-width:640px; width:94%; padding:14px; max-height:92vh; overflow:auto; }
+  #guideModal img { width:100%; border:1px solid var(--line); border-radius:8px; background:#fff; min-height:120px; }
+  #guideModal ol { margin:8px 0 0; padding-left:22px; font-size:15px; line-height:1.5; }
+  .qbadge { display:inline-block; margin-left:8px; font-size:13px; background:#fff4e5; color:#8a4b00; border-radius:10px; padding:1px 8px; vertical-align:2px; }
+  .f.rw input, .f.rw select { border-color:#e08a00; background:#fffaf0; }
+  .rhint { font-size:13px; color:#b26a00; margin:3px 2px 0; }
+  .hist { margin-top:8px; font-size:14px; }
+  .hist div { border-top:1px dashed #e3e7ee; padding:5px 0; }
+  .lock { font-size:13px; color:var(--sub); margin-top:8px; }
+  .optrow { display:flex; gap:8px; margin:8px 0; }
+  .optrow button { flex:1; padding:12px 6px; font-size:15px; border-radius:10px; border:1px solid var(--line); background:#fff; }
+  .optrow button.on { background:var(--pri2); border-color:var(--pri); color:var(--pri); font-weight:700; }
+  .empty { text-align:center; color:var(--sub); padding:30px 0; }
+  .wbtns { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:8px; }
+  .wbtns button { min-height:54px; font-size:19px; font-weight:700; border:1px solid var(--pri); background:var(--pri2); color:var(--pri); border-radius:10px; padding:0; }
+  .wbtns button:active { background:var(--pri); color:#fff; }
+  .wtools { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  .wbtns button.on { background:var(--pri); color:#fff; }
+  .wbtns.w2 { grid-template-columns:1fr 1fr; }
+  .fbox { background:#fff; border:1px solid var(--line); border-radius:11px; padding:10px; margin-bottom:8px; }
+  .fbox { padding-top:2px; }
+  .fbox .fl { font-size:14px; color:var(--sub); margin:10px 2px 4px; }
+  .fbox .wbtns.w3 { grid-template-columns:repeat(3, 1fr); }
+  .wbtns button { line-height:1.15; padding:0 4px; }
+  .fbox .wbtns { margin-top:4px; }
+  .fbox .wbtns button { min-height:46px; font-size:17px; }
+  .fnums { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .freset { margin-top:8px; width:100%; min-height:44px; font-size:15px; border:1px solid var(--line); background:#fff; border-radius:10px; color:var(--sub); }
+  .wtools button { min-height:50px; font-size:16px; border:1px solid var(--line); background:#fff; border-radius:10px; }
+  .wsum { margin-top:8px; font-size:16px; font-weight:700; color:var(--ok); }
+  .box label { display:block; }
+  .adm { background:#fff; border:1px solid var(--line); border-radius:11px; margin-bottom:10px; }
+  .adm > summary { padding:14px; font-size:17px; font-weight:700; cursor:pointer; list-style:none; }
+  .adm > summary::-webkit-details-marker { display:none; }
+  .adm > summary::after { content:'▾'; float:right; color:var(--sub); }
+  .adm[open] > summary::after { content:'▴'; }
+  .adm .in { padding:0 14px 14px; }
+  .urow { border-top:1px solid #eef1f5; padding:10px 0; font-size:15px; }
+  .urow .n { font-weight:700; font-size:17px; }
+  .tag { display:inline-block; font-size:12px; padding:1px 7px; border-radius:10px; background:var(--pri2); color:var(--pri); margin-left:6px; vertical-align:2px; }
+  .tag.g { background:#eef1f5; color:var(--sub); }
+  .tag.w { background:#fff4e5; color:var(--warn); }
+  .urow .ub { display:flex; gap:6px; margin-top:8px; }
+  .urow .ub button { flex:1; padding:9px 4px; font-size:14px; border-radius:8px; border:1px solid var(--pri); background:#fff; color:var(--pri); }
+  .urow .ub button.del { border-color:#c0392b; color:#c0392b; }
+  .pinbox { background:#e9f6ee; border:1px solid #9ccfb0; border-radius:10px; padding:12px; margin:12px 0; font-size:15px; line-height:1.5; }
+  .pinbox .big { font-size:34px; font-weight:800; letter-spacing:8px; color:var(--ok); margin:4px 0; }
+  .pinbox textarea { font-size:14px; min-height:96px; margin-top:8px; }
+  .stbl { width:100%; border-collapse:collapse; font-size:15px; }
+  .stbl td { padding:6px 4px; border-top:1px solid #eef1f5; vertical-align:top; }
+  .stbl td:first-child { color:var(--sub); width:45%; }
+  .err { color:#c0392b; font-size:15px; margin-top:8px; min-height:1em; }
+  .linkbtn { display:block; padding:13px; border:1px solid var(--pri); border-radius:10px; color:var(--pri); text-decoration:none; margin-top:8px; text-align:center; font-size:16px; background:#fff; }
+</style>
+</head>
+<body>
+<header>
+  <a class="homebtn" href="../" title="처음 화면(대문)으로" aria-label="처음 화면으로">🏠</a>
+  <h1>권선 작업기록<span id="qBadge" class="qbadge hide"></span></h1>
+  <div class="who">👤 <b id="whoName">-</b><button onclick="openMe()">내 정보·로그아웃</button></div>
+</header>
+<nav>
+  <button id="tabNew" class="on" onclick="showTab('new')">✏️ 기록하기</button>
+  <button id="tabFind" onclick="FOCUS=null;showTab('find')">🔍 찾아보기</button>
+  <button id="tabRecent" onclick="showTab('recent')">🕘 최근 기록</button>
+  <button id="tabAdmin" class="hide" onclick="showTab('admin')">⚙️ 관리</button>
+</nav>
+
+<main>
+  <!-- 기록하기 -->
+  <section id="pageNew">
+    <div id="pendingBox" class="pending hide"></div>
+    <div class="seg">
+      <button id="kMotor" class="on" onclick="setKind('motor')">모터 재권선</button>
+      <button id="kCoil" onclick="setKind('coil')">마그네틱 코일</button>
+    </div>
+    <div id="editBar" class="editbar hide"><button onclick="resetForm()">취소</button><span id="editMsg">기존 기록을 수정하는 중입니다.</span></div>
+    <form id="form" class="grid" onsubmit="return false"></form>
+    <div class="photo">
+      <label for="photoIn">📷 사진 (명판·코일, 선택)</label>
+      <input type="file" id="photoIn" accept="image/*" onchange="pickPhoto(this)">
+      <img id="photoPrev" class="hide" alt="">
+    </div>
+    <button class="btn" id="saveBtn" onclick="save()">저장하기</button>
+    <button class="btn sub" onclick="if(confirmClear())resetForm()">입력 지우기</button>
+    <p class="note">적던 내용은 휴대폰에 자동으로 임시 저장됩니다. 전파가 끊겨도 저장 대기함에 남았다가 다시 보내집니다.</p>
+  </section>
+
+  <!-- 찾아보기 -->
+  <section id="pageFind" class="hide">
+    <div class="seg">
+      <button id="fMotor" class="on" onclick="FOCUS=null;setFindKind('motor')">모터 재권선</button>
+      <button id="fCoil" onclick="FOCUS=null;setFindKind('coil')">마그네틱 코일</button>
+    </div>
+    <div id="focusBar" class="focusbar hide"></div>
+    <input id="q" placeholder="검색어 (작업번호, 고객, 제조사, 메모…)" oninput="FOCUS=null;render()" style="margin-bottom:8px">
+    <div class="fbox" id="fbox"></div>
+    <button class="btn sub" style="margin-top:0" onclick="loadList(true)">🔄 새로 불러오기</button>
+    <div class="count" id="count"></div>
+    <div id="list"></div>
+  </section>
+
+  <!-- 최근 기록 (모든 작업자) -->
+  <section id="pageRecent" class="hide">
+    <div class="seg">
+      <button id="rk_all" class="on" onclick="setRecentKind('all')">전체</button>
+      <button id="rk_motor" onclick="setRecentKind('motor')">모터</button>
+      <button id="rk_coil" onclick="setRecentKind('coil')">코일</button>
+    </div>
+    <div class="rtools">
+      <button id="rMine" onclick="toggleMine()">👤 내 기록만</button>
+      <input id="rDate" type="date" aria-label="날짜 고르기" onchange="pickRecentDate(this.value)">
+    </div>
+    <div class="rtools">
+      <button id="rd_7" onclick="setRecentDays(7)">7일</button>
+      <button id="rd_30" class="on" onclick="setRecentDays(30)">30일</button>
+      <button id="rd_90" onclick="setRecentDays(90)">90일</button>
+      <button onclick="loadRecent(true)">🔄</button>
+    </div>
+    <div class="count" id="rCount"></div>
+    <div id="rList"></div>
+  </section>
+
+  <!-- 관리 (관리자만) -->
+  <section id="pageAdmin" class="hide">
+    <div class="note" style="margin-bottom:10px">관리자에게만 보이는 메뉴입니다. 눌러서 펼치세요.</div>
+    <div id="adminBox"></div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+<div class="modal hide" id="loginModal">
+  <div class="box">
+    <h2>🔒 로그인</h2>
+    <p class="note" style="margin-top:0">등록된 사람만 들어올 수 있습니다. 처음이면 관리자에게 이름 등록과 임시 PIN을 받으세요.</p>
+    <label for="loginName">이름</label>
+    <input id="loginName" placeholder="예) 홍길동" autocomplete="username">
+    <label for="loginPin" style="margin-top:10px">PIN (숫자)</label>
+    <input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="err" id="loginErr"></div>
+    <button class="btn" id="loginBtn" onclick="doLogin()">들어가기</button>
+  </div>
+</div>
+<div class="modal hide" id="pinModal">
+  <div class="box">
+    <h2 id="pinTitle">🔑 PIN 바꾸기</h2>
+    <p class="note" id="pinNote" style="margin-top:0"></p>
+    <div id="pinOldWrap"><label for="pinOld">지금 PIN</label><input id="pinOld" type="password" inputmode="numeric"></div>
+    <label for="pinNew" style="margin-top:10px">새 PIN (숫자 4~8자리)</label>
+    <input id="pinNew" type="password" inputmode="numeric" autocomplete="new-password">
+    <label for="pinNew2" style="margin-top:10px">새 PIN 한 번 더</label>
+    <input id="pinNew2" type="password" inputmode="numeric" autocomplete="new-password" onkeydown="if(event.key==='Enter')doPin()">
+    <div class="err" id="pinErr"></div>
+    <button class="btn" id="pinBtn" onclick="doPin()">저장</button>
+    <button class="btn sub" id="pinCancel" onclick="closeModal('pinModal')">취소</button>
+  </div>
+</div>
+<div class="modal hide" id="guideModal" onclick="if(event.target===this)closeModal('guideModal')">
+  <div class="box">
+    <h2>📏 다극코일 치수 재는 법</h2>
+    <img id="guideImg" alt="다극코일 치수 측정 그림">
+    <ol>
+      <li><b>내경 ID</b>: 극편 안쪽 끝(가운데 구멍)의 지름</li>
+      <li><b>코어 외경 OD</b>: 코어 바깥 둘레의 지름</li>
+      <li><b>극편 높이 H</b>: 옆에서 본 극편의 높이(축 방향 길이)</li>
+    </ol>
+    <button class="btn sub" onclick="closeModal('guideModal')">닫기</button>
+  </div>
+</div>
+<div class="modal hide" id="meModal">
+  <div class="box">
+    <h2>👤 <span id="meName"></span></h2>
+    <p class="note" id="meRole" style="margin-top:0"></p>
+    <button class="btn" onclick="closeModal('meModal');openPin(false)">🔑 PIN 바꾸기</button>
+    <button class="btn sub" onclick="doLogout()">로그아웃</button>
+    <button class="btn sub" onclick="closeModal('meModal')">닫기</button>
+  </div>
+</div>
+
+<script>
+// ───── 기본 상태 ─────
+var CFG = null, kind = 'motor', findKind = 'motor', editId = null, photo = null;
+var cache = { motor: null, coil: null };
+var LS = { name:'wr_name', token:'wr_token', queue:'wr_queue', draft:'wr_draft_', cfg:'wr_cfg' };
+
+function ls(k, v) {
+  try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); }
+  catch (e) { return null; }
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function toast(msg, ms) { var t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, ms || 2500); }
+// v28 깃허브판: 화면은 깃허브에서 바로 뜨고, 자료만 구글(Apps Script)과 주고받음
+var API = 'https://script.google.com/macros/s/AKfycbyd0RPsssmkYegAsfN5EQFJYO3R0e44egM7moJNYQs_L1tfu1fod5QeRUK8j7rHe80/exec';
+function call(fn) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  return fetch(API, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ fn: fn, args: args }) })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { if (j && j.ok) return j.v; throw (j && j.e) || '서버 응답이 이상합니다'; })
+    .catch(function (e) {
+      var m = String(e && e.message ? e.message : e).replace(/^(Exception|Error):\s*/, '');
+      if (m.indexOf('[로그인]') >= 0) { ls(LS.token, null); if (fn !== 'logout') showLogin('다시 로그인해 주세요.'); m = '로그인이 필요합니다'; }
+      throw m;
+    });
+}
+
+// ───── 시작 ─────
+window.onload = function () {
+  document.querySelector('nav').style.top = document.querySelector('header').offsetHeight + 'px'; // 위쪽 탭이 머리줄에 가리지 않게
+  start();
+};
+window.addEventListener('online', function () { showPending(); flushQueue(); });
+window.addEventListener('offline', function () { showPending(); });
+document.addEventListener('visibilitychange', function () { if (!document.hidden) flushQueue(); });
+setInterval(function () { if (getQueue().length) flushQueue(); }, 45000); // 신호가 돌아오면 자동으로 보냄 (45초마다 다시 시도)
+
+// ───── 로그인 ─────
+var ME = null, loginPinTmp = '';
+function tok() { return ls(LS.token) || ''; }
+function openModal(id) { document.getElementById(id).classList.remove('hide'); }
+function closeModal(id) { document.getElementById(id).classList.add('hide'); }
+function applyCfg(cfg) {
+  CFG = cfg; ME = cfg.me;
+  ls(LS.name, ME.name);
+  document.getElementById('whoName').textContent = ME.name;
+  document.getElementById('tabAdmin').classList.toggle('hide', !ME.admin);
+  closeModal('loginModal');
+}
+// 빠른 시작: 휴대폰이 기억한 지난 화면을 먼저 보여주고, 서버 확인은 뒤에서 함
+function start() {
+  var cached = null;
+  try { cached = JSON.parse(ls(LS.cfg) || 'null'); } catch (e) { cached = null; }
+  var quick = !!(tok() && cached && cached.kinds && cached.me);
+  if (quick) { applyCfg(cached); buildForm(); showPending(); }
+  call('getConfig', tok()).then(function (cfg) {
+    if (cfg.login) { ls(LS.cfg, null); showLogin(); return; }
+    var same = quick && JSON.stringify(cached.kinds) === JSON.stringify(cfg.kinds) && cached.me.name === cfg.me.name && cached.me.admin === cfg.me.admin;
+    ls(LS.cfg, JSON.stringify(cfg));
+    applyCfg(cfg);
+    if (!quick || (!same && !editId && !photo)) buildForm(); // 설정이 바뀌었으면 새 화면으로 (적던 내용은 그대로)
+    showPending(); flushQueue();
+    if (ME.mustChange) openPin(true);
+  }).catch(function (e) { if (!quick) toast('연결 실패: ' + e, 5000); });
+}
+function showLogin(msg) {
+  ME = null; ls(LS.cfg, null);
+  document.getElementById('whoName').textContent = '-';
+  document.getElementById('tabAdmin').classList.add('hide');
+  if (!document.getElementById('pageAdmin').classList.contains('hide')) showTab('new');
+  ['meModal', 'pinModal'].forEach(closeModal);
+  document.getElementById('loginName').value = ls(LS.name) || '';
+  document.getElementById('loginPin').value = '';
+  document.getElementById('loginErr').textContent = msg || '';
+  openModal('loginModal');
+}
+function doLogin() {
+  var n = document.getElementById('loginName').value.trim(), p = document.getElementById('loginPin').value.trim();
+  var err = document.getElementById('loginErr'), b = document.getElementById('loginBtn');
+  if (!n || !p) { err.textContent = '이름과 PIN을 모두 적어주세요.'; return; }
+  b.disabled = true; b.textContent = '확인 중…'; err.textContent = '';
+  call('login', n, p).then(function (res) {
+    ls(LS.cfg, null); ls(LS.token, res.token); ls(LS.name, res.name); loginPinTmp = p;
+    start();
+  }).catch(function (e) { err.textContent = e; })
+    .then(function () { b.disabled = false; b.textContent = '들어가기'; });
+}
+function openMe() {
+  if (!ME) { showLogin(); return; }
+  document.getElementById('meName').textContent = ME.name;
+  document.getElementById('meRole').textContent = ME.admin ? '관리자' : '팀원';
+  openModal('meModal');
+}
+function openPin(force) {
+  ['pinOld', 'pinNew', 'pinNew2'].forEach(function (id) { document.getElementById(id).value = ''; });
+  var hasTmp = !!(force && loginPinTmp);
+  if (hasTmp) document.getElementById('pinOld').value = loginPinTmp;
+  document.getElementById('pinOldWrap').classList.toggle('hide', hasTmp);
+  document.getElementById('pinTitle').textContent = force ? '🔑 새 PIN을 정해주세요' : '🔑 PIN 바꾸기';
+  document.getElementById('pinNote').textContent = force ? '관리자가 준 임시 PIN을 쓰고 있습니다. 나만 아는 숫자로 바꿔주세요.' + (hasTmp ? '' : ' (지금 PIN 칸에는 임시 PIN을 적으세요)') : '';
+  document.getElementById('pinCancel').classList.toggle('hide', !!force);
+  document.getElementById('pinErr').textContent = '';
+  openModal('pinModal');
+}
+function doPin() {
+  var o = document.getElementById('pinOld').value.trim(), n = document.getElementById('pinNew').value.trim(), n2 = document.getElementById('pinNew2').value.trim();
+  var err = document.getElementById('pinErr'), b = document.getElementById('pinBtn');
+  if (!o) { err.textContent = '지금 PIN을 적어주세요.'; return; }
+  if (!/^\d{4,8}$/.test(n)) { err.textContent = '새 PIN은 숫자 4~8자리로 적어주세요.'; return; }
+  if (n !== n2) { err.textContent = '새 PIN 두 번이 서로 다릅니다.'; return; }
+  if (n === o) { err.textContent = '지금 PIN과 다른 숫자로 정해주세요.'; return; }
+  b.disabled = true; err.textContent = '';
+  call('changePin', tok(), o, n).then(function () {
+    loginPinTmp = ''; if (ME) ME.mustChange = false;
+    closeModal('pinModal'); toast('✅ PIN을 바꿨습니다. 다음부터 새 PIN으로 들어오세요', 4000);
+  }).catch(function (e) { err.textContent = e; document.getElementById('pinOldWrap').classList.remove('hide'); })
+    .then(function () { b.disabled = false; });
+}
+function doLogout() {
+  if (!confirm('로그아웃할까요? 다시 들어오려면 이름과 PIN이 필요합니다.')) return;
+  var t = tok(); ls(LS.token, null);
+  call('logout', t).catch(function () {});
+  showLogin();
+}
+
+// ───── 탭 전환 ─────
+function showTab(t) {
+  ['New', 'Find', 'Recent', 'Admin'].forEach(function (x) {
+    document.getElementById('page' + x).classList.toggle('hide', t !== x.toLowerCase());
+    document.getElementById('tab' + x).classList.toggle('on', t === x.toLowerCase());
+  });
+  if (t === 'find') setFindKind(findKind);
+  if (t === 'admin') buildAdmin();
+  if (t === 'recent') loadRecent(false);
+  window.scrollTo(0, 0);
+}
+
+// ───── 입력 화면 만들기 ─────
+function setKind(k) {
+  saveDraft();
+  kind = k; editId = null; photo = null;
+  document.getElementById('kMotor').classList.toggle('on', k === 'motor');
+  document.getElementById('kCoil').classList.toggle('on', k === 'coil');
+  buildForm();
+}
+function buildForm() {
+  var fs = CFG.kinds[kind].fields, h = '';
+  fs.forEach(function (f) {
+    var key = f[0], lab = f[1], typ = f[2], opts = f[3] || [];
+    var wide = (typ === 'area' || typ === 'wire' || typ === 'pick' || key === 'customer' || key === 'model' || key === 'bobbin' || key === 'memo') ? ' wide' : '';
+    var cond = f[4] ? ' data-when="' + esc(f[4].when) + '" data-is="' + esc(f[4].is) + '"' : '';
+    if (GUIDE_AT[key]) h += '<div class="f wide"' + cond + '><button type="button" class="gbtn" onclick="showGuide(\'' + GUIDE_AT[key] + '\')">📏 치수 재는 법 (그림 보기)</button></div>';
+    h += '<div class="f' + wide + '"' + cond + '><label for="i_' + key + '">' + esc(lab) + '</label>';
+    if (typ === 'area') h += '<textarea id="i_' + key + '" oninput="saveDraft()"></textarea>';
+    else if (typ === 'wire') {
+      h += '<input id="i_' + key + '" autocomplete="off" placeholder="아래 버튼을 누르세요 (직접 적어도 됨)" oninput="wireRefresh(\'' + key + '\');saveDraft()">' +
+        '<div class="wsum" id="ws_' + key + '"></div>' +
+        '<div class="wbtns">' + opts.map(function (o) { return '<button type="button" onclick="wireAdd(\'' + key + '\',\'' + esc(o) + '\')">' + esc(o) + '</button>'; }).join('') + '</div>' +
+        '<div class="wtools"><button type="button" onclick="wireMore(\'' + key + '\')">＋ 하나 더하기</button>' +
+        '<button type="button" onclick="wireUndo(\'' + key + '\')">↩ 하나 빼기</button>' +
+        '<button type="button" onclick="wireOther(\'' + key + '\')">✍ 직접 입력</button>' +
+        '<button type="button" onclick="wireClear(\'' + key + '\')">✕ 지우기</button></div>';
+    }
+    else if (typ === 'pick') {
+      h += '<input id="i_' + key + '" autocomplete="off" placeholder="아래에서 고르세요 (직접 적어도 됨)" oninput="pickRefresh(\'' + key + '\');saveDraft()">' +
+        '<div class="wbtns' + (opts.some(function (o) { return String(o).length > 4; }) ? ' w2' : '') + '" id="pb_' + key + '">' + opts.map(function (o) { return '<button type="button" data-v="' + esc(o) + '" onclick="pickSet(\'' + key + '\',this)">' + esc(o) + '</button>'; }).join('') + '</div>';
+    }
+    else if (typ === 'select') {
+      h += '<select id="i_' + key + '" onchange="applyShow();saveDraft()"><option value="">- 선택 -</option>' +
+        opts.map(function (o) { return '<option value="' + esc(o) + '">' + esc(o) + '</option>'; }).join('') + '</select>';
+    }
+    else {
+      var im = typ === 'num' ? ' inputmode="decimal"' : '';
+      var dl = opts.length ? ' list="d_' + key + '"' : '';
+      if (typ === 'list' && opts.every(function (o) { return /^[0-9.\/]+$/.test(o); })) im = ' inputmode="decimal"';
+      h += '<input id="i_' + key + '"' + im + dl + ' autocomplete="off" oninput="saveDraft()">';
+      if (opts.length) h += '<datalist id="d_' + key + '">' + opts.map(function (o) { return '<option value="' + esc(o) + '">'; }).join('') + '</datalist>';
+    }
+    h += '</div>';
+  });
+  document.getElementById('form').innerHTML = h;
+  document.getElementById('editBar').classList.add('hide');
+  document.getElementById('saveBtn').textContent = '저장하기';
+  document.getElementById('photoIn').value = '';
+  document.getElementById('photoPrev').classList.add('hide');
+  loadDraft();
+  applyShow();
+  wireRefreshAll();
+}
+// ───── 코일선경 버튼으로 쌓기: "1.0×2, 0.9×1" ─────
+var wireHist = {};
+function wireParse(s) {
+  var out = [];
+  String(s || '').split(/[,，\/+]/).forEach(function (p) {
+    p = p.trim(); if (!p) return;
+    var m = p.match(/^([0-9]*\.?[0-9]+)\s*(?:[×xX*]\s*([0-9]+))?$/);
+    if (m) out.push([m[1], parseInt(m[2] || '1', 10)]); else out.push([p, null]);
+  });
+  return out;
+}
+function wireFormat(arr) { return arr.filter(function (e) { return e[1] === null || e[1] > 0; }).map(function (e) { return e[1] === null ? e[0] : e[0] + '×' + e[1]; }).join(', '); }
+function wireSet(key, arr) { document.getElementById('i_' + key).value = wireFormat(arr); wireRefresh(key); saveDraft(); }
+function wireAdd(key, d) {
+  var arr = wireParse(document.getElementById('i_' + key).value), f = false;
+  arr.forEach(function (e) { if (e[1] !== null && parseFloat(e[0]) === parseFloat(d)) { e[1]++; f = true; } });
+  if (!f) arr.push([d, 1]);
+  (wireHist[key] = wireHist[key] || []).push(d);
+  wireSet(key, arr);
+}
+// 하나 더하기: 마지막에 누른 선경을 한 가닥 더 (없으면 맨 끝 선경)
+function wireMore(key) {
+  var hs = wireHist[key] || [], d = hs[hs.length - 1];
+  if (d === undefined) {
+    var arr = wireParse(document.getElementById('i_' + key).value).filter(function (e) { return e[1] !== null; });
+    if (arr.length) d = arr[arr.length - 1][0];
+  }
+  if (d === undefined) { toast('먼저 선경 버튼을 눌러주세요'); return; }
+  wireAdd(key, d);
+}
+function wireUndo(key) {
+  var arr = wireParse(document.getElementById('i_' + key).value); if (!arr.length) return;
+  var d = (wireHist[key] || []).pop(), idx = -1;
+  if (d !== undefined) arr.forEach(function (e, i) { if (e[1] !== null && parseFloat(e[0]) === parseFloat(d)) idx = i; });
+  if (idx < 0) idx = arr.length - 1;
+  if (arr[idx][1] === null || arr[idx][1] <= 1) arr.splice(idx, 1); else arr[idx][1]--;
+  wireSet(key, arr);
+}
+function wireClear(key) { if (!document.getElementById('i_' + key).value || confirm('선경을 모두 지울까요?')) { wireHist[key] = []; wireSet(key, []); } }
+function wireOther(key) {
+  var d = prompt('목록에 없는 선경(mm)을 적으세요. 예) 0.55'); if (d === null) return;
+  d = String(d).trim().replace(',', '.');
+  if (!/^[0-9]*\.?[0-9]+$/.test(d)) { toast('숫자로 적어주세요 (예: 0.55)'); return; }
+  wireAdd(key, d);
+}
+function wireRefresh(key) {
+  var el = document.getElementById('ws_' + key); if (!el) return;
+  var arr = wireParse(document.getElementById('i_' + key).value), n = 0, a = 0;
+  arr.forEach(function (e) { if (e[1] !== null) { n += e[1]; a += Math.PI / 4 * Math.pow(parseFloat(e[0]), 2) * e[1]; } });
+  el.textContent = n ? ('총 ' + n + '가닥 · 단면적 합계 ' + a.toFixed(3) + ' mm²') : '';
+  var st = document.getElementById('i_strands');
+  if (st && key === 'wire') {
+    var au = st.getAttribute('data-auto');
+    if (n && (!st.value || st.value === au)) { st.value = n; st.setAttribute('data-auto', String(n)); }
+    else if (!n && au && st.value === au) { st.value = ''; st.removeAttribute('data-auto'); }
+  }
+}
+function wireRefreshAll() { CFG.kinds[kind].fields.forEach(function (f) { if (f[2] === 'wire') wireRefresh(f[0]); if (f[2] === 'pick') pickRefresh(f[0]); }); }
+// ───── 버튼으로 하나 고르기 (결선 등) ─────
+function pickSet(key, b) {
+  var el = document.getElementById('i_' + key), v = b.getAttribute('data-v');
+  el.value = (el.value.trim() === v) ? '' : v;
+  pickRefresh(key); saveDraft();
+}
+function pickRefresh(key) {
+  var box = document.getElementById('pb_' + key); if (!box) return;
+  var v = document.getElementById('i_' + key).value.trim();
+  Array.prototype.forEach.call(box.children, function (b) { b.classList.toggle('on', b.getAttribute('data-v') === v); });
+}
+// 조건 칸 보이기/숨기기 (예: 단일 코일형일 때만 보빈 내경·외경·높이)
+function applyShow() {
+  var boxes = document.querySelectorAll('#form [data-when]');
+  for (var i = 0; i < boxes.length; i++) {
+    var b = boxes[i], src = document.getElementById('i_' + b.getAttribute('data-when'));
+    b.classList.toggle('hide', !src || src.value !== b.getAttribute('data-is'));
+  }
+}
+function getValues() {
+  var v = {};
+  CFG.kinds[kind].fields.forEach(function (f) {
+    var el = document.getElementById('i_' + f[0]);
+    var box = el.parentNode;
+    v[f[0]] = box.classList.contains('hide') ? '' : el.value.trim();
+  });
+  return v;
+}
+function setValues(v) {
+  CFG.kinds[kind].fields.forEach(function (f) {
+    var el = document.getElementById('i_' + f[0]); if (!el) return;
+    var val = v[f[0]] || '';
+    if (el.tagName === 'SELECT' && val && !Array.prototype.some.call(el.options, function (o) { return o.value === val; })) {
+      var o = document.createElement('option'); o.value = val; o.textContent = val; el.appendChild(o);
+    }
+    el.value = val;
+  });
+  applyShow();
+  wireHist = {};
+  var st0 = document.getElementById('i_strands'); if (st0) st0.removeAttribute('data-auto');
+  wireRefreshAll();
+}
+function saveDraft() { if (CFG && !editId) ls(LS.draft + kind, JSON.stringify(getValues())); }
+function loadDraft() { var d = ls(LS.draft + kind); if (d) { try { setValues(JSON.parse(d)); } catch (e) {} } }
+function confirmClear() { return confirm('입력한 내용을 모두 지울까요?'); }
+function resetForm() {
+  ls(LS.draft + kind, null); editId = null; photo = null; buildForm();
+}
+
+// ───── 사진: 휴대폰에서 줄여서 보냄 (긴 쪽 1600px) ─────
+function pickPhoto(inp) {
+  var file = inp.files && inp.files[0]; if (!file) { photo = null; return; }
+  var rd = new FileReader();
+  rd.onload = function () {
+    var img = new Image();
+    img.onload = function () {
+      var max = 1600, w = img.width, h = img.height, s = Math.min(1, max / Math.max(w, h));
+      var c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(h * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      var url = c.toDataURL('image/jpeg', 0.82);
+      photo = { name: 'photo.jpg', type: 'image/jpeg', data: url.split(',')[1] };
+      var pv = document.getElementById('photoPrev'); pv.src = url; pv.classList.remove('hide');
+    };
+    img.src = rd.result;
+  };
+  rd.readAsDataURL(file);
+}
+
+// ───── 저장 (먼저 대기함에 넣고 → 보냄 → 성공하면 대기함에서 뺌) ─────
+function getQueue() { try { return JSON.parse(ls(LS.queue) || '[]'); } catch (e) { return []; } }
+function setQueue(q) { ls(LS.queue, JSON.stringify(q)); showPending(); }
+function newId() { return (kind === 'motor' ? 'M' : 'C') + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase(); }
+
+function save() {
+  if (!ME) { showLogin(); return; }
+  var v = getValues();
+  var filled = Object.keys(v).filter(function (k) { return v[k] !== ''; });
+  if (!filled.length) { toast('입력한 내용이 없습니다'); return; }
+  var main = kind === 'motor' ? (v.kw || v.target) : (v.model || v.size || v.ledgerNo || v.turns);
+  if (!save._checked) {
+    var rw = rangeWarn(kind, v);
+    if (rw.length && !confirm('⚠️ 확인해 주세요 (그래도 저장은 됩니다)\n\n' + rw.join('\n') + '\n\n이대로 저장할까요?\n(취소를 누르면 고칠 수 있어요)')) return;
+  }
+  if (!main && !save._checked) { if (!confirm(kind === 'motor' ? 'kW가 비어 있습니다. 그래도 저장할까요?' : '코일 배치 타입이 비어 있습니다. 그래도 저장할까요?')) return; }
+  if (v.ledgerNo && !editId && !save._checked) {
+    var btn0 = document.getElementById('saveBtn'); btn0.disabled = true; btn0.textContent = '확인 중…';
+    call('findSame', kind, 'ledgerNo', v.ledgerNo, tok()).then(function (same) {
+      btn0.disabled = false; btn0.textContent = '저장하기';
+      if (same && same.length) {
+        var lines = same.slice(0, 5).map(function (r) { return '· ' + r.author + ' ' + r.date + (r.sum ? ' ' + r.sum : ''); }).join('\n');
+        if (!confirm('작업번호 ' + v.ledgerNo + ' 기록이 이미 ' + same.length + '건 있습니다.\n' + lines + '\n\n그래도 새 기록으로 저장할까요?\n(기존 기록을 고치려면 취소 후 찾아보기에서 \'✏️ 수정\')')) return;
+      }
+      save._checked = true; save(); 
+    }).catch(function () { btn0.disabled = false; btn0.textContent = '저장하기'; save._checked = true; save(); });
+    return;
+  }
+  save._checked = false;
+  var rec = { id: editId || newId(), kind: kind, author: ME.name, values: v, photo: photo };
+  var q = getQueue(); q = q.filter(function (r) { return r.id !== rec.id; });
+  try { q.push(rec); setQueue(q); }
+  catch (e) { rec.photo = null; q[q.length - 1] = rec; setQueue(q); toast('사진이 커서 사진은 빼고 저장합니다'); }
+  var wasEdit = !!editId;
+  ls(LS.draft + kind, null); editId = null; photo = null; buildForm();
+  var btn = document.getElementById('saveBtn'); btn.disabled = true; btn.textContent = '저장 중…';
+  sendOne(rec).then(function () {
+    toast(wasEdit ? '✅ 수정했습니다' : '✅ 저장했습니다 (모두가 볼 수 있어요)');
+    cache[rec.kind] = null;
+  }).catch(function (e) {
+    if (String(e).indexOf('[권한]') >= 0) toast('⛔ ' + String(e).replace('[권한]', ''), 5000);
+    else toast('📦 신호가 약해 휴대폰에 보관했어요. 신호가 돌아오면 자동으로 보냅니다', 5000);
+  }).then(function () { btn.disabled = false; btn.textContent = editId ? '수정한 내용 저장' : '저장하기'; });
+}
+function sendOne(rec) {
+  var timer;
+  var wait = new Promise(function (ok, bad) { timer = setTimeout(function () { bad('응답 없음'); }, 40000); });
+  return Promise.race([call('saveRecord', rec, tok()), wait]).then(function (res) {
+    clearTimeout(timer);
+    setQueue(getQueue().filter(function (r) { return r.id !== rec.id; }));
+    return res;
+  }, function (e) {
+    clearTimeout(timer);
+    // 권한이 없어 저장이 안 되는 수정은 대기함에서 뺌 (계속 다시 보내지 않게)
+    if (String(e).indexOf('[권한]') >= 0) setQueue(getQueue().filter(function (r) { return r.id !== rec.id; }));
+    throw e;
+  });
+}
+var flushing = false;
+function flushQueue() {
+  if (flushing || !CFG) return; var q = getQueue(); if (!q.length) return;
+  flushing = true;
+  q.reduce(function (p, rec) { return p.then(function () { return sendOne(rec); }); }, Promise.resolve())
+    .then(function () { toast('✅ 대기 중이던 기록을 모두 보냈습니다'); cache = { motor: null, coil: null }; RC.rows = null; })
+    .catch(function (e) { if (String(e).indexOf('[권한]') >= 0) toast('⛔ 대기 중이던 수정 1건은 권한이 없어 보내지 못했습니다', 5000); })
+    .then(function () { flushing = false; });
+}
+function showPending() {
+  var q = getQueue(), b = document.getElementById('pendingBox'), qb = document.getElementById('qBadge');
+  var off = navigator.onLine === false;
+  qb.textContent = q.length ? '📦 전송 대기 ' + q.length + '건' : (off ? '📵 신호 없음' : '');
+  qb.classList.toggle('hide', !q.length && !off);
+  if (!q.length) { b.classList.add('hide'); return; }
+  b.innerHTML = '📦 전송 대기 <b>' + q.length + '건</b> · 휴대폰에 보관 중이에요. ' + (off ? '신호가 돌아오면' : '곧') + ' 자동으로 보냅니다. <button onclick="flushQueue()">지금 보내기</button>';
+  b.classList.remove('hide');
+}
+// ───── 입력값 범위 확인 (벗어나면 경고만, 저장은 됨) ─────
+function rangeOf(k, key) { return CFG && CFG.ranges && CFG.ranges[k] ? CFG.ranges[k][key] : null; }
+function labelOf(k, key) { var f = CFG.kinds[k].fields.filter(function (x) { return x[0] === key; })[0]; return f ? f[1] : key; }
+function rangeMsg(k, key, val) {
+  var r = rangeOf(k, key); if (!r || val === '' || val == null) return '';
+  var nums = key === 'wire' ? wireParse(val).map(function (e) { return parseFloat(e[0]); }) : [parseFloat(String(val).replace(/,/g, ''))];
+  var bad = nums.filter(function (n) { return isNaN(n) || n < r[0] || n > r[1]; });
+  if (!bad.length) return '';
+  return labelOf(k, key) + ': ' + (isNaN(bad[0]) ? '숫자가 아님' : bad[0]) + ' (보통 ' + r[0] + ' ~ ' + r[1] + ')';
+}
+function rangeWarn(k, v) {
+  var out = [];
+  Object.keys(v).forEach(function (key) { var m = rangeMsg(k, key, v[key]); if (m) out.push('· ' + m); });
+  [['ringID', 'ringOD'], ['mpID', 'mpOD']].forEach(function (p) {
+    var a = parseFloat(v[p[0]]), b = parseFloat(v[p[1]]);
+    if (!isNaN(a) && !isNaN(b) && a >= b) out.push('· ' + labelOf(k, p[0]) + '(' + a + ')이 ' + labelOf(k, p[1]) + '(' + b + ')보다 크거나 같아요');
+  });
+  return out;
+}
+function rangeMark(el) {
+  if (!el || !el.id || el.id.indexOf('i_') !== 0 || !CFG) return;
+  var key = el.id.slice(2), box = el.parentNode, m = rangeMsg(kind, key, el.value.trim());
+  box.classList.toggle('rw', !!m);
+  var h = box.querySelector('.rhint');
+  if (m && !h) { h = document.createElement('div'); h.className = 'rhint'; box.appendChild(h); }
+  if (h) h.textContent = m ? '⚠️ 범위를 벗어났어요 — 보통 ' + rangeOf(kind, key).join(' ~ ') : '';
+}
+document.addEventListener('change', function (e) { if (e.target && e.target.closest && e.target.closest('#form')) rangeMark(e.target); });
+
+// ───── 찾아보기 ─────
+// 찾아보기 조건: [키, 이름, 방식]  num=숫자칸, text=글자칸, btn=버튼으로 고르기 (목록은 기록하기와 같음)
+// 마그네틱 코일은 기록하기 화면과 같은 순서·같은 버튼으로 자동 구성 (FIND_SKIP 칸만 뺌)
+var FILTERS = {
+  motor: [['target', '권선 대상', 'btn'], ['kw', 'kW', 'num'], ['slots', '슬롯수', 'num'], ['poles', '극수', 'btn'], ['conn', '결선', 'btn']],
+  coil:  'form'
+};
+var FIND_SKIP = { coil: ['coilG', 'memo'] };
+var fsel = {};
+function fdefs() {
+  var fs = CFG.kinds[findKind].fields, skip = FIND_SKIP[findKind] || [];
+  if (FILTERS[findKind] === 'form') {
+    return fs.filter(function (f) { return skip.indexOf(f[0]) < 0 && f[2] !== 'area'; }).map(function (f) {
+      var o = f[3] || [];
+      var mode = o.length && /^(select|pick|wire|list)$/.test(f[2]) ? 'btn' : (f[2] === 'num' ? 'num' : 'text');
+      return [f[0], f[1], mode, o, f[4] || null];
+    });
+  }
+  return FILTERS[findKind].map(function (d) {
+    var f = fs.filter(function (x) { return x[0] === d[0]; })[0];
+    return f ? [d[0], d[1], d[2], f[3] || [], f[4] || null] : null;
+  }).filter(function (d) { return d && (d[2] !== 'btn' || d[3].length); });
+}
+function buildFilters() {
+  fsel = {};
+  var ds = fdefs(), h = '', grid = '';
+  function cond(d) { return d[4] ? ' data-fwhen="' + esc(d[4].when) + '" data-fis="' + esc(d[4].is) + '"' : ''; }
+  function flush() { if (grid) { h += '<div class="fnums">' + grid + '</div>'; grid = ''; } }
+  ds.forEach(function (d) {
+    if (GUIDE_AT[d[0]]) { flush(); h += '<div' + cond(d) + '><button type="button" class="gbtn" onclick="showGuide(\'' + GUIDE_AT[d[0]] + '\')">📏 치수 재는 법 (그림 보기)</button></div>'; }
+    if (d[2] === 'btn') {
+      flush();
+      h += '<div' + cond(d) + '><div class="fl">' + esc(d[1]) + '</div><div class="wbtns' + (d[3].length <= 3 ? ' w3' : '') + '" id="fb_' + d[0] + '">' + d[3].map(function (o) {
+        return '<button type="button" data-v="' + esc(o) + '" onclick="fpick(\'' + d[0] + '\',this)">' + esc(o) + '</button>';
+      }).join('') + '</div></div>';
+    } else {
+      grid += '<div' + cond(d) + '><div class="fl">' + esc(d[1]) + '</div><input id="ff_' + d[0] + '"' + (d[2] === 'num' ? ' inputmode="decimal"' : '') +
+        ' autocomplete="off" placeholder="' + esc(d[1]) + '" oninput="render()"></div>';
+    }
+  });
+  flush();
+  h += '<button type="button" class="freset" onclick="fclear()">✕ 조건 모두 지우기</button>';
+  document.getElementById('fbox').innerHTML = h;
+  fshow();
+}
+// 기록하기처럼: 단일 코일형을 고르면 내경·외경·높이, 다극코일형이면 극수, 기타면 보빈치수 조건이 나옴
+function fshow() {
+  var bs = document.querySelectorAll('#fbox [data-fwhen]');
+  for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('hide', fsel[bs[i].getAttribute('data-fwhen')] !== bs[i].getAttribute('data-fis'));
+}
+function fon(d) { return !d[4] || fsel[d[4].when] === d[4].is; }
+function fpick(key, b) {
+  var v = b.getAttribute('data-v');
+  fsel[key] = fsel[key] === v ? '' : v;
+  Array.prototype.forEach.call(b.parentNode.children, function (x) { x.classList.toggle('on', x.getAttribute('data-v') === fsel[key]); });
+  fshow();
+  render();
+}
+function fclear() { FOCUS = null; document.getElementById('q').value = ''; buildFilters(); render(); }
+function fmatch(d, cell, want) {
+  cell = String(cell || '');
+  if (d[0] === 'wire') return wireParse(cell).some(function (e) { return parseFloat(e[0]) === parseFloat(want); });
+  if (d[2] === 'num') return parseFloat(cell) === parseFloat(want) || norm(cell) === norm(want);
+  if (d[2] === 'text') return norm(cell).indexOf(norm(want)) >= 0;
+  return norm(cell) === norm(want);
+}
+function setFindKind(k) {
+  findKind = k;
+  document.getElementById('fMotor').classList.toggle('on', k === 'motor');
+  document.getElementById('fCoil').classList.toggle('on', k === 'coil');
+  buildFilters();
+  loadList(false);
+}
+function loadList(force) {
+  if (cache[findKind] && !force) { render(); return; }
+  document.getElementById('list').innerHTML = '<div class="empty">불러오는 중…</div>';
+  var k = findKind;
+  call('listRecords', k, tok()).then(function (rows) { cache[k] = rows; if (k === findKind) render(); })
+    .catch(function (e) { document.getElementById('list').innerHTML = '<div class="empty">불러오기 실패: ' + esc(e) + '</div>'; });
+}
+function norm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ''); }
+function render() {
+  var rows = cache[findKind]; if (!rows) return;
+  var fb = document.getElementById('focusBar');
+  if (FOCUS) {
+    var one = rows.filter(function (r) { return r.id === FOCUS; });
+    if (!one.length && !FOCUS_RETRY) { FOCUS_RETRY = true; loadList(true); return; }
+    fb.innerHTML = '<button onclick="FOCUS=null;render()">✕ 전체 보기</button>🕘 최근 기록에서 고른 기록입니다.';
+    fb.classList.remove('hide');
+    document.getElementById('q').classList.add('hide'); document.getElementById('fbox').classList.add('hide');
+    document.getElementById('count').textContent = '';
+    document.getElementById('list').innerHTML = one.length ? one.map(card).join('') : '<div class="empty">이 기록을 찾지 못했습니다. 지워졌을 수 있습니다.</div>';
+    var c = document.querySelector('#list .card .more'); if (c) c.classList.remove('hide');
+    return;
+  }
+  fb.classList.add('hide');
+  document.getElementById('q').classList.remove('hide'); document.getElementById('fbox').classList.remove('hide');
+  var q = norm(document.getElementById('q').value);
+  var defs = fdefs(), fv = defs.map(function (d) {
+    if (!fon(d)) return '';
+    if (d[2] === 'btn') return fsel[d[0]] || '';
+    var el = document.getElementById('ff_' + d[0]); return el ? el.value.trim() : '';
+  });
+  var hit = rows.filter(function (r) {
+    for (var i = 0; i < defs.length; i++) {
+      if (fv[i] && !fmatch(defs[i], r.values[defs[i][0]], fv[i])) return false;
+    }
+    if (q) {
+      var all = norm(Object.keys(r.values).map(function (k) { return r.values[k]; }).join(' ') + ' ' + r.author);
+      if (all.indexOf(q) < 0) return false;
+    }
+    return true;
+  });
+  document.getElementById('count').textContent = '전체 ' + rows.length + '건 중 ' + hit.length + '건';
+  if (!hit.length) { document.getElementById('list').innerHTML = '<div class="empty">찾는 기록이 없습니다</div>'; return; }
+  document.getElementById('list').innerHTML = hit.slice(0, 200).map(card).join('');
+}
+function card(r) {
+  var v = r.values, t, s;
+  if (findKind === 'motor') {
+    t = [v.ledgerNo && '#' + v.ledgerNo, v.target, v.kw && v.kw + 'kW', v.poles && v.poles + 'P', v.volt && v.volt + 'V', v.maker].filter(Boolean).join(' · ');
+    s = ['슬롯 ' + (v.slots || '-'), '선경 ' + (v.wire || '-') + (v.strands ? ' (' + v.strands + '가닥)' : ''), '턴 ' + (v.turns || '-'),
+         '직렬 ' + (v.series || '-'), '피치 ' + (v.pitch || '-'), '결선 ' + (v.conn || '-')].join(' / ');
+  } else {
+    var dim = v.size === '단일 코일형' ? [v.ringID, v.ringOD, v.ringH].map(function (x) { return x || '-'; }).join('×')
+      : v.size === '다극코일형' ? [v.coilPoles && v.coilPoles + '극', (v.mpID || v.mpOD || v.mpH) && ('ID ' + (v.mpID || '-') + ' / OD ' + (v.mpOD || '-') + ' / H ' + (v.mpH || '-'))].filter(Boolean).join(' · ') : (v.bobbin || '');
+    t = [v.ledgerNo && '#' + v.ledgerNo, v.size, dim].filter(Boolean).join(' · ');
+    s = ['턴 ' + (v.turns || '-'), '선경 ' + (v.wire || '-'), '저항 ' + (v.ohm || '-') + 'Ω'].join(' / ');
+  }
+  var skip = FIND_SKIP[findKind] || [];
+  var rowsH = CFG.kinds[findKind].fields.map(function (f) { return v[f[0]] && (f[0] === 'memo' || skip.indexOf(f[0]) < 0) ? '<tr><td>' + esc(f[1]) + '</td><td>' + esc(v[f[0]]) + '</td></tr>' : ''; }).join('');
+  if (r.photo) rowsH += '<tr><td>사진</td><td>' + r.photo.split('\n').map(function (u, i) { return '<a href="' + esc(u) + '" target="_blank">사진' + (i + 1) + '</a>'; }).join(' ') + '</td></tr>';
+  var canEdit = !CFG.opts || !CFG.opts.editOwnOnly || (ME && (ME.admin || r.author === ME.name));
+  return '<div class="card" onclick="toggleCard(this)">' + (canEdit ? '<button class="ebtn" onclick="event.stopPropagation();useRec(\'' + esc(r.id) + '\',true)">✏️ 수정</button>' : '') + '<div class="t">' + esc(t || '(제목 없음)') + '</div><div class="s">' + esc(s) + '</div>' +
+    '<div class="m">' + esc(r.author) + ' · ' + esc(r.date) + (r.edited ? ' (수정 ' + esc(r.edited) + ')' : '') + (r.photo ? ' · 📷' : '') + '</div>' +
+    '<div class="more hide"><table>' + rowsH + '</table><div class="acts">' +
+    '<button onclick="event.stopPropagation();useRec(\'' + esc(r.id) + '\',false)">복사해서 새 기록</button>' +
+    (canEdit ? '<button onclick="event.stopPropagation();useRec(\'' + esc(r.id) + '\',true)">✏️ 수정하기</button>' : '') +
+    '<button onclick="event.stopPropagation();showHist(this,\'' + esc(r.id) + '\')">📝 수정 이력</button></div>' +
+    (canEdit ? '' : '<div class="lock">🔒 남의 기록은 관리자만 고칠 수 있어요</div>') + '<div class="hist"></div></div></div>';
+}
+function showHist(btn, id) {
+  var box = btn.closest('.more').querySelector('.hist');
+  box.innerHTML = '<div>불러오는 중…</div>';
+  call('recordHistory', tok(), id).then(function (list) {
+    box.innerHTML = list.length ? list.map(function (h) {
+      return '<div><b>' + esc(h.field) + '</b>: ' + esc(h.from || '(빈칸)') + ' → ' + esc(h.to || '(빈칸)') + '<br><span class="note">' + esc(h.when) + ' · ' + esc(h.who) + '</span></div>';
+    }).join('') : '<div class="note">고친 적이 없는 기록입니다.</div>';
+  }).catch(function (e) { box.innerHTML = '<div class="err">' + esc(e) + '</div>'; });
+}
+function toggleCard(el) { el.querySelector('.more').classList.toggle('hide'); }
+function useRec(id, edit) {
+  var r = (cache[findKind] || []).filter(function (x) { return x.id === id; })[0]; if (!r) return;
+  showTab('new'); setKind(findKind); setValues(r.values);
+  if (edit) {
+    editId = r.id;
+    var np = r.photo ? r.photo.split('\n').filter(String).length : 0;
+    document.getElementById('editMsg').innerHTML = '✏️ <b>' + esc(r.values.ledgerNo ? '#' + r.values.ledgerNo : '이') + '</b> 기록을 수정하는 중입니다. 저장하면 새 줄이 아니라 원래 기록이 바뀝니다.' +
+      (np ? '<br>기존 사진 ' + np + '장은 그대로 남고, 사진을 새로 넣으면 추가됩니다.' : '');
+    document.getElementById('editBar').classList.remove('hide');
+    document.getElementById('saveBtn').textContent = '수정한 내용 저장';
+  }
+  else saveDraft();
+  toast(edit ? '고친 뒤 \'수정한 내용 저장\'을 누르세요' : '내용을 복사했습니다. 바꿀 부분만 고치세요');
+}
+
+// ───── 📏 치수 재는 법 그림: 이 칸 바로 위에 버튼이 나옴 (그림은 서버에서 처음 한 번만 받아옴) ─────
+var GUIDE_AT = { coilPoles: 'mp' }, GUIDE_IMG = {};
+function showGuide(k) {
+  var img = document.getElementById('guideImg');
+  openModal('guideModal');
+  if (GUIDE_IMG[k]) { img.src = GUIDE_IMG[k]; return; }
+  img.removeAttribute('src'); img.alt = '그림 불러오는 중…';
+  call('getGuide', tok(), k).then(function (u) { GUIDE_IMG[k] = u; img.src = u; })
+    .catch(function (e) { img.alt = '그림을 못 불러왔습니다: ' + e; });
+}
+
+// ───── 🕘 최근 기록 (모든 작업자) ─────
+var FOCUS = null, FOCUS_RETRY = false;
+var RC = { kind: 'all', mine: false, days: 30, date: '', rows: null, loadedDays: 0 };
+function ymd(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function dayName(s) {
+  var p = s.split('-'), d = new Date(+p[0], p[1] - 1, +p[2]), t = new Date(); t.setHours(0, 0, 0, 0);
+  var diff = Math.round((t - d) / 86400000), w = '일월화수목금토'.charAt(d.getDay());
+  var md = (+p[1]) + '월 ' + (+p[2]) + '일 (' + w + ')';
+  return diff === 0 ? '오늘<small>' + md + '</small>' : diff === 1 ? '어제<small>' + md + '</small>' : md;
+}
+function needDays() {
+  if (!RC.date) return RC.days;
+  var p = RC.date.split('-'), d = new Date(+p[0], p[1] - 1, +p[2]), t = new Date(); t.setHours(0, 0, 0, 0);
+  return Math.max(1, Math.round((t - d) / 86400000) + 1);
+}
+function loadRecent(force) {
+  var n = needDays();
+  if (RC.rows && !force && RC.loadedDays >= n) { renderRecent(); return; }
+  document.getElementById('rList').innerHTML = '<div class="empty">불러오는 중…</div>';
+  call('recentRecords', tok(), n).then(function (rows) { RC.rows = rows; RC.loadedDays = n; renderRecent(); })
+    .catch(function (e) { document.getElementById('rList').innerHTML = '<div class="empty">불러오기 실패: ' + esc(e) + '</div>'; });
+}
+function setRecentKind(k) {
+  RC.kind = k;
+  ['all', 'motor', 'coil'].forEach(function (x) { document.getElementById('rk_' + x).classList.toggle('on', x === k); });
+  renderRecent();
+}
+function toggleMine() { RC.mine = !RC.mine; document.getElementById('rMine').classList.toggle('on', RC.mine); renderRecent(); }
+function setRecentDays(n) {
+  RC.days = n; RC.date = ''; document.getElementById('rDate').value = '';
+  [7, 30, 90].forEach(function (x) { document.getElementById('rd_' + x).classList.toggle('on', x === n); });
+  loadRecent(false);
+}
+function pickRecentDate(v) {
+  RC.date = v || '';
+  [7, 30, 90].forEach(function (x) { document.getElementById('rd_' + x).classList.toggle('on', !RC.date && x === RC.days); });
+  loadRecent(false);
+}
+function renderRecent() {
+  if (!RC.rows) return;
+  var me = ME ? ME.name : '', lim = '';
+  if (!RC.date) { var d0 = new Date(); d0.setDate(d0.getDate() - RC.days + 1); lim = ymd(d0); }
+  var hit = RC.rows.filter(function (r) {
+    var day = String(r.when).slice(0, 10);
+    if (RC.date ? day !== RC.date : day < lim) return false;
+    if (RC.kind !== 'all' && r.kind !== RC.kind) return false;
+    if (RC.mine && r.who !== me) return false;
+    return true;
+  });
+  document.getElementById('rCount').textContent = (RC.date ? RC.date.replace(/-/g, '.') + ' 하루' : '최근 ' + RC.days + '일') + ' · ' + hit.length + '건 (줄을 누르면 기록 카드가 열립니다)';
+  if (!hit.length) { document.getElementById('rList').innerHTML = '<div class="empty">이 기간에 기록이 없습니다</div>'; return; }
+  var h = '', cur = '';
+  hit.forEach(function (r) {
+    var day = String(r.when).slice(0, 10);
+    if (day !== cur) { cur = day; h += '<div class="rday">' + dayName(day) + '</div>'; }
+    h += '<button type="button" class="rrow" onclick="openRecent(\'' + esc(r.kind) + '\',\'' + esc(r.id) + '\')">' +
+      '<span class="go">열기 ›</span><div class="rt">' + esc(r.no ? '#' + r.no : '(작업번호 없음)') +
+      ' <span class="tag' + (r.type === '수정' ? ' w' : '') + '">' + esc(r.type) + '</span><span class="tag g">' + (r.kind === 'motor' ? '모터' : '코일') + '</span></div>' +
+      '<div>' + esc(r.label || '(내용 없음)') + (r.photo ? ' · 📷' : '') + '</div>' +
+      '<div class="rm">' + esc(String(r.when).slice(11, 16)) + ' · ' + esc(r.who || '-') + '</div></button>';
+  });
+  document.getElementById('rList').innerHTML = h;
+}
+function openRecent(k, id) {
+  FOCUS = id; FOCUS_RETRY = false; findKind = k;
+  showTab('find');
+}
+
+// ───── ⚙️ 관리자 메뉴 (관리자에게만 보임) ─────
+// 메뉴를 늘리려면 아래 목록에 { title, render } 를 하나 추가하면 됩니다. (서버 쪽은 Code.gs 의 ADMIN_ACTIONS)
+var ADMIN_SECTIONS = [
+  { title: '👥 사람 등록·관리', open: true, render: admUsers },
+  { title: '📊 기록 현황', render: admStats },
+  { title: '🔒 수정 권한', render: admPerm },
+  { title: '📝 수정기록 (최근 80건)', render: admLog },
+  { title: '💾 백업 (매일 밤 자동)', render: admBackup },
+  { title: '🔗 바로가기 (시트·사진 폴더)', render: admLinks }
+];
+function admPerm(el) {
+  adm('getOpts').then(function (o) {
+    el.innerHTML = '<div class="note">찾아보기·최근 기록에서 잘못 적힌 기록을 누가 고칠 수 있는지 정합니다. 고친 내용은 어느 쪽이든 \'수정기록\' 탭에 모두 남습니다.</div>' +
+      '<div class="optrow"><button id="op0" class="' + (o.editOwnOnly ? '' : 'on') + '" onclick="admSetPerm(false)">👥 누구나 고치기</button>' +
+      '<button id="op1" class="' + (o.editOwnOnly ? 'on' : '') + '" onclick="admSetPerm(true)">🔒 남의 기록은 관리자만</button></div>' +
+      '<div class="note">\'관리자만\'으로 하면 팀원은 자기가 쓴 기록만 고칠 수 있습니다.</div>';
+  }).catch(admErr(el));
+}
+function admSetPerm(on) {
+  adm('setOpt', { key: 'editOwnOnly', on: on }).then(function (o) {
+    CFG.opts = { editOwnOnly: o.editOwnOnly };
+    document.getElementById('op0').classList.toggle('on', !o.editOwnOnly);
+    document.getElementById('op1').classList.toggle('on', o.editOwnOnly);
+    toast(o.editOwnOnly ? '🔒 이제 남의 기록은 관리자만 고칠 수 있습니다' : '👥 이제 누구나 고칠 수 있습니다');
+  }).catch(function (e) { toast('⚠️ ' + e, 4000); });
+}
+function admLog(el) {
+  adm('changeLog').then(function (list) {
+    if (!list.length) { el.innerHTML = '<div class="empty">아직 고친 기록이 없습니다.</div>'; return; }
+    el.innerHTML = list.map(function (h) {
+      return '<div class="urow"><b>' + esc(h.no ? '#' + h.no : h.id) + '</b> <span class="tag g">' + esc(h.kind) + '</span> · ' + esc(h.field) +
+        '<div>' + esc(h.from || '(빈칸)') + ' → <b>' + esc(h.to || '(빈칸)') + '</b></div><div class="note">' + esc(h.when) + ' · ' + esc(h.who) + '</div></div>';
+    }).join('');
+  }).catch(admErr(el));
+}
+function admBackup(el) {
+  adm('backupInfo').then(function (b) {
+    el.innerHTML = '<div class="note">매일 밤 2~3시에 기록 시트(모터·코일·수정기록·설정, 사진 제외)를 날짜별 폴더에 CSV(엑셀로 열림)로 복사합니다. 최근 30일 + 매달 1일 백업은 남기고, 원본 시트는 절대 지우지 않습니다.</div>' +
+      '<div style="margin-top:8px"><b>마지막 백업</b><div class="note">' + esc(b.last || '아직 없음') + '</div></div>' +
+      '<button class="btn sub" id="bkBtn" onclick="admBackupNow()">💾 지금 백업하기</button>' +
+      '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(b.url) + '">📁 백업 폴더 열기 (' + b.count + '개)</a>' +
+      (b.list.length ? '<div class="note" style="margin-top:8px">' + b.list.slice(0, 12).map(esc).join(', ') + (b.count > 12 ? ' …' : '') + '</div>' : '');
+  }).catch(admErr(el));
+}
+function admBackupNow() {
+  var b = document.getElementById('bkBtn'); b.disabled = true; b.textContent = '백업 중…';
+  adm('backupNow').then(function (r) { toast('✅ 백업했습니다', 3000); admBackup(b.parentNode); })
+    .catch(function (e) { b.disabled = false; b.textContent = '💾 지금 백업하기'; toast('⚠️ ' + e, 5000); });
+}
+var ADM = { users: [], el: null };
+function adm(action, args) { return call('adminCall', tok(), action, args || {}); }
+function admErr(el) { return function (e) { el.innerHTML = '<div class="err">' + esc(e) + '</div>'; }; }
+function buildAdmin() {
+  var box = document.getElementById('adminBox'); box.innerHTML = '';
+  ADMIN_SECTIONS.forEach(function (s) {
+    var d = document.createElement('details'); d.className = 'adm';
+    d.innerHTML = '<summary>' + esc(s.title) + '</summary><div class="in"></div>';
+    var el = d.querySelector('.in');
+    d.addEventListener('toggle', function () { if (d.open) { el.innerHTML = '<div class="note">불러오는 중…</div>'; s.render(el); } });
+    box.appendChild(d);
+    if (s.open) d.open = true;
+  });
+}
+function admUsers(el, after) {
+  ADM.el = el;
+  adm('listUsers').then(function (users) {
+    ADM.users = users;
+    var h = '<label for="auName">새로 등록할 이름</label><input id="auName" placeholder="예) 홍길동" onkeydown="if(event.key===\'Enter\')admAdd()">' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:15px"><input type="checkbox" id="auAdmin" style="width:22px;height:22px"> 관리자로 등록 (이 관리 메뉴도 보임)</label>' +
+      '<button class="btn" id="auBtn" style="margin-top:10px" onclick="admAdd()">➕ 등록하고 임시 PIN 받기</button>' +
+      '<div id="auPin"></div>' +
+      '<div class="count" style="margin-top:16px">등록된 사람 ' + users.length + '명</div>';
+    users.forEach(function (u, i) {
+      var self = ME && u.name === ME.name;
+      h += '<div class="urow"><span class="n">' + esc(u.name) + '</span>' +
+        (u.admin ? '<span class="tag">관리자</span>' : '<span class="tag g">팀원</span>') +
+        (u.temp ? '<span class="tag w">임시 PIN 사용 중</span>' : '') + (self ? ' <span class="note">(나)</span>' : '') +
+        '<div class="note">등록 ' + esc(u.reg || '-') + ' · 마지막 접속 ' + esc(u.last || '아직 없음') + '</div>' +
+        (self ? '' : '<div class="ub"><button onclick="admReset(' + i + ')">🔑 PIN 초기화</button>' +
+          '<button onclick="admRole(' + i + ')">' + (u.admin ? '팀원으로' : '관리자로') + '</button>' +
+          '<button class="del" onclick="admDel(' + i + ')">🗑 삭제</button></div>') + '</div>';
+    });
+    el.innerHTML = h;
+    if (after) after();
+  }).catch(admErr(el));
+}
+function admAdd() {
+  var n = document.getElementById('auName').value.trim(), a = document.getElementById('auAdmin').checked;
+  if (!n) { toast('이름을 적어주세요'); return; }
+  var b = document.getElementById('auBtn'); b.disabled = true; b.textContent = '등록 중…';
+  adm('addUser', { name: n, admin: a }).then(function (res) {
+    admUsers(ADM.el, function () { showPinBox(res, '등록했습니다.'); });
+  }).catch(function (e) { b.disabled = false; b.textContent = '➕ 등록하고 임시 PIN 받기'; toast('⚠️ ' + e, 4000); });
+}
+function admReset(i) {
+  var u = ADM.users[i];
+  if (!confirm(u.name + ' 님 PIN을 새 임시 PIN으로 바꿀까요?\n그 사람 휴대폰은 새 PIN으로 다시 로그인해야 합니다.')) return;
+  adm('resetPin', { name: u.name }).then(function (res) {
+    admUsers(ADM.el, function () { showPinBox(res, 'PIN을 초기화했습니다.'); });
+  }).catch(function (e) { toast('⚠️ ' + e, 4000); });
+}
+function admRole(i) {
+  var u = ADM.users[i], to = u.admin ? '팀원' : '관리자';
+  if (!confirm(u.name + ' 님을 ' + to + '(으)로 바꿀까요?')) return;
+  adm('setRole', { name: u.name, admin: !u.admin }).then(function () { toast('✅ ' + u.name + ' 님 → ' + to); admUsers(ADM.el); })
+    .catch(function (e) { toast('⚠️ ' + e, 4000); });
+}
+function admDel(i) {
+  var u = ADM.users[i];
+  if (!confirm(u.name + ' 님을 삭제할까요?\n더 이상 앱에 들어올 수 없습니다. (이 사람이 남긴 기록은 그대로 남습니다)')) return;
+  adm('deleteUser', { name: u.name }).then(function () { toast('🗑 ' + u.name + ' 님을 삭제했습니다'); admUsers(ADM.el); })
+    .catch(function (e) { toast('⚠️ ' + e, 4000); });
+}
+function showPinBox(res, what) {
+  var msg = '[권선 작업기록 앱]\n주소: ' + res.site + '\n이름: ' + res.name + '\n임시 PIN: ' + res.pin + '\n처음 들어가면 나만 아는 PIN으로 바꾸게 됩니다.';
+  var b = document.getElementById('auPin');
+  b.innerHTML = '<div class="pinbox">✅ <b>' + esc(res.name) + '</b> 님 ' + esc(what) + '<br>임시 PIN<div class="big">' + esc(res.pin) + '</div>' +
+    '이 번호를 본인에게만 알려주세요. 이 화면을 벗어나면 다시 볼 수 없습니다. (잊으면 \'PIN 초기화\')' +
+    '<textarea readonly id="auMsg" onclick="this.select()">' + esc(msg) + '</textarea>' +
+    '<button class="btn sub" style="margin-top:6px" onclick="copyMsg()">📋 안내 문구 복사 (카톡으로 보내기)</button></div>';
+  b.scrollIntoView({ block: 'center' });
+}
+function copyMsg(id) {
+  var t = document.getElementById(id || 'auMsg'), ok = false;
+  t.select();
+  try { ok = document.execCommand('copy'); } catch (e) {}
+  if (ok) { toast('복사했습니다. 카톡에 붙여넣으세요'); return; }
+  if (navigator.clipboard) navigator.clipboard.writeText(t.value).then(function () { toast('복사했습니다. 카톡에 붙여넣으세요'); }, function () { toast('글자를 길게 눌러 복사하세요'); });
+  else toast('글자를 길게 눌러 복사하세요');
+}
+function admStats(el) {
+  adm('stats').then(function (s) {
+    var h = '<div class="note">등록된 사람 ' + s.users + '명 · 이번 달 ' + esc(s.month) + '</div>';
+    s.kinds.forEach(function (k) {
+      h += '<h3 style="margin:14px 0 4px;font-size:16px">' + esc(k.title) + '</h3><table class="stbl">' +
+        '<tr><td>전체 기록</td><td><b>' + k.total + '건</b></td></tr>' +
+        '<tr><td>이번 달 새 기록</td><td>' + k.month + '건</td></tr>' +
+        '<tr><td>수정된 기록</td><td>' + k.edited + '건</td></tr>' +
+        (k.authors.length ? '<tr><td>사람별 기록</td><td>' + k.authors.map(function (a) { return esc(a[0]) + ' ' + a[1] + '건'; }).join('<br>') + '</td></tr>' : '') +
+        '</table>';
+    });
+    el.innerHTML = h;
+  }).catch(admErr(el));
+}
+function admRecent(el) {
+  adm('recent').then(function (list) {
+    if (!list.length) { el.innerHTML = '<div class="empty">아직 기록이 없습니다.</div>'; return; }
+    el.innerHTML = '<div class="note">최근 30개 (새 기록·수정)</div>' + list.map(function (r) {
+      return '<div class="urow"><span class="tag' + (r.type === '수정' ? ' w' : '') + '" style="margin-left:0">' + esc(r.type) + '</span> <b>' + esc(r.who || '-') + '</b> · ' + esc(r.kind) +
+        '<div>' + esc(r.label || '(내용 없음)') + '</div><div class="note">' + esc(r.when) + '</div></div>';
+    }).join('');
+  }).catch(admErr(el));
+}
+function admRefresh() {
+  var b = document.getElementById('rfBtn'); b.disabled = true;
+  adm('refreshCache').then(function () {
+    ls(LS.cfg, null); toast('✅ 설정 탭 내용을 다시 읽었습니다', 3000); start();
+  }).catch(function (e) { toast('⚠️ ' + e, 4000); }).then(function () { b.disabled = false; });
+}
+function admLinks(el) {
+  adm('links').then(function (l) {
+    el.innerHTML = '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(l.sheet) + '">📄 기록 시트 열기</a>' +
+      '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(l.photos) + '">🖼️ 사진 폴더 열기</a>' +
+      '<h3 style="margin:16px 0 4px;font-size:16px">📱 앱 주소 (팀원에게 보낼 주소)</h3>' +
+      '<textarea readonly id="siteUrl" rows="2" onclick="this.select()">' + esc(l.site) + '</textarea>' +
+      '<button class="btn sub" style="margin-top:6px" onclick="copyMsg(\'siteUrl\')">📋 주소 복사 (카톡에 붙여넣기)</button>' +
+      '<div class="note" style="margin-top:10px">숨길 칸·버튼 목록은 시트의 \'설정\' 탭에서 바꿀 수 있습니다. 앱 속도를 위해 10분 동안 기억해 두므로, 바로 보려면 아래 버튼을 누르세요.</div>' +
+      '<button class="btn sub" id="rfBtn" style="margin-top:6px" onclick="admRefresh()">⚡ 설정 탭 바로 반영</button>';
+  }).catch(admErr(el));
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+</script>
+</body>
+</html>
