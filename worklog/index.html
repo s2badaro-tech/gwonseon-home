@@ -753,12 +753,34 @@ function setFindKind(k) {
   buildFilters();
   loadList(false);
 }
+// 찾아보기: 최근 200건을 먼저 보여주고, 나머지는 뒤에서 400건씩 더 받아 붙임
+var LOADING = {}, LOADGEN = {};
 function loadList(force) {
   if (cache[findKind] && !force) { render(); return; }
   document.getElementById('list').innerHTML = '<div class="empty">불러오는 중…</div>';
-  var k = findKind;
-  call('listRecords', k, tok()).then(function (rows) { cache[k] = rows; if (k === findKind) render(); })
-    .catch(function (e) { document.getElementById('list').innerHTML = '<div class="empty">불러오기 실패: ' + esc(e) + '</div>'; });
+  var k = findKind, gen = (LOADGEN[k] = (LOADGEN[k] || 0) + 1), got = [], total = 0;
+  LOADING[k] = true;
+  function page(start, n) {
+    return call('listRecordsPage', k, tok(), start, n).then(function (p) {
+      if (LOADGEN[k] !== gen) return; // 그 사이 새로 불러오기를 시작함
+      total = p.total;
+      p.rows.forEach(function (a) {
+        var v = {}; p.keys.forEach(function (key, i) { v[key] = a[5 + i]; });
+        got.push({ id: a[0], date: a[1], author: a[2], photo: a[3], edited: a[4], values: v });
+      });
+      var more = p.rows.length && start + n < total;
+      LOADING[k] = !!more;
+      cache[k] = got.slice();
+      if (k === findKind) render();
+      if (more) return page(start + n, 400);
+    });
+  }
+  page(0, 200).catch(function (e) {
+    LOADING[k] = false;
+    if (LOADGEN[k] !== gen) return;
+    if (cache[k] && cache[k].length) { toast('⚠️ 나머지 기록을 다 못 받았습니다: ' + e, 4000); render(); return; }
+    document.getElementById('list').innerHTML = '<div class="empty">불러오기 실패: ' + esc(e) + '</div>';
+  });
 }
 function norm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ''); }
 function render() {
@@ -766,6 +788,7 @@ function render() {
   var fb = document.getElementById('focusBar');
   if (FOCUS) {
     var one = rows.filter(function (r) { return r.id === FOCUS; });
+    if (!one.length && LOADING[findKind]) { document.getElementById('list').innerHTML = '<div class="empty">찾는 중…</div>'; return; }
     if (!one.length && !FOCUS_RETRY) { FOCUS_RETRY = true; loadList(true); return; }
     fb.innerHTML = '<button onclick="FOCUS=null;render()">✕ 전체 보기</button>🕘 최근 기록에서 고른 기록입니다.';
     fb.classList.remove('hide');
@@ -793,8 +816,8 @@ function render() {
     }
     return true;
   });
-  document.getElementById('count').textContent = '전체 ' + rows.length + '건 중 ' + hit.length + '건';
-  if (!hit.length) { document.getElementById('list').innerHTML = '<div class="empty">찾는 기록이 없습니다</div>'; return; }
+  document.getElementById('count').textContent = '전체 ' + rows.length + '건 중 ' + hit.length + '건' + (LOADING[findKind] ? ' (나머지 받는 중…)' : '');
+  if (!hit.length) { document.getElementById('list').innerHTML = '<div class="empty">' + (LOADING[findKind] ? '찾는 중…' : '찾는 기록이 없습니다') + '</div>'; return; }
   document.getElementById('list').innerHTML = hit.slice(0, 200).map(card).join('');
 }
 function card(r) {
