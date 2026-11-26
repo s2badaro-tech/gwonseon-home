@@ -7,7 +7,9 @@
 <!-- 깃허브 시험판 (2026-11-26): 구글 사이트 대신 깃허브 페이지에 올려 속도 비교. 홈 화면에 추가하면 앱처럼 열림 -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="권선 작업실">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#1f6fb2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -45,6 +47,17 @@
     background:#1d2430;color:#fff;padding:3.5vw 6vw;border-radius:3vw;font-size:5vw;
     opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.on{opacity:1}
+  /* 앱으로 설치 (홈 화면 아이콘) */
+  .inst{display:none;width:100%;margin-top:5vw;height:12vw;border:0;border-radius:3vw;background:#1d2430;color:#fff;
+    font:inherit;font-size:5vw;font-weight:700;cursor:pointer;box-shadow:0 .8vw 2vw rgba(0,0,0,.15)}
+  .inst.on{display:block}
+  .inst:active{transform:scale(.97)}
+  .sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:9}
+  .sheet.on{display:flex}
+  .sheet .box{background:#fff;width:100%;border-radius:5vw 5vw 0 0;padding:6vw 6vw 8vw;font-size:4.6vw;line-height:1.6}
+  .sheet h2{margin:0 0 3vw;font-size:5.6vw}
+  .sheet ol{margin:0;padding-left:6vw}
+  .sheet button{margin-top:5vw;width:100%;height:11vw;border:0;border-radius:3vw;background:#1f6fb2;color:#fff;font:inherit;font-size:4.8vw;font-weight:700}
 </style>
 </head>
 <body>
@@ -63,8 +76,18 @@
     <button class="room wait"><span class="ic">🚧</span><span class="nm">작업 중</span></button>
     <button class="room wait"><span class="ic">🚧</span><span class="nm">작업 중</span></button>
   </div>
+  <button class="inst" id="inst">📲 휴대폰에 앱으로 설치</button>
 </div>
 <div class="toast" id="t">아직 만드는 중입니다</div>
+<div class="sheet" id="sheet"><div class="box">
+  <h2>📲 아이폰에 설치하기</h2>
+  <ol>
+    <li>사파리 맨 아래 가운데 <b>공유 버튼(네모에 위 화살표 ⬆)</b>을 누릅니다.</li>
+    <li>목록을 올려서 <b>홈 화면에 추가</b>를 누릅니다.</li>
+    <li>오른쪽 위 <b>추가</b>를 누르면 홈 화면에 '권선 작업실' 아이콘이 생깁니다.</li>
+  </ol>
+  <button id="sheetOk">알겠어요</button>
+</div></div>
 <script>
   var n=new Date(),w='일월화수목금토';
   document.getElementById('d').textContent=(n.getMonth()+1)+'월 '+n.getDate()+'일 ('+w[n.getDay()]+')';
@@ -80,6 +103,19 @@
       t.classList.add('on'); clearTimeout(tm); tm=setTimeout(function(){t.classList.remove('on')},1500);
     });
   });
+  // ── 앱으로 설치: 안드로이드 크롬은 버튼 한 번, 아이폰은 방법 안내. 이미 앱으로 열었으면 버튼 숨김
+  var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  var ib = document.getElementById('inst'), sh = document.getElementById('sheet'), dp = null;
+  var ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); dp = e; if (!standalone) ib.classList.add('on'); });
+  window.addEventListener('appinstalled', function () { ib.classList.remove('on'); dp = null; });
+  if (ios && !standalone) ib.classList.add('on');
+  ib.addEventListener('click', function () {
+    if (dp) { dp.prompt(); dp.userChoice.then(function () { dp = null; ib.classList.remove('on'); }); return; }
+    if (ios) { sh.classList.add('on'); return; }
+    t.textContent = '크롬 메뉴(⋮) → 홈 화면에 추가'; t.classList.add('on'); clearTimeout(tm); tm = setTimeout(function () { t.classList.remove('on'); t.textContent = '아직 만드는 중입니다'; }, 3500);
+  });
+  document.getElementById('sheetOk').addEventListener('click', function () { sh.classList.remove('on'); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
 </script>
 </body>
