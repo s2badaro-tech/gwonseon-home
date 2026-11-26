@@ -151,8 +151,8 @@
   <section id="pageNew">
     <div id="pendingBox" class="pending hide"></div>
     <div class="seg">
-      <button id="kMotor" class="on" onclick="setKind('motor')">모터 재권선</button>
-      <button id="kCoil" onclick="setKind('coil')">마그네틱 코일</button>
+      <button id="kMotor" class="on" onclick="setKind('motor')">모터</button>
+      <button id="kCoil" onclick="setKind('coil')">전자브레이크</button>
     </div>
     <div id="editBar" class="editbar hide"><button onclick="resetForm()">취소</button><span id="editMsg">기존 기록을 수정하는 중입니다.</span></div>
     <form id="form" class="grid" onsubmit="return false"></form>
@@ -169,8 +169,9 @@
   <!-- 찾아보기 -->
   <section id="pageFind" class="hide">
     <div class="seg">
-      <button id="fMotor" class="on" onclick="FOCUS=null;setFindKind('motor')">모터 재권선</button>
-      <button id="fCoil" onclick="FOCUS=null;setFindKind('coil')">마그네틱 코일</button>
+      <button id="fAll" class="on" onclick="FOCUS=null;setFindKind('all')">전체</button>
+      <button id="fMotor" onclick="FOCUS=null;setFindKind('motor')">모터</button>
+      <button id="fCoil" onclick="FOCUS=null;setFindKind('coil')">전자브레이크</button>
     </div>
     <div id="focusBar" class="focusbar hide"></div>
     <input id="q" placeholder="검색어 (작업번호, 고객, 제조사, 메모…)" oninput="FOCUS=null;render()" style="margin-bottom:8px">
@@ -185,7 +186,7 @@
     <div class="seg">
       <button id="rk_all" class="on" onclick="setRecentKind('all')">전체</button>
       <button id="rk_motor" onclick="setRecentKind('motor')">모터</button>
-      <button id="rk_coil" onclick="setRecentKind('coil')">코일</button>
+      <button id="rk_coil" onclick="setRecentKind('coil')">전자브레이크</button>
     </div>
     <div class="rtools">
       <button id="rMine" onclick="toggleMine()">👤 내 기록만</button>
@@ -260,7 +261,7 @@
 <script src="../auth.js"></script>
 <script>
 // ───── 기본 상태 ─────
-var CFG = null, kind = 'motor', findKind = 'motor', editId = null, photo = null;
+var CFG = null, kind = 'motor', findKind = 'all', editId = null, photo = null;
 var cache = { motor: null, coil: null };
 var LS = { name:'wr_name', token:'wr_token', queue:'wr_queue', draft:'wr_draft_', cfg:'wr_cfg' };
 
@@ -689,7 +690,11 @@ var FILTERS = {
 };
 var FIND_SKIP = { coil: ['coilG', 'memo'] };
 var fsel = {};
+// 화면에 보이는 이름 (시트 탭·서버 이름은 그대로: 마그네틱코일)
+var KNAME = { motor: '모터', coil: '전자브레이크' };
+function showTitle(t) { return t === '마그네틱 코일' ? '전자브레이크' : t === '모터 재권선' ? '모터' : t; }
 function fdefs() {
+  if (findKind === 'all') return []; // 전체: 검색어로만 찾기
   var fs = CFG.kinds[findKind].fields, skip = FIND_SKIP[findKind] || [];
   if (FILTERS[findKind] === 'form') {
     return fs.filter(function (f) { return skip.indexOf(f[0]) < 0 && f[2] !== 'area'; }).map(function (f) {
@@ -748,6 +753,8 @@ function fmatch(d, cell, want) {
 }
 function setFindKind(k) {
   findKind = k;
+  document.getElementById('fAll').classList.toggle('on', k === 'all');
+  document.getElementById('fbox').classList.toggle('hide', k === 'all');
   document.getElementById('fMotor').classList.toggle('on', k === 'motor');
   document.getElementById('fCoil').classList.toggle('on', k === 'coil');
   buildFilters();
@@ -755,10 +762,22 @@ function setFindKind(k) {
 }
 // 찾아보기: 최근 200건을 먼저 보여주고, 나머지는 뒤에서 400건씩 더 받아 붙임
 var LOADING = {}, LOADGEN = {};
+function kindsNow() { return findKind === 'all' ? ['motor', 'coil'] : [findKind]; }
+function isLoading() { return kindsNow().some(function (k) { return LOADING[k]; }); }
+function rowsNow() { // 전체: 모터+전자브레이크를 날짜 최근 순으로 합침
+  if (findKind !== 'all') return cache[findKind];
+  if (!cache.motor && !cache.coil) return null;
+  return (cache.motor || []).concat(cache.coil || []).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+}
+function findRec(id) { return (cache.motor || []).concat(cache.coil || []).filter(function (x) { return x.id === id; })[0]; }
 function loadList(force) {
-  if (cache[findKind] && !force) { render(); return; }
+  var need = kindsNow().filter(function (k) { return force || !cache[k]; });
+  if (!need.length) { render(); return; }
   document.getElementById('list').innerHTML = '<div class="empty">불러오는 중…</div>';
-  var k = findKind, gen = (LOADGEN[k] = (LOADGEN[k] || 0) + 1), got = [], total = 0;
+  need.forEach(loadKind);
+}
+function loadKind(k) {
+  var gen = (LOADGEN[k] = (LOADGEN[k] || 0) + 1), got = [], total = 0;
   LOADING[k] = true;
   function page(start, n) {
     return call('listRecordsPage', k, tok(), start, n).then(function (p) {
@@ -766,29 +785,30 @@ function loadList(force) {
       total = p.total;
       p.rows.forEach(function (a) {
         var v = {}; p.keys.forEach(function (key, i) { v[key] = a[5 + i]; });
-        got.push({ id: a[0], date: a[1], author: a[2], photo: a[3], edited: a[4], values: v });
+        got.push({ id: a[0], date: a[1], author: a[2], photo: a[3], edited: a[4], values: v, kind: k });
       });
       var more = p.rows.length && start + n < total;
       LOADING[k] = !!more;
       cache[k] = got.slice();
-      if (k === findKind) render();
+      if (k === findKind || findKind === 'all') render();
       if (more) return page(start + n, 400);
     });
   }
   page(0, 200).catch(function (e) {
     LOADING[k] = false;
     if (LOADGEN[k] !== gen) return;
+    if (k !== findKind && findKind !== 'all') return;
     if (cache[k] && cache[k].length) { toast('⚠️ 나머지 기록을 다 못 받았습니다: ' + e, 4000); render(); return; }
     document.getElementById('list').innerHTML = '<div class="empty">불러오기 실패: ' + esc(e) + '</div>';
   });
 }
 function norm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ''); }
 function render() {
-  var rows = cache[findKind]; if (!rows) return;
+  var rows = rowsNow(); if (!rows) return;
   var fb = document.getElementById('focusBar');
   if (FOCUS) {
     var one = rows.filter(function (r) { return r.id === FOCUS; });
-    if (!one.length && LOADING[findKind]) { document.getElementById('list').innerHTML = '<div class="empty">찾는 중…</div>'; return; }
+    if (!one.length && isLoading()) { document.getElementById('list').innerHTML = '<div class="empty">찾는 중…</div>'; return; }
     if (!one.length && !FOCUS_RETRY) { FOCUS_RETRY = true; loadList(true); return; }
     fb.innerHTML = '<button onclick="FOCUS=null;render()">✕ 전체 보기</button>🕘 최근 기록에서 고른 기록입니다.';
     fb.classList.remove('hide');
@@ -799,7 +819,7 @@ function render() {
     return;
   }
   fb.classList.add('hide');
-  document.getElementById('q').classList.remove('hide'); document.getElementById('fbox').classList.remove('hide');
+  document.getElementById('q').classList.remove('hide'); document.getElementById('fbox').classList.toggle('hide', findKind === 'all');
   var q = norm(document.getElementById('q').value);
   var defs = fdefs(), fv = defs.map(function (d) {
     if (!fon(d)) return '';
@@ -816,13 +836,13 @@ function render() {
     }
     return true;
   });
-  document.getElementById('count').textContent = '전체 ' + rows.length + '건 중 ' + hit.length + '건' + (LOADING[findKind] ? ' (나머지 받는 중…)' : '');
-  if (!hit.length) { document.getElementById('list').innerHTML = '<div class="empty">' + (LOADING[findKind] ? '찾는 중…' : '찾는 기록이 없습니다') + '</div>'; return; }
+  document.getElementById('count').textContent = '전체 ' + rows.length + '건 중 ' + hit.length + '건' + (isLoading() ? ' (나머지 받는 중…)' : '');
+  if (!hit.length) { document.getElementById('list').innerHTML = '<div class="empty">' + (isLoading() ? '찾는 중…' : '찾는 기록이 없습니다') + '</div>'; return; }
   document.getElementById('list').innerHTML = hit.slice(0, 200).map(card).join('');
 }
 function card(r) {
-  var v = r.values, t, s;
-  if (findKind === 'motor') {
+  var v = r.values, t, s, K = r.kind || findKind;
+  if (K === 'motor') {
     t = [v.ledgerNo && '#' + v.ledgerNo, v.target, v.kw && v.kw + 'kW', v.poles && v.poles + 'P', v.volt && v.volt + 'V', v.maker].filter(Boolean).join(' · ');
     s = ['슬롯 ' + (v.slots || '-'), '선경 ' + (v.wire || '-') + (v.strands ? ' (' + v.strands + '가닥)' : ''), '턴 ' + (v.turns || '-'),
          '직렬 ' + (v.series || '-'), '피치 ' + (v.pitch || '-'), '결선 ' + (v.conn || '-')].join(' / ');
@@ -832,12 +852,12 @@ function card(r) {
     t = [v.ledgerNo && '#' + v.ledgerNo, v.size, dim].filter(Boolean).join(' · ');
     s = ['턴 ' + (v.turns || '-'), '선경 ' + (v.wire || '-'), '저항 ' + (v.ohm || '-') + 'Ω'].join(' / ');
   }
-  var skip = FIND_SKIP[findKind] || [];
-  var rowsH = CFG.kinds[findKind].fields.map(function (f) { return v[f[0]] && (f[0] === 'memo' || skip.indexOf(f[0]) < 0) ? '<tr><td>' + esc(f[1]) + '</td><td>' + esc(v[f[0]]) + '</td></tr>' : ''; }).join('');
+  var skip = FIND_SKIP[K] || [];
+  var rowsH = CFG.kinds[K].fields.map(function (f) { return v[f[0]] && (f[0] === 'memo' || skip.indexOf(f[0]) < 0) ? '<tr><td>' + esc(f[1]) + '</td><td>' + esc(v[f[0]]) + '</td></tr>' : ''; }).join('');
   if (r.photo) rowsH += '<tr><td>사진</td><td>' + r.photo.split('\n').map(function (u, i) { return '<a href="' + esc(u) + '" target="_blank">사진' + (i + 1) + '</a>'; }).join(' ') + '</td></tr>';
   var canEdit = !CFG.opts || !CFG.opts.editOwnOnly || (ME && (ME.admin || r.author === ME.name));
   return '<div class="card" onclick="toggleCard(this)">' + (canEdit ? '<button class="ebtn" onclick="event.stopPropagation();useRec(\'' + esc(r.id) + '\',true)">✏️ 수정</button>' : '') + '<div class="t">' + esc(t || '(제목 없음)') + '</div><div class="s">' + esc(s) + '</div>' +
-    '<div class="m">' + esc(r.author) + ' · ' + esc(r.date) + (r.edited ? ' (수정 ' + esc(r.edited) + ')' : '') + (r.photo ? ' · 📷' : '') + '</div>' +
+    '<div class="m">' + (findKind === 'all' ? '<span class="tag g">' + KNAME[K] + '</span> ' : '') + esc(r.author) + ' · ' + esc(r.date) + (r.edited ? ' (수정 ' + esc(r.edited) + ')' : '') + (r.photo ? ' · 📷' : '') + '</div>' +
     '<div class="more hide"><table>' + rowsH + '</table><div class="acts">' +
     '<button onclick="event.stopPropagation();useRec(\'' + esc(r.id) + '\',false)">복사해서 새 기록</button>' +
     (canEdit ? '<button onclick="event.stopPropagation();useRec(\'' + esc(r.id) + '\',true)">✏️ 수정하기</button>' : '') +
@@ -855,8 +875,8 @@ function showHist(btn, id) {
 }
 function toggleCard(el) { el.querySelector('.more').classList.toggle('hide'); }
 function useRec(id, edit) {
-  var r = (cache[findKind] || []).filter(function (x) { return x.id === id; })[0]; if (!r) return;
-  showTab('new'); setKind(findKind); setValues(r.values);
+  var r = findRec(id); if (!r) return;
+  showTab('new'); setKind(r.kind || findKind); setValues(r.values);
   if (edit) {
     editId = r.id;
     var np = r.photo ? r.photo.split('\n').filter(String).length : 0;
@@ -937,7 +957,7 @@ function renderRecent() {
     if (day !== cur) { cur = day; h += '<div class="rday">' + dayName(day) + '</div>'; }
     h += '<button type="button" class="rrow" onclick="openRecent(\'' + esc(r.kind) + '\',\'' + esc(r.id) + '\')">' +
       '<span class="go">열기 ›</span><div class="rt">' + esc(r.no ? '#' + r.no : '(작업번호 없음)') +
-      ' <span class="tag' + (r.type === '수정' ? ' w' : '') + '">' + esc(r.type) + '</span><span class="tag g">' + (r.kind === 'motor' ? '모터' : '코일') + '</span></div>' +
+      ' <span class="tag' + (r.type === '수정' ? ' w' : '') + '">' + esc(r.type) + '</span><span class="tag g">' + KNAME[r.kind] + '</span></div>' +
       '<div>' + esc(r.label || '(내용 없음)') + (r.photo ? ' · 📷' : '') + '</div>' +
       '<div class="rm">' + esc(String(r.when).slice(11, 16)) + ' · ' + esc(r.who || '-') + '</div></button>';
   });
@@ -980,7 +1000,7 @@ function admLog(el) {
   adm('changeLog').then(function (list) {
     if (!list.length) { el.innerHTML = '<div class="empty">아직 고친 기록이 없습니다.</div>'; return; }
     el.innerHTML = list.map(function (h) {
-      return '<div class="urow"><b>' + esc(h.no ? '#' + h.no : h.id) + '</b> <span class="tag g">' + esc(h.kind) + '</span> · ' + esc(h.field) +
+      return '<div class="urow"><b>' + esc(h.no ? '#' + h.no : h.id) + '</b> <span class="tag g">' + esc(showTitle(h.kind)) + '</span> · ' + esc(h.field) +
         '<div>' + esc(h.from || '(빈칸)') + ' → <b>' + esc(h.to || '(빈칸)') + '</b></div><div class="note">' + esc(h.when) + ' · ' + esc(h.who) + '</div></div>';
     }).join('');
   }).catch(admErr(el));
@@ -1086,7 +1106,7 @@ function admStats(el) {
   adm('stats').then(function (s) {
     var h = '<div class="note">등록된 사람 ' + s.users + '명 · 이번 달 ' + esc(s.month) + '</div>';
     s.kinds.forEach(function (k) {
-      h += '<h3 style="margin:14px 0 4px;font-size:16px">' + esc(k.title) + '</h3><table class="stbl">' +
+      h += '<h3 style="margin:14px 0 4px;font-size:16px">' + esc(showTitle(k.title)) + '</h3><table class="stbl">' +
         '<tr><td>전체 기록</td><td><b>' + k.total + '건</b></td></tr>' +
         '<tr><td>이번 달 새 기록</td><td>' + k.month + '건</td></tr>' +
         '<tr><td>수정된 기록</td><td>' + k.edited + '건</td></tr>' +
