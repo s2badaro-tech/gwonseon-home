@@ -52,6 +52,20 @@
     font:inherit;font-size:5vw;font-weight:700;cursor:pointer;box-shadow:0 .8vw 2vw rgba(0,0,0,.15)}
   .inst.on{display:block}
   .inst:active{transform:scale(.97)}
+  /* v6: 한 번 로그인 (대문에서 이름+PIN → 작업기록·코일 관리 둘 다 들어가짐) */
+  .me{position:absolute;top:3.5vw;left:3vw;max-width:40vw;height:9vw;padding:0 3vw;border:0;border-radius:4.5vw;background:#e3e6eb;color:#1d2430;
+    font:inherit;font-size:4vw;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;display:none}
+  .me.on{display:block}
+  .lg{position:fixed;inset:0;background:var(--bg);z-index:8;display:none;flex-direction:column;justify-content:center;padding:0 8vw}
+  .lg.on{display:flex}
+  .lg h2{margin:0 0 1vw;font-size:8vw;text-align:center}
+  .lg .s{color:var(--sub);text-align:center;font-size:4.2vw;margin-bottom:6vw;line-height:1.5}
+  .lg label{display:block;font-size:4.4vw;font-weight:700;margin:3vw 0 1.5vw}
+  .lg input{width:100%;height:13vw;border:.5vw solid #c3c9d2;border-radius:3vw;padding:0 4vw;font:inherit;font-size:5.5vw;background:#fff}
+  .lg .go{width:100%;height:14vw;margin-top:6vw;border:0;border-radius:3vw;background:#1f6fb2;color:#fff;font:inherit;font-size:6vw;font-weight:700}
+  .lg .go:disabled{opacity:.6}
+  .lg .err{color:#c62828;font-size:4.2vw;min-height:6vw;margin-top:3vw;text-align:center;line-height:1.4}
+  .lg .sub2{width:100%;height:12vw;margin-top:3vw;border:0;border-radius:3vw;background:#e3e6eb;color:#1d2430;font:inherit;font-size:5vw;font-weight:700}
   .sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-end;justify-content:center;z-index:9}
   .sheet.on{display:flex}
   .sheet .box{background:#fff;width:100%;border-radius:5vw 5vw 0 0;padding:6vw 6vw 8vw;font-size:4.6vw;line-height:1.6}
@@ -63,6 +77,7 @@
 <body>
 <div class="wrap">
   <button class="gear" data-url="https://sites.google.com/view/gwonseon-home/settings" aria-label="설정" title="설정">⚙</button>
+  <button class="me" id="meBtn">👤</button>
   <div class="brand">POSCO GY솔루션</div>
   <h1>🔧 권선 작업실</h1>
   <div class="date" id="d"></div>
@@ -79,6 +94,33 @@
   <button class="inst" id="inst">📲 휴대폰에 앱으로 설치</button>
 </div>
 <div class="toast" id="t">아직 만드는 중입니다</div>
+<!-- v6: 로그인 화면 (처음 한 번). 여기서 들어가면 작업기록·코일 관리에서 다시 묻지 않음 -->
+<div class="lg" id="lg">
+  <form id="lgForm" autocomplete="on" onsubmit="return false">
+    <h2>🔧 권선 작업실</h2>
+    <div class="s">이름과 PIN을 한 번만 넣으면<br>작업기록·코일 관리 모두 들어가집니다.</div>
+    <label for="lgName">이름</label><input id="lgName" autocomplete="username">
+    <label for="lgPin">PIN (숫자)</label><input id="lgPin" type="password" inputmode="numeric" autocomplete="current-password">
+    <button class="go" id="lgGo" type="submit">들어가기</button>
+    <div class="err" id="lgErr"></div>
+  </form>
+  <form id="pnForm" onsubmit="return false" style="display:none">
+    <h2>🔑 새 PIN 정하기</h2>
+    <div class="s" id="pnNote">나만 아는 숫자(4~8자리)로 바꿔 주세요.<br>바꾼 PIN은 작업기록·코일 관리 모두 같습니다.</div>
+    <div id="pnOldWrap"><label for="pnOld">지금 PIN</label><input id="pnOld" type="password" inputmode="numeric" autocomplete="current-password"></div>
+    <label for="pnNew">새 PIN</label><input id="pnNew" type="password" inputmode="numeric" autocomplete="new-password">
+    <label for="pnNew2">새 PIN 한 번 더</label><input id="pnNew2" type="password" inputmode="numeric" autocomplete="new-password">
+    <button class="go" id="pnGo" type="submit">PIN 바꾸기</button>
+    <button class="sub2" id="pnCancel" type="button">닫기</button>
+    <div class="err" id="pnErr"></div>
+  </form>
+</div>
+<div class="sheet" id="meSheet"><div class="box">
+  <h2 id="meTitle">👤</h2>
+  <button id="mePin">🔑 PIN 바꾸기</button>
+  <button id="meOut" style="background:#c62828">로그아웃 (작업기록·코일 모두)</button>
+  <button id="meClose" style="background:#e3e6eb;color:#1d2430">닫기</button>
+</div></div>
 <div class="sheet" id="sheet"><div class="box">
   <h2>📲 아이폰에 설치하기</h2>
   <ol>
@@ -88,6 +130,7 @@
   </ol>
   <button id="sheetOk">알겠어요</button>
 </div></div>
+<script src="auth.js"></script>
 <script>
   var n=new Date(),w='일월화수목금토';
   document.getElementById('d').textContent=(n.getMonth()+1)+'월 '+n.getDate()+'일 ('+w[n.getDay()]+')';
@@ -116,6 +159,46 @@
     t.textContent = '크롬 메뉴(⋮) → 홈 화면에 추가'; t.classList.add('on'); clearTimeout(tm); tm = setTimeout(function () { t.classList.remove('on'); t.textContent = '아직 만드는 중입니다'; }, 3500);
   });
   document.getElementById('sheetOk').addEventListener('click', function () { sh.classList.remove('on'); });
+  // ── v6: 한 번 로그인 ──
+  var $=function(i){return document.getElementById(i);}, lg=$('lg'), pinTmp='';
+  function showMe(){ var nm=GW.name(); $('meBtn').textContent='👤 '+nm; $('meBtn').classList.add('on'); }
+  function showLogin(msg){ $('meBtn').classList.remove('on'); $('lgForm').style.display=''; $('pnForm').style.display='none';
+    $('lgName').value=GW.name(); $('lgPin').value=''; $('lgErr').textContent=msg||''; lg.classList.add('on'); }
+  function showPin(force){ $('lgForm').style.display='none'; $('pnForm').style.display='';
+    ['pnOld','pnNew','pnNew2'].forEach(function(i){$(i).value='';}); $('pnErr').textContent='';
+    var hasTmp=!!(force&&pinTmp); $('pnOld').value=hasTmp?pinTmp:''; $('pnOldWrap').style.display=hasTmp?'none':'';
+    $('pnNote').innerHTML=(force?'관리자가 준 임시 PIN을 쓰고 있습니다.<br>':'')+'나만 아는 숫자(4~8자리)로 바꿔 주세요.<br>바꾼 PIN은 작업기록·코일 관리 모두 같습니다.';
+    $('pnCancel').style.display=force?'none':''; lg.classList.add('on'); }
+  $('lgForm').addEventListener('submit',function(){
+    var nm=$('lgName').value.trim(), p=$('lgPin').value.trim(), b=$('lgGo');
+    if(!nm||!p){ $('lgErr').textContent='이름과 PIN을 모두 넣어 주세요.'; return; }
+    b.disabled=true; b.textContent='확인 중…'; $('lgErr').textContent='';
+    GW.login(nm,p).then(function(r){
+      showMe();
+      if(r.mustChange){ pinTmp=p; showPin(true); } else lg.classList.remove('on');
+    },function(e){ $('lgErr').textContent=e.message; }).then(function(){ b.disabled=false; b.textContent='들어가기'; });
+  });
+  $('pnForm').addEventListener('submit',function(){
+    var o=$('pnOld').value.trim(), a=$('pnNew').value.trim(), a2=$('pnNew2').value.trim(), er=$('pnErr'), b=$('pnGo');
+    if(!o){ er.textContent='지금 PIN을 넣어 주세요.'; return; }
+    if(!/^\d{4,8}$/.test(a)){ er.textContent='새 PIN은 숫자 4~8자리로 넣어 주세요.'; return; }
+    if(a!==a2){ er.textContent='새 PIN 두 번이 서로 다릅니다.'; return; }
+    if(a===o){ er.textContent='지금 PIN과 다른 숫자로 정해 주세요.'; return; }
+    b.disabled=true; er.textContent='바꾸는 중…';
+    GW.changePin(GW.name(),o,a).then(function(){
+      pinTmp=''; lg.classList.remove('on');
+      t.textContent='✅ PIN을 바꿨습니다'; t.classList.add('on'); clearTimeout(tm); tm=setTimeout(function(){t.classList.remove('on'); t.textContent='아직 만드는 중입니다';},3000);
+    },function(e){ er.textContent=e.message; $('pnOldWrap').style.display=''; }).then(function(){ b.disabled=false; });
+  });
+  $('pnCancel').addEventListener('click',function(){ lg.classList.remove('on'); });
+  $('meBtn').addEventListener('click',function(){ $('meTitle').textContent='👤 '+GW.name(); $('meSheet').classList.add('on'); });
+  $('meClose').addEventListener('click',function(){ $('meSheet').classList.remove('on'); });
+  $('mePin').addEventListener('click',function(){ $('meSheet').classList.remove('on'); showPin(false); });
+  $('meOut').addEventListener('click',function(){ if(!confirm('로그아웃할까요? 작업기록·코일 관리 모두 다시 이름과 PIN이 필요합니다.')) return;
+    GW.logout(); $('meSheet').classList.remove('on'); showLogin(); });
+  if(GW.loggedIn()) showMe(); else showLogin();
+  // 방에서 돌아왔을 때(뒤로 가기) 로그인 상태 다시 확인
+  window.addEventListener('pageshow',function(){ if(GW.loggedIn()){ showMe(); if($('lgForm').style.display!=='none') lg.classList.remove('on'); } else showLogin(); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function(){});
 </script>
 </body>

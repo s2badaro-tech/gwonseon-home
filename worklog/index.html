@@ -257,6 +257,7 @@
   </div>
 </div>
 
+<script src="../auth.js"></script>
 <script>
 // ───── 기본 상태 ─────
 var CFG = null, kind = 'motor', findKind = 'motor', editId = null, photo = null;
@@ -340,6 +341,7 @@ function doLogin() {
   b.disabled = true; b.textContent = '확인 중…'; err.textContent = '';
   call('login', n, p).then(function (res) {
     ls(LS.cfg, null); ls(LS.token, res.token); ls(LS.name, res.name); loginPinTmp = p;
+    if (window.GW) GW.alsoLogin('co', n, p); // 한 번 로그인: 코일 관리도 같이 들어가 둠
     start();
   }).catch(function (e) { err.textContent = e; })
     .then(function () { b.disabled = false; b.textContent = '들어가기'; });
@@ -369,16 +371,17 @@ function doPin() {
   if (n !== n2) { err.textContent = '새 PIN 두 번이 서로 다릅니다.'; return; }
   if (n === o) { err.textContent = '지금 PIN과 다른 숫자로 정해주세요.'; return; }
   b.disabled = true; err.textContent = '';
-  call('changePin', tok(), o, n).then(function () {
+  // 한 번 로그인: PIN을 바꾸면 작업기록·코일 출입증을 새 PIN으로 함께 다시 받음
+  (window.GW ? GW.changePin(ME ? ME.name : ls(LS.name), o, n).catch(function (e) { throw e.message; }) : call('changePin', tok(), o, n)).then(function () {
     loginPinTmp = ''; if (ME) ME.mustChange = false;
-    closeModal('pinModal'); toast('✅ PIN을 바꿨습니다. 다음부터 새 PIN으로 들어오세요', 4000);
+    closeModal('pinModal'); toast('✅ PIN을 바꿨습니다. 작업기록·코일 모두 새 PIN입니다', 4000);
   }).catch(function (e) { err.textContent = e; document.getElementById('pinOldWrap').classList.remove('hide'); })
     .then(function () { b.disabled = false; });
 }
 function doLogout() {
-  if (!confirm('로그아웃할까요? 다시 들어오려면 이름과 PIN이 필요합니다.')) return;
-  var t = tok(); ls(LS.token, null);
-  call('logout', t).catch(function () {});
+  if (!confirm('로그아웃할까요? 작업기록·코일 관리 모두 다시 이름과 PIN이 필요합니다.')) return;
+  if (window.GW) GW.logout(); // 작업기록·코일 모두 로그아웃
+  else { var t = tok(); ls(LS.token, null); call('logout', t).catch(function () {}); }
   showLogin();
 }
 

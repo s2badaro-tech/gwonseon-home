@@ -417,6 +417,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
 <datalist id="tgtList"></datalist><datalist id="locList"></datalist>
 <div id="toast"></div><div id="busy">잠시만요…</div>
 
+<script src="../auth.js"></script>
 <script>
 // QR 주소(?coil=C-014)로 열었을 때만 그 타래를 엶. 출력 태그가 값을 이미 따옴표로 감싸 주므로 JSON.stringify를 쓰지 않음 (v10까지 빈 값이 '""'로 들어가 '"" 번 타래를 찾지 못했습니다'가 떴음)
 var START_COIL = (function () { try { var p = new URLSearchParams(location.search); return p.get('coil') || p.get('no') || ''; } catch (e) { return ''; } })(); // v29 깃허브판: 주소창 ?coil= 에서 읽음
@@ -545,7 +546,10 @@ function showLogin() { ls('coilinv_snap', null); STARTED = false; $('meBtn').cla
 var loginPinTmp = '';
 $('lgBtn').onclick = function () {
   var pin = $('lgPin').value;
-  call('login', $('lgName').value, pin).then(function (r) { ls(TK, r.token); ls('coilinv_name', r.name); $('lgPin').value = ''; loginPinTmp = r.mustChange ? pin : ''; start(); }, function () {});
+  var nm = $('lgName').value;
+  call('login', nm, pin).then(function (r) { ls(TK, r.token); ls('coilinv_name', r.name); $('lgPin').value = ''; loginPinTmp = r.mustChange ? pin : '';
+    if (window.GW) GW.alsoLogin('wl', nm, pin); // 한 번 로그인: 작업기록도 같이 들어가 둠
+    start(); }, function () {});
 };
 try { $('lgName').value = ls('coilinv_name') || ''; } catch (e) {}
 function modal(id, on) { $(id).classList.toggle('hide', !on); }
@@ -570,13 +574,17 @@ $('pinBtn').onclick = function () {
   if (!/^\d{4,8}$/.test(nw)) { err.textContent = '새 PIN은 숫자 4~8자리로 적어주세요.'; return; }
   if (nw !== n2) { err.textContent = '새 PIN 두 번이 서로 다릅니다.'; return; }
   if (nw === o) { err.textContent = '지금 PIN과 다른 숫자로 정해주세요.'; return; }
-  rawCall('changePin', [ls(TK), o, nw]).then(function () {
+  // 한 번 로그인: PIN을 바꾸면 작업기록·코일 출입증을 새 PIN으로 함께 다시 받음
+  busy(true);
+  (window.GW ? GW.changePin(ME ? ME.name : ls('coilinv_name'), o, nw) : rawCall('changePin', [ls(TK), o, nw])).then(function () { busy(false);
     loginPinTmp = ''; if (ME) ME.mustChange = false; modal('pinModal', false);
-    toast('✅ PIN을 바꿨습니다. 두 앱 모두 새 PIN으로 들어오세요', 4000);
-  }, function (e) { err.textContent = e.message; $('pinOldWrap').classList.remove('hide'); });
+    toast('✅ PIN을 바꿨습니다. 작업기록·코일 모두 새 PIN입니다', 4000);
+  }, function (e) { busy(false); err.textContent = e.message; $('pinOldWrap').classList.remove('hide'); });
 };
 $('lgPin').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('lgBtn').click(); });
-$('logoutBtn').onclick = function () { if (!confirm('로그아웃할까요? 다시 들어오려면 이름과 PIN이 필요합니다.')) return; var t = ls(TK); ls(TK, null); if (t) rawCall('logout', [t], true).catch(function () {}); modal('meModal', false); showLogin(); };
+$('logoutBtn').onclick = function () { if (!confirm('로그아웃할까요? 작업기록·코일 관리 모두 다시 이름과 PIN이 필요합니다.')) return;
+  if (window.GW) GW.logout(); else { var t = ls(TK); ls(TK, null); if (t) rawCall('logout', [t], true).catch(function () {}); } // 두 앱 모두 로그아웃
+  modal('meModal', false); showLogin(); };
 
 // v24: 빨리 열기 — 휴대폰에 기억한 지난 자료(coilinv_snap)로 화면을 먼저 보여 주고, 새 자료는 뒤에서 받아 바꿈
 var STARTED = false;
