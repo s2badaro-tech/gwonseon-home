@@ -304,7 +304,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
       <div style="height:10px"></div>
       <button class="btn" id="hGo">찾기</button>
     </div>
-    <div class="card hide" id="hUsedBox"><h3>찾은 기간 사용 합계</h3><div id="hUsedBy"></div><div class="muted" style="margin:6px 0 2px">규격별</div><div id="hUsed"></div></div>
+    <div class="card hide" id="hUsedBox"><h3>누가 · 어떤 모터에 · 어떤 코일을 썼나</h3><div id="hUsedBy"></div><div id="hUsed"></div></div>
     <div class="card"><div class="list" id="hList"><div class="muted">조건을 고르고 ‘찾기’를 누르세요.</div></div></div>
   </section>
 
@@ -1064,7 +1064,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v35', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v36', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1439,11 +1439,26 @@ $('hGo').onclick = function () {
   var f = { from: $('hFrom').value, to: $('hTo').value, worker: $('hWorker').value, type: $('hType').value, target: $('hTarget').value.trim(), no: $('hNo').value.trim() };
   call('getHistory', ls(TK), f).then(function (r) {
     $('hList').innerHTML = histHtml(r.rows, false) || '<div class="muted">찾은 기록이 없습니다.</div>';
-    var ks = Object.keys(r.used);
-    $('hUsedBox').classList.toggle('hide', !ks.length);
-    var bs = Object.keys(r.usedBy || {});
-    $('hUsedBy').innerHTML = bs.length ? '<table>' + bs.map(function (k) { return '<tr><td>👷 ' + esc(k) + '</td><td class="n"><b>' + r.usedBy[k] + 'kg</b></td></tr>'; }).join('') + '</table>' : '';
-    $('hUsed').innerHTML = '<table>' + ks.map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="n"><b>' + r.used[k] + 'kg</b></td></tr>'; }).join('') + '</table>' +
+    // v36: 작업자 → 작업(모터 kW) → 코일 사이즈별 쓴 양 (취소된 기록은 뺌)
+    var W = {}, wl = [];
+    (r.rows || []).forEach(function (x) {
+      if (x.type !== '출고' || x.cancelled) return;
+      var u = -n(x.delta); if (!isFinite(u) || u <= 0) return;
+      var w = x.worker || '-'; if (!W[w]) { W[w] = { tot: 0, g: {}, l: [] }; wl.push(w); }
+      var kw = String(x.kw || '').trim(), key = (x.target || '-') + '|' + kw + '|' + x.spec + '|' + x.kind;
+      if (!W[w].g[key]) { W[w].g[key] = { t: x.target || '-', kw: kw, sp: x.spec, kd: x.kind, u: 0 }; W[w].l.push(key); }
+      W[w].g[key].u += u; W[w].tot += u;
+    });
+    wl.sort(function (a, b) { return W[b].tot - W[a].tot; });
+    $('hUsedBox').classList.toggle('hide', !wl.length);
+    $('hUsedBy').innerHTML = wl.map(function (w) {
+      return '<div style="margin:10px 0 4px;font-size:16px">👷 <b>' + esc(w) + '</b> · 합계 <b>' + r2(W[w].tot) + 'kg</b></div><table>' +
+        '<tr class="muted"><td>작업 (모터)</td><td>코일 사이즈</td><td class="n">쓴 양</td></tr>' +
+        W[w].l.map(function (k) { var g = W[w].g[k];
+          return '<tr><td>' + esc(g.t) + '<div class="muted">' + (g.kw ? esc(g.kw) + 'kW' : 'kW 없음') + '</div></td><td>' + esc(g.sp) + 'mm ' + esc(g.kd) + '</td><td class="n"><b>' + r2(g.u) + 'kg</b></td></tr>';
+        }).join('') + '</table>';
+    }).join('');
+    $('hUsed').innerHTML = ((r.rows || []).length >= 300 ? '<div class="muted" style="margin-top:6px">⚠️ 기록이 많아 최근 300건만 합쳤어요. 기간을 줄이면 정확해요.</div>' : '') +
       (f.target ? '<div class="muted" style="margin-top:6px">작업대상 “' + esc(f.target) + '”에 들어간 양입니다.</div>' : '');
   }, function () {});
 };
