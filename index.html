@@ -43,6 +43,7 @@
   .help:active{transform:scale(.97)}
   .help .ph{font-size:4.2vw;line-height:1}
   .help .tx{font-size:3.8vw;font-weight:700;letter-spacing:.1vw}
+  button.help{width:100%;border:0;font:inherit;cursor:pointer}
   .toast{position:fixed;left:50%;bottom:6vw;transform:translateX(-50%);white-space:nowrap;
     background:#1d2430;color:#fff;padding:3.5vw 6vw;border-radius:3vw;font-size:5vw;
     opacity:0;transition:opacity .2s;pointer-events:none}
@@ -92,6 +93,8 @@
     <button class="room wait"><span class="ic">🚧</span><span class="nm">작업 중</span></button>
   </div>
   <button class="inst" id="inst">📲 휴대폰에 앱으로 설치</button>
+  <!-- v8: Help Desk — 번호는 구글 서버(설정방)에만 있고, 로그인한 사람이 누를 때만 받아서 전화를 겁니다 -->
+  <button class="help" id="helpBtn" style="display:none"><span class="ph">📞</span><span class="tx">Help Desk</span></button>
 </div>
 <div class="toast" id="t">아직 만드는 중입니다</div>
 <!-- v6: 로그인 화면 (처음 한 번). 여기서 들어가면 작업기록·코일 관리에서 다시 묻지 않음 -->
@@ -197,6 +200,18 @@
   $('mePin').addEventListener('click',function(){ $('meSheet').classList.remove('on'); showPin(false); });
   $('meOut').addEventListener('click',function(){ if(!confirm('로그아웃할까요? 작업기록·코일 관리 모두 다시 이름과 PIN이 필요합니다.')) return;
     GW.logout(); $('meSheet').classList.remove('on'); showLogin(); });
+  // ── v8: Help Desk 전화 (번호는 화면·저장소에 없음, 서버에서 받아 바로 걸기) ──
+  var TEL='';
+  function telFetch(){ var tk=GW.stToken(); if(!tk) return Promise.reject(new Error('다시 로그인해 주세요'));
+    return GW.stPost('helpDesk',[tk]).then(function(r){ TEL=String(r&&r.tel||'').replace(/[^0-9+]/g,''); return TEL; }); }
+  function helpShow(){ $('helpBtn').style.display=GW.loggedIn()?'':'none'; if(GW.loggedIn()&&!TEL) telFetch().catch(function(){}); }
+  $('helpBtn').addEventListener('click',function(){
+    if(TEL){ location.href='tel:'+TEL; return; }
+    telFetch().then(function(n){ if(n) location.href='tel:'+n; },function(e){
+      t.textContent=e.message||'잠시 뒤 다시 눌러 주세요'; t.classList.add('on'); clearTimeout(tm); tm=setTimeout(function(){t.classList.remove('on'); t.textContent='아직 만드는 중입니다';},3000); });
+  });
+  var _showMe=showMe; showMe=function(){ _showMe(); helpShow(); };
+  var _showLogin=showLogin; showLogin=function(m){ _showLogin(m); TEL=''; helpShow(); };
   if(GW.loggedIn()) showMe(); else showLogin();
   // 방에서 돌아왔을 때(뒤로 가기) 로그인 상태 다시 확인
   window.addEventListener('pageshow',function(){ if(GW.loggedIn()){ showMe(); if($('lgForm').style.display!=='none') lg.classList.remove('on'); } else showLogin(); });
