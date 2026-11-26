@@ -77,7 +77,7 @@ tr.low td:first-child{border-left:4px solid var(--red)}
 tr.sub td{background:#fafbfd;font-size:14px}
 .hide{display:none!important}
 #scanBtn{font-size:21px;padding:18px}
-#scanBox{position:relative;margin-bottom:8px}
+#scanBox{position:relative;margin-bottom:8px;overflow:hidden;border-radius:12px}
 #scanVid{width:100%;max-height:60vh;object-fit:cover;border-radius:12px;background:#000;display:block}
 #scanBox .aim{position:absolute;left:50%;top:50%;width:58%;aspect-ratio:1;transform:translate(-50%,-50%);border:3px solid rgba(255,255,255,.85);border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.25);pointer-events:none}
 #scanBox .bar2{position:absolute;left:8px;right:8px;bottom:8px;display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:700;text-shadow:0 1px 3px #000}
@@ -189,6 +189,15 @@ tr.sub td{background:#fafbfd;font-size:14px}
       <div style="height:8px"></div>
       <button class="btn gray sm" id="bClear">목록 비우기</button>
     </div>
+    <!-- v31: 한 개씩도 코일을 찍기 전에 작업 목록이 보이게 (작업 먼저 고르고 QR 찍기) -->
+    <div class="card" id="jobCard">
+      <h3 style="margin-top:0">📋 어느 작업에 쓰나요?</h3>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="uJobs"></div>
+        <div class="row">
+          <div><label>작업번호 <span style="color:var(--red)">*</span></label><input id="uJob" list="tgtList" placeholder="목록에 없으면 직접"></div>
+          <div><label>kW <span style="color:var(--red)">*</span></label><input id="uKw" inputmode="decimal" placeholder="예: 37"></div>
+        </div>
+    </div>
     <div id="coilBox" class="hide">
       <div class="card">
         <div class="coilhead">
@@ -217,11 +226,6 @@ tr.sub td{background:#fafbfd;font-size:14px}
       <div class="card" id="useCard">
         <h3 style="margin-top:0">✍️ 사용량 기록</h3>
         <div class="muted">작업자: <b id="uWho"></b> (로그인한 사람으로 자동 기록)</div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="uJobs"></div>
-        <div class="row">
-          <div><label>작업번호 <span style="color:var(--red)">*</span></label><input id="uJob" list="tgtList" placeholder="목록에 없으면 직접"></div>
-          <div><label>kW <span style="color:var(--red)">*</span></label><input id="uKw" inputmode="decimal" placeholder="예: 37"></div>
-        </div>
         <label>지금 저울 무게 (보빈 포함, kg) <span style="color:var(--red)">*</span></label>
         <input id="uVal" inputmode="decimal" placeholder="타래째 저울에 올린 무게" style="font-size:22px">
         <div class="preview" id="uPrev">저울 무게를 넣으면 쓴 양이 자동으로 계산됩니다.</div>
@@ -614,7 +618,7 @@ function applyInit(r, fresh) {
     if (!STARTED) {
       STARTED = true;
       $('uJob').value = ls('coilinv_job') || ''; $('uKw').value = ls('coilinv_kw') || '';
-      renderRecent();
+      renderRecent(); renderJobs('u', ''); // v31: 코일 찍기 전에도 작업 목록
       tab('move');
       if (START_COIL) { $('coilNo').value = START_COIL; loadCoil(START_COIL); START_COIL = ''; }
       else if (!ME.mustChange && liveAllowed()) startLive(true);
@@ -626,7 +630,8 @@ function saveSnap() { try { if (INIT) ls('coilinv_snap', JSON.stringify(INIT)); 
 function loadJobs() {
   rawCall('getJobs', [ls(TK), true], true).then(function (l) {
     INIT.jobs = l; saveSnap();
-    if (CUR) autoJob('u', CUR.spec);
+    if (CUR) autoJob('u', CUR.spec); else renderJobs('u', '');
+    if (BATCH && !BATCH.items[0]) renderJobs('b', '');
     if (BATCH && BATCH.items[0]) autoJob('b', BATCH.items[0].coil.spec);
   }, function () {});
 }
@@ -673,7 +678,8 @@ function jobs() { return (INIT && INIT.jobs) || []; }
 function firstNum(t) { var m = String(t || '').match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : NaN; }
 function fits(j, spec) { var a = firstNum(j.wire), b = firstNum(spec); return isFinite(a) && isFinite(b) && Math.abs(a - b) < 0.001; }
 function renderJobs(pre, spec) {
-  var L = jobs(), cur = $(pre + 'Job').value.trim(), box = $(pre + 'Jobs');
+  var L = jobs(), cur = $(pre + 'Job').value.trim(), box = $(pre + 'Jobs'), top = box.scrollTop;
+  if (!INIT || !INIT.jobs) { box.innerHTML = '<div class="muted" style="padding:8px 10px">작업 목록을 불러오는 중…</div>'; return; }
   if (!L.length) { box.innerHTML = '<div class="muted" style="padding:8px 10px">최근 3일 작업기록이 없습니다. 작업번호를 아래에 직접 넣으세요.</div>'; return; }
   var h = '', lastHead = '';
   L.forEach(function (j, i) {
@@ -681,10 +687,12 @@ function renderJobs(pre, spec) {
     if (head !== lastHead) { h += '<div class="jh">' + head + '</div>'; lastHead = head; }
     h += '<button type="button" data-job="' + i + '" class="' + (j.no === cur ? 'on' : '') + '"><b>' + esc(j.no) + '</b> ' + esc(j.desc || '') +
       (spec && fits(j, spec) ? ' <span class="fit">✔ 규격 맞음</span>' : '') +
-      '<div class="m">' + (j.kw ? esc(j.kw) + 'kW · ' : '') + (j.wire ? '선경 ' + esc(j.wire) + ' · ' : '') + esc(j.src) + ' · ' + esc(String(j.at).slice(5, 16)) + (j.who ? ' · ' + esc(j.who) : '') + '</div></button>';
+      '<div class="m">' + (j.kw ? esc(j.kw) + 'kW · ' : '') + (j.wire ? '선경 ' + esc(j.wire) + ' · ' : '') + esc(srcName(j.src)) + ' · ' + esc(String(j.at).slice(5, 16)) + (j.who ? ' · ' + esc(j.who) : '') + '</div></button>';
   });
-  box.innerHTML = h;
+  box.innerHTML = h; box.scrollTop = top; // v31: 고른 뒤 목록이 맨 위로 튀지 않게
 }
+// v31: 작업기록 앱 화면 이름에 맞춤 (시트 탭 이름은 그대로 마그네틱코일)
+function srcName(s) { return s === '코일' || s === '마그네틱코일' || s === '마그네틱 코일' ? '전자브레이크' : s; }
 function pickJob(pre, j) {
   $(pre + 'Job').value = j.no;
   if (j.kw && isFinite(n(j.kw))) $(pre + 'Kw').value = n(j.kw);
@@ -697,7 +705,9 @@ function autoJob(pre, spec) {
 ['u', 'b'].forEach(function (pre) {
   $(pre + 'Jobs').addEventListener('click', function (e) {
     var b = e.target.closest('[data-job]'); if (!b) return;
-    JOB_MANUAL[pre] = true; pickJob(pre, jobs()[+b.dataset.job]);
+    var j = jobs()[+b.dataset.job]; if (!j) return;
+    JOB_MANUAL[pre] = true; pickJob(pre, j);
+    toast('✔ 작업 ' + j.no + (j.kw ? ' · ' + j.kw + 'kW' : '') + ' 골랐어요', 2000); // v31: 눌렀다는 표시
     renderJobs(pre, pre === 'u' ? (CUR && CUR.spec) : (BATCH && BATCH.items[0] && BATCH.items[0].coil.spec));
   });
   $(pre + 'Job').addEventListener('input', function () { JOB_MANUAL[pre] = true; });
@@ -722,6 +732,7 @@ seg('useMode', function (v) {
   USE_MODE = v;
   BATCH = null; STK = null;
   $('batchBox').classList.add('hide'); $('stkBox').classList.add('hide');
+  $('jobCard').classList.toggle('hide', v !== 'one'); // v31
   if (v === 'many') {
     BATCH = { items: [], busy: {} };
     $('bJob').value = $('bJob').value || ls('coilinv_job') || ''; $('bKw').value = $('bKw').value || ls('coilinv_kw') || '';
@@ -736,6 +747,7 @@ seg('useMode', function (v) {
   } else {
     $('coilGo').textContent = '찾기';
     $('scanHint').textContent = 'QR이 안 되면 라벨 아래 번호를 넣으세요.';
+    renderJobs('u', CUR && CUR.spec);
   }
 });
 // ── v18: 한 달 재고 조사 ──
@@ -1059,6 +1071,7 @@ function startLive(auto) {
   if (LIVE) return;
   $('scanHint').textContent = '카메라를 여는 중…';
   navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then(function (st) {
+    if (LIVE) { try { st.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} return; } // v31: 두 번 눌러 두 번 열린 카메라는 닫음
     LIVE_OK = true; LIVE = { st: st, cv: document.createElement('canvas'), k: 0 };
     clearTimeout(LIVE_WAIT); $('scanPhoto').classList.add('hide');
     // 초점 자동 계속 맞추기, 불빛(플래시) 버튼 — 되는 휴대폰만
@@ -1090,13 +1103,13 @@ function startLive(auto) {
       : 'QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.', auto);
   });
   // v30: 카메라가 6초 넘게 답이 없으면 사진 찍기로 바꿈 (눌러도 반응 없는 것 방지)
-  LIVE_WAIT = setTimeout(function () { if (!LIVE) photoMode('카메라가 열리지 않아 사진으로 찍습니다. 아래 버튼을 눌러 주세요.', false); }, 6000);
+  LIVE_WAIT = setTimeout(function () { if (!LIVE) photoMode('카메라가 아직 안 열렸어요. 허용 창이 떠 있으면 [허용]을 누르거나, 아래 사진 찍기 버튼을 쓰세요.', false, true); }, 6000); // v31: 늦게 허용해도 바로 켜지게 카메라 버튼은 남겨 둠
 }
 // v30: 사진 찍기는 휴대폰이 직접 처리하는 버튼(label)으로 → 어떤 휴대폰·화면에서도 눌리면 바로 카메라가 열림
 var LIVE_WAIT = null;
-function photoMode(msg, auto) {
-  LIVE_OK = false;
-  $('scanBtn').classList.add('hide'); $('scanPhoto').classList.remove('hide');
+function photoMode(msg, auto, keep) {
+  if (!keep) { LIVE_OK = false; $('scanBtn').classList.add('hide'); }
+  $('scanPhoto').classList.remove('hide');
   $('scanHint').textContent = msg;
   if (!auto) toast('📷 QR 사진 찍기 버튼을 눌러 주세요.', 3500);
 }
