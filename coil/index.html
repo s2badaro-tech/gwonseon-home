@@ -160,7 +160,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
       <div class="muted" id="scanHint" style="margin:8px 0 4px">QR이 안 되면 라벨 아래 번호를 넣으세요.</div>
       <div class="muted" id="camDiag" style="font-size:11px;margin:0 0 4px"></div>
       <div class="warn hide" id="camHelp" style="margin:6px 0;border:2px solid var(--org);background:var(--org2);color:var(--ink)">
-        <b>📷 이 휴대폰에서 이 앱의 카메라가 '차단'되어 있어요</b><br>
+        <div style="display:flex;justify-content:space-between;gap:8px"><b>📷 방금 카메라를 못 열었어요 (이 앱 카메라가 '차단')</b><button type="button" class="btn gray sm" id="camHelpX" style="flex:none">✕</button></div>
         깃허브 새 주소는 구글 주소와 다른 곳이라 카메라 허락을 새로 받아야 해요. 한 번만 바꾸면 됩니다.<br>
         <b>방법 1 (안드로이드):</b> 휴대폰 <b>설정 → 애플리케이션 → 권선 작업실 → 권한 → 카메라 → 허용</b><br>
         <b>방법 2:</b> <b>크롬</b> 앱 → 오른쪽 위 <b>⋮ → 설정 → 사이트 설정 → 카메라</b> → 차단됨 목록의 <b>s2badaro-tech.github.io</b> 누르기 → <b>허용</b><br>
@@ -1062,7 +1062,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v33', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v34', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1070,7 +1070,7 @@ function camDiag() {
   if (CAM_ERR) a.push('오류 ' + CAM_ERR);
   var d = $('camDiag'); if (d) d.textContent = a.join(' · ');
 }
-try { navigator.permissions.query({ name: 'camera' }).then(function (st) { CAM_PERM = st.state; camDiag(); if (st.state === 'denied') $('camHelp').classList.remove('hide'); st.onchange = function () { CAM_PERM = st.state; camDiag(); if (st.state === 'granted') { $('camHelp').classList.add('hide'); LIVE_OK = null; $('scanBtn').classList.remove('hide'); } }; }, function () {}); } catch (e) {}
+try { navigator.permissions.query({ name: 'camera' }).then(function (st) { CAM_PERM = st.state; camDiag(); st.onchange = function () { CAM_PERM = st.state; camDiag(); if (st.state === 'granted') { $('camHelp').classList.add('hide'); LIVE_OK = null; $('scanBtn').classList.remove('hide'); } }; }, function () {}); } catch (e) {}
 setTimeout(camDiag, 1500); setTimeout(camDiag, 5000);
 // v32: QR이 왜 안 되는지 확인용 — 카메라에서 일어난 일을 서버 '진단기록'에 짧게 남김 (재고·기록과 무관)
 var CAM_N = { fr: 0, bd: 0, bdHit: 0, js: 0, jsHit: 0 }, CAM_LOGN = 0;
@@ -1146,7 +1146,7 @@ function startLive(auto) {
       if (cap.torch) { LIVE.tr = tr; LIVE.torch = false; $('scanTorch').classList.remove('hide'); }
     } catch (e) {}
     var v = $('scanVid'); v.srcObject = st; try { var pl = v.play && v.play(); if (pl && pl.catch) pl.catch(function (e) { CAM_ERR = '영상 ' + (e && e.name); camDiag(); }); } catch (e) {}
-    CAM_ERR = ''; camDiag();
+    CAM_ERR = ''; CAM_PERM = 'granted'; $('camHelp').classList.add('hide'); camDiag(); // v34: 카메라가 실제로 열리면 안내 칸·'막힘' 글자 지움
     setTimeout(function () { if (LIVE && LIVE.st === st) camLog('카메라 열림 ' + v.videoWidth + 'x' + v.videoHeight + ' 상태' + v.readyState); }, 3000);
     setTimeout(function () { if (LIVE && LIVE.st === st) camLog('10초 동안 QR 못 읽음'); }, 10000);
     $('scanBox').classList.remove('hide'); $('scanBtn').classList.add('hide');
@@ -1193,6 +1193,7 @@ function stopLive() {
   $('scanBox').classList.add('hide'); if (LIVE_OK !== false) $('scanBtn').classList.remove('hide');
 }
 $('scanStop').onclick = stopLive;
+$('camHelpX').onclick = function () { $('camHelp').classList.add('hide'); };
 $('scanTorch').onclick = function () {
   if (!LIVE || !LIVE.tr) return; LIVE.torch = !LIVE.torch;
   LIVE.tr.applyConstraints({ advanced: [{ torch: LIVE.torch }] }).catch(function () { toast('이 휴대폰은 불빛을 켤 수 없습니다.'); });
