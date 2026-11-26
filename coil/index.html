@@ -158,6 +158,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
       <label class="btn hide" id="scanPhoto" for="scanFile" style="display:block;text-align:center">📷 QR 사진 찍기</label>
       <input type="file" id="scanFile" accept="image/*" capture="environment" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
       <div class="muted" id="scanHint" style="margin:8px 0 4px">QR이 안 되면 라벨 아래 번호를 넣으세요.</div>
+      <div class="muted" id="camDiag" style="font-size:11px;margin:0 0 4px"></div>
       <div class="numin"><input id="coilNo" placeholder="번호 (예: 14)" inputmode="text"><button class="btn" id="coilGo">찾기</button></div>
       <div class="warn hide" id="notFound" style="margin:8px 0 0"></div>
       <div class="chips" id="recentCoils"></div>
@@ -177,7 +178,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
     <div id="batchBox" class="card hide">
       <h3 style="margin-top:0">📚 여러 코일 한 번에</h3>
       <div class="muted">작업번호와 kW를 한 번 넣고, QR을 연달아 찍으세요. 찍은 코일이 아래에 쌓입니다. 줄마다 저울 무게만 넣고 [모두 저장].</div>
-<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="bJobs"></div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="bJobs"></div><div id="bFit"></div>
       <div class="row">
         <div><label>작업번호 <span style="color:var(--red)">*</span></label><input id="bJob" list="tgtList" placeholder="목록에 없으면 직접"></div>
         <div><label>kW <span style="color:var(--red)">*</span></label><input id="bKw" inputmode="decimal" placeholder="예: 37"></div>
@@ -192,7 +193,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
     <!-- v31: 한 개씩도 코일을 찍기 전에 작업 목록이 보이게 (작업 먼저 고르고 QR 찍기) -->
     <div class="card" id="jobCard">
       <h3 style="margin-top:0">📋 어느 작업에 쓰나요?</h3>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="uJobs"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="uJobs"></div><div id="uFit"></div>
         <div class="row">
           <div><label>작업번호 <span style="color:var(--red)">*</span></label><input id="uJob" list="tgtList" placeholder="목록에 없으면 직접"></div>
           <div><label>kW <span style="color:var(--red)">*</span></label><input id="uKw" inputmode="decimal" placeholder="예: 37"></div>
@@ -604,7 +605,7 @@ function applyInit(r, fresh) {
     $('fileBox').classList.toggle('hide', !ME.admin);
     $('uWho').textContent = ME.name;
     updLabels();
-    $('footer').textContent = '코일 관리 ' + r.version;
+    $('footer').textContent = '코일 관리 ' + r.version + ' · 화면 ' + SCREEN_V; camDiag();
     var last = ls('coilinv_worker');
     $('mWorker').innerHTML = r.users.map(function (u) { return '<option' + (u === (last || ME.name) ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('');
     $('hWorker').innerHTML = '<option value="">전체</option>' + r.users.map(function (u) { return '<option>' + esc(u) + '</option>'; }).join('');
@@ -676,7 +677,42 @@ $('coilNo').addEventListener('keydown', function (e) { if (e.key === 'Enter') $(
 var JOB_MANUAL = { u: false, b: false };
 function jobs() { return (INIT && INIT.jobs) || []; }
 function firstNum(t) { var m = String(t || '').match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : NaN; }
-function fits(j, spec) { var a = firstNum(j.wire), b = firstNum(spec); return isFinite(a) && isFinite(b) && Math.abs(a - b) < 0.001; }
+function fits(j, spec) { var b = firstNum(spec); return isFinite(b) && wireSpecs(j.wire).some(function (a) { return Math.abs(a - b) < 0.001; }); }
+// v32: 작업의 코일선경 '1.2×8, 0.9×7' → [1.2, 0.9]
+function wireSpecs(w) { var out = []; String(w || '').split(/[,/+]/).forEach(function (p) { var x = firstNum(p); if (isFinite(x) && out.indexOf(x) < 0) out.push(x); }); return out; }
+// v32: 그 작업 선경에 맞는 사용중 코일 (선경 순서 → 먼저 들어온 순)
+function fitCoils(j) {
+  var ws = wireSpecs(j && j.wire), L = [];
+  ((INIT && INIT.stock) || []).forEach(function (g) {
+    var k = ws.findIndex(function (x) { return Math.abs(x - firstNum(g.spec)) < 0.001; }); if (k < 0) return;
+    (g.coils || []).forEach(function (c) { if (c.status !== '소진') L.push({ c: c, k: k }); });
+  });
+  L.sort(function (a, b) { return (a.k - b.k) || (String(a.c.reg) < String(b.c.reg) ? -1 : String(a.c.reg) > String(b.c.reg) ? 1 : 0); });
+  return { ws: ws, list: L.map(function (x) { return x.c; }) };
+}
+function renderFit(pre, j) {
+  var box = $(pre + 'Fit'); if (!j) { box.innerHTML = ''; return null; }
+  var f = fitCoils(j);
+  if (!f.ws.length) { box.innerHTML = '<div class="muted" style="margin-top:6px">이 작업에는 코일선경이 안 적혀 있어요. QR을 찍거나 번호를 넣으세요.</div>'; return null; }
+  if (!f.list.length) { box.innerHTML = '<div class="warn" style="margin:6px 0 0">이 작업 선경(' + f.ws.join(', ') + 'mm)에 맞는 코일이 재고에 없어요.</div>'; return null; }
+  var by = {}; f.list.forEach(function (c) { var k = String(firstNum(c.spec)); (by[k] = by[k] || []).push(c); });
+  var h = '<div class="muted" style="margin-top:8px">🧵 <b>' + esc(j.no) + '</b> 선경에 맞는 코일 — 눌러서 ' + (pre === 'b' ? '목록에 넣기' : '열기') + '</div>';
+  f.ws.forEach(function (w) {
+    var l = by[String(w)] || [];
+    h += '<div class="chips" style="margin-top:4px"><span class="muted" style="align-self:center">' + w + 'mm:</span>' + (l.length ? l.slice(0, 8).map(function (c, i) {
+      return '<button type="button" data-fit="' + esc(c.no) + '"' + (i === 0 ? ' style="border-color:var(--grn);color:var(--grn);font-weight:700"' : '') + '>' + esc(c.no) + ' ' + c.rem + 'kg' + (i === 0 ? ' (먼저)' : '') + '</button>';
+    }).join('') + (l.length > 8 ? '<span class="muted" style="align-self:center">외 ' + (l.length - 8) + '개</span>' : '') : '<span class="muted" style="align-self:center">재고 없음</span>') + '</div>';
+  });
+  box.innerHTML = h;
+  return f.list[0];
+}
+['u', 'b'].forEach(function (pre) {
+  $(pre + 'Fit').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-fit]'); if (!b) return;
+    if (pre === 'b') { if (BATCH) addBatch(b.dataset.fit); return; }
+    $('coilNo').value = b.dataset.fit; loadCoil(b.dataset.fit);
+  });
+});
 function renderJobs(pre, spec) {
   var L = jobs(), cur = $(pre + 'Job').value.trim(), box = $(pre + 'Jobs'), top = box.scrollTop;
   if (!INIT || !INIT.jobs) { box.innerHTML = '<div class="muted" style="padding:8px 10px">작업 목록을 불러오는 중…</div>'; return; }
@@ -708,6 +744,8 @@ function autoJob(pre, spec) {
     var j = jobs()[+b.dataset.job]; if (!j) return;
     JOB_MANUAL[pre] = true; pickJob(pre, j);
     toast('✔ 작업 ' + j.no + (j.kw ? ' · ' + j.kw + 'kW' : '') + ' 골랐어요', 2000); // v31: 눌렀다는 표시
+    var first = renderFit(pre, j); // v32: 그 작업 선경에 맞는 코일을 보여 주고
+    if (pre === 'u' && first && !(CUR && fits(j, CUR.spec))) { $('coilNo').value = first.no; loadCoil(first.no); } // 한 개씩이면 먼저 들어온 코일을 바로 엶
     renderJobs(pre, pre === 'u' ? (CUR && CUR.spec) : (BATCH && BATCH.items[0] && BATCH.items[0].coil.spec));
   });
   $(pre + 'Job').addEventListener('input', function () { JOB_MANUAL[pre] = true; });
@@ -1016,6 +1054,24 @@ $('mSave').onclick = function () {
 };
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
+// v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
+var SCREEN_V = 'v32', CAM_ERR = '', CAM_PERM = '';
+function camDiag() {
+  var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
+    'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
+  if (CAM_PERM) a.push('권한 ' + ({ granted: '허용', denied: '막힘', prompt: '묻는중' }[CAM_PERM] || CAM_PERM));
+  if (CAM_ERR) a.push('오류 ' + CAM_ERR);
+  var d = $('camDiag'); if (d) d.textContent = a.join(' · ');
+}
+try { navigator.permissions.query({ name: 'camera' }).then(function (st) { CAM_PERM = st.state; camDiag(); st.onchange = function () { CAM_PERM = st.state; camDiag(); }; }, function () {}); } catch (e) {}
+setTimeout(camDiag, 1500); setTimeout(camDiag, 5000);
+// v32: QR이 왜 안 되는지 확인용 — 카메라에서 일어난 일을 서버 '진단기록'에 짧게 남김 (재고·기록과 무관)
+var CAM_N = { fr: 0, bd: 0, bdHit: 0, js: 0, jsHit: 0 }, CAM_LOGN = 0;
+function camLog(ev) {
+  if (CAM_LOGN++ > 40) return; // 한 번 열 때 40줄까지만
+  var tail = ' | ' + ($('camDiag') ? $('camDiag').textContent : '') + ' | 화면프레임 ' + CAM_N.fr + ' 내장읽기 ' + CAM_N.bd + '/' + CAM_N.bdHit + ' jsQR ' + CAM_N.js + '/' + CAM_N.jsHit + ' | ' + navigator.userAgent.replace(/^Mozilla\/5\.0 /, '').slice(0, 120);
+  try { rawCall('clientLog', [ls(TK), ev + tail], true).catch(function () {}); } catch (e) {}
+}
 function liveAllowed() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
   if (LIVE_OK === false) return false;
@@ -1033,8 +1089,9 @@ function qrNo(t) {
 var LAST_QR = { t: '', n: 0, warned: 0 };
 function gotQR(t, live) {
   var no = qrNo(t);
+  if (LAST_QR.t !== t) { LAST_QR.t = t; camLog((no ? 'QR 읽음 → ' + no : 'QR 읽었지만 코일 라벨 아님') + ' [' + String(t).slice(0, 80) + ']'); }
   if (!no) {
-    if (Date.now() - LAST_QR.warned > 4000) { LAST_QR.warned = Date.now(); toast('코일 라벨 QR이 아닙니다. 코일 라벨을 비춰 주세요.', 2500); }
+    if (Date.now() - LAST_QR.warned > 4000) { LAST_QR.warned = Date.now(); toast('코일 라벨 QR이 아닙니다. 코일 라벨을 비춰 주세요. (읽은 글자: ' + String(t).slice(0, 40) + ')', 3000); }
     return false;
   }
   if (STK) { addStk(no, t); return false; } // v18 재고 조사
@@ -1046,7 +1103,7 @@ function gotQR(t, live) {
 // v14 인식률 높이기: 휴대폰에 내장된 QR 읽기(BarcodeDetector)가 있으면 먼저 쓰고, 없으면 jsQR.
 // 화면 가운데(네모 안)를 원래 화질로 잘라 읽고, 번갈아 전체 화면도 읽음. 코일 라벨 형식만 받으므로 한 번 읽으면 바로 엶.
 var BD = null;
-try { if ('BarcodeDetector' in window) BarcodeDetector.getSupportedFormats().then(function (f) { if (f.indexOf('qr_code') >= 0) BD = new BarcodeDetector({ formats: ['qr_code'] }); }); } catch (e) {}
+try { if ('BarcodeDetector' in window) BarcodeDetector.getSupportedFormats().then(function (f) { if (f.indexOf('qr_code') >= 0) BD = new BarcodeDetector({ formats: ['qr_code'] }); camDiag(); }); } catch (e) {}
 function decode(ctx, w, h, inv) {
   if (!window.jsQR) return null;
   var d = ctx.getImageData(0, 0, w, h), r = jsQR(d.data, w, h, { inversionAttempts: inv ? 'attemptBoth' : 'dontInvert' });
@@ -1069,6 +1126,7 @@ function fullTo(c, src, sw, sh, m) {
 }
 function startLive(auto) {
   if (LIVE) return;
+  camLog(auto ? '카메라 자동 켜기 시작' : 'QR 찍기 버튼 누름');
   $('scanHint').textContent = '카메라를 여는 중…';
   navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then(function (st) {
     if (LIVE) { try { st.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} return; } // v31: 두 번 눌러 두 번 열린 카메라는 닫음
@@ -1080,30 +1138,37 @@ function startLive(auto) {
       if (cap.focusMode && cap.focusMode.indexOf('continuous') >= 0) tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function () {});
       if (cap.torch) { LIVE.tr = tr; LIVE.torch = false; $('scanTorch').classList.remove('hide'); }
     } catch (e) {}
-    var v = $('scanVid'); v.srcObject = st; v.play && v.play();
+    var v = $('scanVid'); v.srcObject = st; try { var pl = v.play && v.play(); if (pl && pl.catch) pl.catch(function (e) { CAM_ERR = '영상 ' + (e && e.name); camDiag(); }); } catch (e) {}
+    CAM_ERR = ''; camDiag();
+    setTimeout(function () { if (LIVE && LIVE.st === st) camLog('카메라 열림 ' + v.videoWidth + 'x' + v.videoHeight + ' 상태' + v.readyState); }, 3000);
+    setTimeout(function () { if (LIVE && LIVE.st === st) camLog('10초 동안 QR 못 읽음'); }, 10000);
     $('scanBox').classList.remove('hide'); $('scanBtn').classList.add('hide');
     $('scanHint').textContent = 'QR이 안 되면 라벨 아래 번호를 넣으세요.';
     (function loop() {
       if (!LIVE) return;
       if (!(v.readyState >= 2 && v.videoWidth)) return setTimeout(loop, 150);
+      CAM_N.fr++;
       if (BD && LIVE.k++ % 2 === 0) {
-        bdRead(v).then(function (t) { if (!LIVE) return; if (t && gotQR(t, true)) return; setTimeout(loop, 60); });
+        CAM_N.bd++; bdRead(v).then(function (t) { if (t) CAM_N.bdHit++; if (!LIVE) return; if (t && gotQR(t, true)) return; setTimeout(loop, 60); });
         return;
       }
       var k = (LIVE.j = (LIVE.j || 0) + 1) % 3, c = LIVE.cv, vw = v.videoWidth, vh = v.videoHeight, ctx, t;
       if (k === 2) { ctx = fullTo(c, v, vw, vh, 800); t = decode(ctx, c.width, c.height, false); }
       else { ctx = cropTo(c, v, vw, vh, k ? 0.5 : 0.75, 720); t = decode(ctx, c.width, c.height, false); }
+      CAM_N.js++; if (t) CAM_N.jsHit++;
       if (t && gotQR(t, true)) return;
       setTimeout(loop, 100);
     })();
   }, function (e) {
+    CAM_ERR = (e && (e.name || e.message)) || '알수없음'; camDiag(); // v32
+    camLog('카메라 못 엶: ' + (e && e.name) + ' ' + (e && e.message));
     clearTimeout(LIVE_WAIT); if (LIVE) return;
     photoMode(e && e.name === 'NotAllowedError'
       ? '카메라 허용이 꺼져 있어 사진으로 찍습니다. (바로 켜려면 휴대폰 설정 → 앱/사이트 권한 → 카메라 허용)'
       : 'QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.', auto);
   });
   // v30: 카메라가 6초 넘게 답이 없으면 사진 찍기로 바꿈 (눌러도 반응 없는 것 방지)
-  LIVE_WAIT = setTimeout(function () { if (!LIVE) photoMode('카메라가 아직 안 열렸어요. 허용 창이 떠 있으면 [허용]을 누르거나, 아래 사진 찍기 버튼을 쓰세요.', false, true); }, 6000); // v31: 늦게 허용해도 바로 켜지게 카메라 버튼은 남겨 둠
+  LIVE_WAIT = setTimeout(function () { if (!LIVE) camLog('6초 지나도 카메라 대답 없음'); if (!LIVE) photoMode('카메라가 아직 안 열렸어요. 허용 창이 떠 있으면 [허용]을 누르거나, 아래 사진 찍기 버튼을 쓰세요.', false, true); }, 6000); // v31: 늦게 허용해도 바로 켜지게 카메라 버튼은 남겨 둠
 }
 // v30: 사진 찍기는 휴대폰이 직접 처리하는 버튼(label)으로 → 어떤 휴대폰·화면에서도 눌리면 바로 카메라가 열림
 var LIVE_WAIT = null;
@@ -1126,7 +1191,8 @@ $('scanTorch').onclick = function () {
 };
 $('scanBtn').onclick = function () { if (liveAllowed()) startLive(false); else photoMode('QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.', false); };
 $('scanFile').onchange = function () {
-  var f = this.files && this.files[0]; this.value = ''; if (!f) return;
+  var f = this.files && this.files[0]; this.value = ''; if (!f) return camLog('사진 찍기 취소(사진 없음)');
+  camLog('사진 받음 ' + Math.round(f.size / 1024) + 'KB ' + f.type);
   if (!window.jsQR && !BD) return toast('QR 읽기 준비가 아직 안 됐습니다. 잠시 후 다시 해 주세요.');
   busy(true);
   var url = URL.createObjectURL(f), img = new Image();
@@ -1139,7 +1205,7 @@ $('scanFile').onchange = function () {
         function () { return fullTo(c, img, W, H, 1800); }, function () { return cropTo(c, img, W, H, 0.8, 1600); }];
       for (var i = 0; i < tries.length && !found; i++) { var ctx = tries[i](); found = decode(ctx, c.width, c.height, true); }
       URL.revokeObjectURL(url); busy(false);
-      if (found) gotQR(found); else toast('QR을 못 읽었습니다. 라벨이 화면 가운데 오게, 한 뼘 거리에서 흔들리지 않게 다시 찍거나 번호를 넣어 주세요.', 5000);
+      if (found) gotQR(found); else { camLog('사진에서 QR 못 읽음 ' + W + 'x' + H); } if (!found) toast('QR을 못 읽었습니다. 라벨이 화면 가운데 오게, 한 뼘 거리에서 흔들리지 않게 다시 찍거나 번호를 넣어 주세요.', 5000);
     });
   };
   img.onerror = function () { busy(false); toast('사진을 열지 못했습니다.'); };
