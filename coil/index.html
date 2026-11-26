@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>코일 관리</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#d9730d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<base target="_top">
+<style>
+:root{--bg:#f3f5f8;--card:#fff;--ink:#1d2733;--sub:#5f6b7a;--line:#d9dee6;--pri:#1f5fae;--pri2:#e6eef9;--red:#c62828;--red2:#fdecea;--grn:#2e7d32;--grn2:#e8f5e9;--org:#b26a00;--org2:#fff4e0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:16px;-webkit-text-size-adjust:100%}
+header{background:var(--pri);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:8px}
+header b{font-size:18px;flex:1}
+#homeBtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;margin:-6px 2px -6px -6px;border-radius:12px;background:rgba(255,255,255,.18);font-size:22px;text-decoration:none}
+header small{opacity:.85;font-size:13px}
+/* v15: 메뉴를 화면 아래 큰 버튼으로 (엄지로 누르기 쉽게, 글자 겹침 없음) */
+.topbar{position:sticky;top:0;z-index:6;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+nav{display:flex;background:#fff;border-bottom:1px solid var(--line)}
+nav button{flex:1;min-width:0;border:0;background:none;padding:6px 2px 5px;font-size:14px;line-height:1.2;color:var(--sub);border-bottom:3px solid transparent;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+nav button i{display:block;font-style:normal;font-size:20px;line-height:1.1;margin-bottom:1px}
+nav button.on{color:var(--pri);border-bottom-color:var(--pri);font-weight:800;background:var(--pri2)}
+main{padding:12px 12px 30px;max-width:640px;margin:0 auto}
+details.more>summary{cursor:pointer;list-style:none;color:var(--pri);font-weight:700;font-size:15px;padding:10px 0 2px}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:'▸ '}
+details.more[open]>summary::before{content:'▾ '}
+details.card>summary{cursor:pointer;font-weight:700;font-size:16px;list-style:none}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::after{content:' ▾';color:var(--sub)}
+details.card[open]>summary{margin-bottom:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+h3{margin:0 0 10px;font-size:16px}
+label{display:block;font-size:14px;color:var(--sub);margin:10px 0 4px}
+input,select,textarea{width:100%;font-size:17px;padding:11px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+textarea{min-height:60px}
+.row{display:flex;gap:8px;align-items:stretch}
+.row>*{flex:1;min-width:0}
+.btn{display:inline-block;border:0;border-radius:10px;padding:13px 14px;font-size:17px;font-weight:700;background:var(--pri);color:#fff;width:100%;cursor:pointer;text-align:center;text-decoration:none}
+.btn.gray{background:#e9edf2;color:var(--ink)}
+.btn.sm{width:auto;padding:8px 12px;font-size:14px;white-space:nowrap;flex:none}
+.btn:disabled{opacity:.5}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:60px;padding:12px 6px;border:2px solid var(--line);background:#fff;border-radius:10px;font-size:16px;font-weight:700;color:var(--sub)}
+.seg button.on{border-color:var(--pri);background:var(--pri2);color:var(--pri)}
+#useMode button{font-size:15px;padding:11px 3px}
+.seg.t button.on[data-v="출고"]{border-color:var(--red);background:var(--red2);color:var(--red)}
+.seg.t button.on[data-v="입고"]{border-color:var(--grn);background:var(--grn2);color:var(--grn)}
+.seg.t button.on[data-v="실사조정"]{border-color:var(--org);background:var(--org2);color:var(--org)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chips button{border:1px solid var(--line);background:#fff;border-radius:16px;padding:6px 11px;font-size:14px}
+.chips button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.big{font-size:34px;font-weight:800}
+.coilhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.tag{display:inline-block;font-size:13px;padding:2px 8px;border-radius:10px;background:#eef1f5;color:var(--sub);margin:2px 2px 0 0}
+.tag.red{background:var(--red2);color:var(--red)} .tag.grn{background:var(--grn2);color:var(--grn)} .tag.org{background:var(--org2);color:var(--org)}
+.preview{background:#f7f9fc;border:1px dashed var(--line);border-radius:9px;padding:10px;margin-top:8px;font-size:15px}
+.preview b{font-size:19px}
+.warn{background:var(--red2);color:var(--red);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-weight:700}
+.ok{background:var(--grn2);color:var(--grn);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-weight:700}
+.list .it{border-top:1px solid var(--line);padding:9px 0;font-size:14px}
+.list .it:first-child{border-top:0}
+.it .t{display:flex;justify-content:space-between;gap:6px}
+.muted{color:var(--sub);font-size:13px}
+.x{text-decoration:line-through;opacity:.55}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th,td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left}
+th{font-size:13px;color:var(--sub);font-weight:600}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+tr.low td{background:var(--red2)}
+tr.low td:first-child{border-left:4px solid var(--red)}
+tr.sub td{background:#fafbfd;font-size:14px}
+.hide{display:none!important}
+#scanBtn{font-size:21px;padding:18px}
+#scanBox{position:relative;margin-bottom:8px}
+#scanVid{width:100%;max-height:60vh;object-fit:cover;border-radius:12px;background:#000;display:block}
+#scanBox .aim{position:absolute;left:50%;top:50%;width:58%;aspect-ratio:1;transform:translate(-50%,-50%);border:3px solid rgba(255,255,255,.85);border-radius:14px;box-shadow:0 0 0 999px rgba(0,0,0,.25);pointer-events:none}
+#scanBox .bar2{position:absolute;left:8px;right:8px;bottom:8px;display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:700;text-shadow:0 1px 3px #000}
+.tiles{display:flex;gap:8px;margin-bottom:12px}
+.tile{flex:1;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 8px;text-align:center}
+.tile .v{font-size:24px;font-weight:800;line-height:1.2}
+.tile .l{font-size:12px;color:var(--sub)}
+.tile.red{background:var(--red2);border-color:#f3b8b3;color:var(--red)}
+.sk{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;background:#fff;cursor:pointer}
+.sk.low{border-color:#f3b8b3;background:#fff7f6;border-left:5px solid var(--red)}
+.sk .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.sk .nm{font-size:18px;font-weight:800}
+.sk .kg{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+.sk.low .kg{color:var(--red)}
+.bar{position:relative;height:12px;background:#eef1f5;border-radius:6px;margin:8px 0 6px;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:var(--grn)}
+.sk.low .bar i{background:var(--red)}
+.bar b{position:absolute;top:-2px;bottom:-2px;width:2px;background:#333;opacity:.55}
+.sk .sub{margin-top:8px;border-top:1px dashed var(--line);padding-top:6px}
+#toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#222;color:#fff;padding:11px 16px;border-radius:10px;font-size:15px;max-width:92%;z-index:20;display:none}
+#busy{position:fixed;inset:0;background:rgba(255,255,255,.55);z-index:15;display:none;align-items:center;justify-content:center;font-weight:700;color:var(--pri)}
+.numin{display:flex;gap:8px}
+.numin input{font-size:24px;font-weight:800;text-transform:uppercase}
+.numin .btn{width:96px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:30;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal .card{width:100%;max-width:420px;margin:0}
+#meBtn{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:16px;padding:5px 10px;font-size:14px}
+#qBox{background:var(--org2);color:var(--org);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-weight:700}
+#qBox button{margin-left:6px}
+.jobs{max-height:250px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:6px}
+.jobs .jh{font-size:12px;color:var(--sub);background:#f7f9fc;padding:4px 10px;font-weight:700;position:sticky;top:0}
+.jobs button{display:block;width:100%;text-align:left;border:0;border-top:1px solid var(--line);background:#fff;padding:9px 10px;font-size:14px;color:var(--ink)}
+.jobs button b{font-size:16px}
+.jobs button.on{background:var(--pri2);box-shadow:inset 4px 0 0 var(--pri)}
+.jobs button .m{color:var(--sub);font-size:12px}
+.jobs button .fit{color:var(--grn);font-weight:700;font-size:12px}
+.err{color:var(--red);font-size:14px;margin-top:6px;min-height:18px}
+/* v21: 장갑 낀 손으로 누르기 쉽게 작은 버튼도 40px 이상 */
+.chips button{min-height:40px;font-size:15px;padding:8px 13px}
+.btn.sm{min-height:40px}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js" async></script>
+</head>
+<body>
+<div class="topbar">
+<header><a id="homeBtn" href="../" title="권선 작업실 처음 화면">🏠</a><b>🧵 코일 관리</b><button id="meBtn" class="hide">👤 <span id="who"></span></button></header>
+<nav id="nav" class="hide">
+  <button data-tab="move" class="on"><i>📦</i>코일 사용</button>
+  <button data-tab="stock"><i>📊</i>재고</button>
+  <button data-tab="hist"><i>🕘</i>이력</button>
+  <button data-tab="add" id="navAdd" class="hide"><i>➕</i>등록</button>
+  <button data-tab="admin" id="navAdmin" class="hide"><i>⚙️</i>관리</button>
+</nav>
+</div>
+<main>
+  <div id="qBox" class="hide"></div>
+  <!-- 로그인 -->
+  <section id="login" class="card hide">
+    <h3>로그인</h3>
+    <div class="muted">작업기록 앱과 같은 이름과 PIN으로 들어갑니다.</div>
+    <label>이름</label><input id="lgName" autocomplete="username">
+    <label>PIN</label><input id="lgPin" type="password" inputmode="numeric" autocomplete="current-password">
+    <div style="height:12px"></div>
+    <button class="btn" id="lgBtn">들어가기</button>
+  </section>
+
+  <!-- 입출고 -->
+  <section id="tab-move" class="hide">
+    <div id="lowBanner" class="warn hide"></div>
+    <div class="card">
+      <div class="seg" id="useMode" style="margin-bottom:10px"><button data-v="one" class="on">한 개씩</button><button data-v="many">여러 개</button><button data-v="stk" id="stkModeBtn" class="hide">📋 재고조사</button></div>
+      <div id="scanBox" class="hide">
+        <video id="scanVid" playsinline muted autoplay></video>
+        <div class="aim"></div>
+        <div class="bar2"><span>QR을 네모 안에 맞추세요</span><span><button class="btn gray sm hide" id="scanTorch">💡 불빛</button> <button class="btn gray sm" id="scanStop">닫기</button></span></div>
+      </div>
+      <button class="btn" id="scanBtn">📷 QR 찍기</button>
+      <input type="file" id="scanFile" accept="image/*" capture="environment" class="hide">
+      <div class="muted" id="scanHint" style="margin:8px 0 4px">QR이 안 되면 라벨 아래 번호를 넣으세요.</div>
+      <div class="numin"><input id="coilNo" placeholder="번호 (예: 14)" inputmode="text"><button class="btn" id="coilGo">찾기</button></div>
+      <div class="warn hide" id="notFound" style="margin:8px 0 0"></div>
+      <div class="chips" id="recentCoils"></div>
+    </div>
+    <!-- v18: 한 달 재고 조사 (관리자) — QR 찍고 저울 무게만 → 실사조정으로 저장, 이번 달 몇 개 확인했는지 -->
+    <div id="stkBox" class="card hide">
+      <h3 style="margin-top:0">📋 한 달 재고 조사</h3>
+      <div class="muted">한 달에 한 번, 모든 타래를 저울에 올려 앱 숫자와 맞춥니다. QR을 연달아 찍거나 아래 ‘아직 안 잰 타래’를 누르세요. 줄마다 저울 무게(보빈째)만 넣고 [모두 저장].</div>
+      <div class="preview" id="stkProg" style="margin-top:8px">불러오는 중…</div>
+      <div id="stkList" class="list" style="margin-top:8px"></div>
+      <div style="height:10px"></div>
+      <button class="btn" id="stkSave" style="font-size:20px;padding:16px">모두 저장</button>
+      <details class="card" style="margin:10px 0 0" id="stkTodoBox"><summary>⏳ 아직 안 잰 타래</summary><div class="list" id="stkTodo"></div></details>
+      <details class="card" style="margin:10px 0 0"><summary>✅ 이번 달 잰 타래</summary><div class="list" id="stkDone"></div></details>
+    </div>
+    <!-- v16: 여러 개 한 번에 — 작업번호·kW 한 번, QR 연달아 찍기, 줄마다 저울 무게, [모두 저장] -->
+    <div id="batchBox" class="card hide">
+      <h3 style="margin-top:0">📚 여러 코일 한 번에</h3>
+      <div class="muted">작업번호와 kW를 한 번 넣고, QR을 연달아 찍으세요. 찍은 코일이 아래에 쌓입니다. 줄마다 저울 무게만 넣고 [모두 저장].</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="bJobs"></div>
+      <div class="row">
+        <div><label>작업번호 <span style="color:var(--red)">*</span></label><input id="bJob" list="tgtList" placeholder="목록에 없으면 직접"></div>
+        <div><label>kW <span style="color:var(--red)">*</span></label><input id="bKw" inputmode="decimal" placeholder="예: 37"></div>
+      </div>
+      <div id="bList" class="list" style="margin-top:8px"></div>
+      <div class="preview" id="bSum">아직 찍은 코일이 없습니다.</div>
+      <div style="height:12px"></div>
+      <button class="btn" id="bSave" style="font-size:20px;padding:16px">모두 저장</button>
+      <div style="height:8px"></div>
+      <button class="btn gray sm" id="bClear">목록 비우기</button>
+    </div>
+    <div id="coilBox" class="hide">
+      <div class="card">
+        <div class="coilhead">
+          <div><div class="big" id="cNo"></div><div id="cSpec" style="font-size:18px;font-weight:700"></div><div id="cTags"></div></div>
+          <div style="text-align:right"><div class="muted">현재 잔량</div><div class="big" id="cRem"></div><div class="muted" id="cTare"></div></div>
+        </div>
+        <div style="margin-top:8px;text-align:right"><button class="btn gray sm hide" id="editToggle">✏️ 정보 수정</button></div>
+        <div id="editBox" class="hide">
+          <div class="row"><div><label>규격(mm)</label><input id="eSpec" inputmode="decimal"></div><div><label>선종</label><input id="eKind"></div></div>
+          <div class="row"><div><label>빈 보빈(kg)</label><input id="eTare" inputmode="decimal"></div><div><label>제조사</label><input id="eMaker"></div></div>
+          <label>코일 종류</label><select id="eType"></select>
+          <label>보관위치</label><input id="eLoc" list="locList">
+          <label>상태</label><div class="seg" id="eStatus"><button data-v="사용중">사용중</button><button data-v="소진">소진</button></div>
+          <label>메모</label><input id="eMemo">
+          <div style="height:10px"></div>
+          <button class="btn" id="eSave">정보 저장</button>
+          <div class="muted" style="margin-top:6px">남은 무게는 여기서 못 고칩니다. 아래 ‘무게 맞추기’를 쓰세요. 고친 내용은 이력에 남습니다.</div>
+        </div>
+      </div>
+      <div class="card hide" id="tareBox" style="border:2px solid var(--org)">
+        <div style="font-weight:700;color:var(--org)">⚠️ 이 타래는 빈 보빈 무게가 아직 없어요</div>
+        <div class="muted" style="margin:4px 0">등록할 때 순수 코일 무게만 넣은 타래입니다. 저울에는 보빈까지 같이 달리니, <b>보빈 종류를 한 번만 골라 주세요</b>. 앱이 저울 무게에서 보빈 무게를 빼서 계산합니다.</div>
+        <div class="chips bob" id="tbBob"></div>
+        <input id="tbKg" inputmode="decimal" placeholder="목록에 없으면 빈 보빈 무게 직접 (kg)" style="margin-top:6px">
+      </div>
+      <div class="card" id="useCard">
+        <h3 style="margin-top:0">✍️ 사용량 기록</h3>
+        <div class="muted">작업자: <b id="uWho"></b> (로그인한 사람으로 자동 기록)</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="uJobs"></div>
+        <div class="row">
+          <div><label>작업번호 <span style="color:var(--red)">*</span></label><input id="uJob" list="tgtList" placeholder="목록에 없으면 직접"></div>
+          <div><label>kW <span style="color:var(--red)">*</span></label><input id="uKw" inputmode="decimal" placeholder="예: 37"></div>
+        </div>
+        <label>지금 저울 무게 (보빈 포함, kg) <span style="color:var(--red)">*</span></label>
+        <input id="uVal" inputmode="decimal" placeholder="타래째 저울에 올린 무게" style="font-size:22px">
+        <div class="preview" id="uPrev">저울 무게를 넣으면 쓴 양이 자동으로 계산됩니다.</div>
+        <details class="more"><summary>메모 (선택)</summary><input id="uMemo" placeholder="예: 고정자 2층"></details>
+        <div style="height:12px"></div>
+        <button class="btn" id="uSave" style="font-size:20px;padding:16px">저장</button>
+        <button class="btn gray" id="uEmpty" style="margin-top:8px">🏁 다 씀 (빈 보빈만 남음)</button>
+      </div>
+      <details class="card hide" id="admMove">
+        <summary>🔧 재고 맞추기 (관리자)</summary>
+        <div class="muted" style="margin-bottom:6px">타래를 저울에 올려 보빈째 잰 무게만 넣으면, 빈 보빈 무게를 빼고 남은 코일 무게를 맞춥니다.</div>
+        <div class="seg t" id="mType"><button data-v="실사조정" class="on">무게 맞추기(실사)</button><button data-v="입고">입고(추가)</button><button data-v="출고">출고</button></div>
+        <label>입력 방법</label>
+        <div class="seg" id="mMode"><button data-v="gross" class="on">저울 총무게</button><button data-v="kg" id="modeKg">실제 잔량(kg)</button></div>
+        <label id="mValLbl">저울에 올린 총무게 (타래째, kg)</label>
+        <input id="mVal" inputmode="decimal" placeholder="0.0">
+        <div class="preview" id="mPrev">무게를 넣으면 저장 후 잔량이 보입니다.</div>
+        <div class="row">
+          <div><label>작업자</label><select id="mWorker"></select></div>
+        </div>
+        <label id="mTgtLbl">작업대상 (작업번호·모터·설비) <span style="color:var(--red)">*출고는 꼭</span></label>
+        <input id="mTarget" list="tgtList" placeholder="예: 25-118 OO펌프 고정자">
+        <label>메모</label><input id="mMemo" placeholder="선택">
+        <div style="height:12px"></div>
+        <button class="btn" id="mSave">저장</button>
+      </details>
+      <details class="card"><summary>🕘 이 타래 최근 기록</summary><div class="list" id="cHist"></div></details>
+    </div>
+  </section>
+
+  <!-- 재고현황 -->
+  <section id="tab-stock" class="hide">
+    <div id="stockWarn" class="warn hide"></div>
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 style="margin:0">규격별 재고</h3><button class="btn gray sm" id="stockRe">🔄 새로고침</button></div>
+      <div class="muted" style="margin:6px 0">빨간색 = 알림 무게보다 적음 (위로 올라옴). 막대의 검은 선이 알림 무게입니다. 누르면 타래별 잔량이 보입니다.</div>
+      <div id="stockTiles" class="tiles"></div>
+      <div id="stockBody"></div>
+      <div id="fileBox" class="hide" style="margin-top:12px">
+        <button class="btn gray" id="fileGo">📥 파일 받기 (엑셀에서 열림)</button>
+        <div id="fileLink" style="margin-top:8px"></div>
+      </div>
+    </div>
+    <details class="card" id="monBox">
+      <summary>📈 규격별 월 사용량 (주문량 정할 때)</summary>
+      <div class="muted">입출고 이력으로 계산합니다. 취소한 기록은 뺍니다. <b>버팀</b> = 지금 재고 ÷ 지난 3달 평균 사용량 (몇 달 쓸 수 있는지).</div>
+      <div class="chips" id="monChips" style="margin-top:8px"></div>
+      <div id="monSum" class="preview"></div>
+      <div id="monBody" style="margin-top:8px;overflow-x:auto"></div>
+    </details>
+    <div class="card hide" id="oldBox">
+      <h3>🔍 한 달 넘게 안 쓴 타래 (재고 점검)</h3>
+      <div class="muted">30일 넘게 한 번도 찍히지 않은 타래입니다. 실제로 있는지, 무게가 맞는지 확인해 보세요. 누르면 그 타래가 열립니다.</div>
+      <div class="list" id="oldList" style="margin-top:6px"></div>
+    </div>
+  </section>
+
+  <!-- 이력 -->
+  <section id="tab-hist" class="hide">
+    <div class="card">
+      <h3>사용 이력 찾기</h3>
+      <div class="chips" id="hRange"><button data-d="0">오늘</button><button data-d="7" class="on">7일</button><button data-d="30">30일</button><button data-d="-1">전체</button></div>
+      <div class="row"><div><label>부터</label><input type="date" id="hFrom"></div><div><label>까지</label><input type="date" id="hTo"></div></div>
+      <div class="row"><div><label>작업번호</label><input id="hTarget" list="tgtList" placeholder="비우면 전체"></div><div><label>타래 번호</label><input id="hNo" placeholder="비우면 전체"></div></div>
+      <details class="more"><summary>더 보기 (작업자 · 구분)</summary>
+      <div class="row"><div><label>작업자</label><select id="hWorker"></select></div><div><label>구분</label><select id="hType"><option value="">전체</option><option>출고</option><option>입고</option><option>실사조정</option><option>신규등록</option><option>취소</option><option>정보수정</option></select></div></div>
+      </details>
+      <div style="height:10px"></div>
+      <button class="btn" id="hGo">찾기</button>
+    </div>
+    <div class="card hide" id="hUsedBox"><h3>찾은 기간 사용 합계</h3><div id="hUsedBy"></div><div class="muted" style="margin:6px 0 2px">규격별</div><div id="hUsed"></div></div>
+    <div class="card"><div class="list" id="hList"><div class="muted">조건을 고르고 ‘찾기’를 누르세요.</div></div></div>
+  </section>
+
+  <!-- 코일 등록 -->
+  <section id="tab-add" class="hide">
+    <div class="card hide" id="aDone"></div>
+    <div class="card">
+      <h3>코일 등록</h3>
+      <div class="muted">규격·선종·코일 무게만 넣으면 됩니다.</div>
+      <div class="seg hide" id="aType"></div>
+      <label>규격 (선경 mm)</label><input id="aSpec" inputmode="decimal" placeholder="예: 0.9"><div class="chips" id="aSpecChips"></div>
+      <div class="chips" id="aInroll"></div>
+      <div class="muted" id="aTypeNow" style="margin-top:4px"></div>
+      <label>선종</label><input id="aKind" placeholder="예: PEW"><div class="chips" id="aKindChips"></div>
+      <label>코일 무게 (kg) <span style="color:var(--red)">*</span> <span class="muted">라벨에 적힌 순수 코일 무게 (보빈 빼고)</span></label><input id="aVal" inputmode="decimal" placeholder="예: 20" style="font-size:20px">
+      <label>빈 보빈 무게 (kg)</label>
+      <div class="chips bob hide" id="aBob"></div>
+      <input id="aTare" inputmode="decimal" value="1">
+      <div class="muted" style="margin-top:4px" id="aTareHint">종류를 고르면 기본 무게가 들어갑니다. 보빈이 다른 타래만 숫자를 고쳐 쓰세요.</div>
+      <div class="preview" id="aPrev">코일 무게를 넣으세요.</div>
+      <details class="more" id="aMore"><summary>더 적기 (제조사·보관위치·메모)</summary>
+        <label>제조사</label><input id="aMaker">
+        <label>보관위치</label><input id="aLoc" list="locList"><div class="chips" id="aLocChips"></div>
+        <label>메모</label><input id="aMemo">
+      </details>
+      <div style="height:12px"></div>
+      <button class="btn" id="aSave" style="font-size:20px;padding:16px">등록</button>
+    </div>
+  </section>
+
+  <!-- 관리 -->
+  <section id="tab-admin" class="hide">
+    <div class="card">
+      <h3>🏷️ QR 라벨 인쇄</h3>
+      <div class="muted">새 코일은 등록하면 바로 라벨 버튼이 뜹니다. 여기는 라벨이 떨어지거나 더러워져서 <b>다시 뽑을 때</b> 씁니다. A4 한 장에 21개(3×7).</div>
+      <label>다시 뽑을 번호 (쉼표로 여러 개, 예: 14, 15)</label><input id="lbNos" placeholder="예: 14">
+      <div style="height:10px"></div>
+      <button class="btn" id="lbGo">라벨 화면 열기</button>
+    </div>
+    <div class="card">
+      <h3>🔔 부족 알림 무게</h3>
+      <div class="muted">같은 규격·선종의 남은 무게 합계가 이 무게보다 적으면 재고현황에서 빨간색으로 위에 올라오고 메일이 갑니다.</div>
+      <div id="typeRows" style="margin-top:6px"></div>
+      <div style="height:8px"></div>
+      <button class="btn" id="typeSave">알림 무게 저장</button>
+    </div>
+    <div class="card hide">
+      <h3>🧵 보빈 종류와 무게</h3>
+      <div class="muted">빈 보빈을 종류별로 한 개씩 저울에 달아서 적어 두세요. 등록·사용 화면에 버튼으로 나옵니다.<br>쓰는 법: <b>이름 무게</b>를 쉼표로 이어서. 예) 플라스틱 소 0.4, 플라스틱 대 1.2, 나무 2.5</div>
+      <input id="bobTxt" placeholder="예: 플라스틱 소 0.4, 플라스틱 대 1.2, 나무 2.5" style="margin-top:6px">
+      <div style="height:8px"></div>
+      <button class="btn" id="bobSave">보빈 종류 저장</button>
+    </div>
+    <div class="card hide">
+      <h3>⚖️ 빈 보빈 무게가 안 정해진 타래</h3>
+      <div class="muted">순수 코일 무게만 등록된 타래입니다. 그대로 두면 작업자가 처음 쓸 때 보빈 종류를 고릅니다. 여기서 한꺼번에 정해 두면 더 확실합니다.</div>
+      <div style="height:8px"></div>
+      <button class="btn gray sm" id="tmLoad">타래 불러오기</button>
+      <div id="tmBox" class="hide">
+        <div class="list" id="tmList" style="margin-top:6px"></div>
+        <label>체크한 타래의 보빈 종류</label>
+        <div class="chips bob" id="tmBob"></div>
+        <input id="tmKg" inputmode="decimal" placeholder="직접 (kg)" style="margin-top:6px">
+        <div style="height:8px"></div>
+        <button class="btn" id="tmSave">체크한 타래에 정하기</button>
+      </div>
+    </div>
+    <details class="card" id="admMore"><summary>📁 기타 (시트 · 코일 관리자 · 사람 · 백업 · 수정기록)</summary>
+    <div class="card" style="border:0;padding:6px 0;margin:0;border-top:1px solid var(--line);border-radius:0">
+      <h3>🔗 바로가기</h3>
+      <div id="links"></div>
+    </div>
+    <div class="card" style="border:0;padding:6px 0;margin:0;border-top:1px solid var(--line);border-radius:0">
+      <h3>🛡️ 코일 관리자</h3>
+      <div class="muted">코일 등록·재고조사·관리 화면을 쓸 사람입니다. <b>작업기록 앱 관리자와 따로</b> 정합니다. 체크하고 [저장]. 나 자신은 뺄 수 없습니다.</div>
+      <div style="height:8px"></div>
+      <button class="btn gray sm" id="caLoad">명단 불러오기</button>
+      <div class="list" id="caList" style="margin-top:6px"></div>
+      <button class="btn hide" id="caSave" style="margin-top:8px">코일 관리자 저장</button>
+      <div style="height:14px"></div>
+      <h3>👥 사람</h3>
+      <div class="muted">사람 등록·PIN 초기화는 작업기록 앱 ⚙️관리에서 합니다 (두 앱이 같은 명단).</div>
+      <div style="height:8px"></div>
+      <a class="btn gray" id="worklogLink" target="_blank">작업기록 앱 열기 (사람 등록)</a>
+      <div style="height:10px"></div>
+      <button class="btn gray" id="logoutAll">🔒 모든 휴대폰 로그아웃 (휴대폰을 잃어버렸을 때)</button>
+      <div class="muted" style="margin-top:4px">지금 이 휴대폰만 빼고 모두 로그아웃됩니다. 다들 이름과 PIN으로 다시 들어오면 됩니다. 로그인은 30일 동안 안 쓰면 저절로 끝납니다.</div>
+    </div>
+    <div class="card" style="border:0;padding:6px 0;margin:0;border-top:1px solid var(--line);border-radius:0">
+      <h3>💾 백업</h3>
+      <div class="muted">매일 밤 작업기록 앱과 같은 '백업' 폴더(날짜 폴더)에 코일재고_ CSV로 저장합니다. 최근 30일 + 매달 1일은 영구 보관, 원본 시트는 지우지 않습니다.</div>
+      <div id="bkInfo" class="muted" style="margin:8px 0">-</div>
+      <div class="row"><button class="btn gray" id="bkLoad">상태 보기</button><button class="btn gray" id="bkNow">지금 백업</button></div>
+    </div>
+    <div class="card" style="border:0;padding:6px 0;margin:0;border-top:1px solid var(--line);border-radius:0">
+      <h3>📝 수정기록 (타래 정보 전→후)</h3>
+      <button class="btn gray sm" id="elGo">최근 수정 보기</button>
+      <div class="list" id="elList" style="margin-top:6px"></div>
+    </div>
+    </details>
+  </section>
+  <div id="footer" class="muted" style="text-align:center;padding:10px"></div>
+</main>
+<div class="modal hide" id="meModal"><div class="card">
+  <h3 id="meTitle"></h3>
+  <div class="muted">사람 등록·PIN 초기화는 관리자가 작업기록 앱 ⚙️관리에서 합니다. 한 번 등록하면 작업기록 앱과 코일 관리 앱 모두 같은 이름·PIN으로 들어갑니다.</div>
+  <div style="height:10px"></div>
+  <button class="btn gray" id="mePinBtn">🔑 PIN 바꾸기</button><div style="height:8px"></div>
+  <button class="btn gray" id="logoutBtn">로그아웃</button><div style="height:8px"></div>
+  <button class="btn" id="meClose">닫기</button>
+</div></div>
+<div class="modal hide" id="pinModal"><div class="card">
+  <h3 id="pinTitle">🔑 PIN 바꾸기</h3>
+  <div class="muted" id="pinNote"></div>
+  <div id="pinOldWrap"><label>지금 PIN</label><input id="pinOld" type="password" inputmode="numeric"></div>
+  <label>새 PIN (숫자 4~8자리)</label><input id="pinNew" type="password" inputmode="numeric">
+  <label>새 PIN 한 번 더</label><input id="pinNew2" type="password" inputmode="numeric">
+  <div class="err" id="pinErr"></div>
+  <button class="btn" id="pinBtn">바꾸기</button><div style="height:8px"></div>
+  <button class="btn gray" id="pinCancel">취소</button>
+</div></div>
+<datalist id="tgtList"></datalist><datalist id="locList"></datalist>
+<div id="toast"></div><div id="busy">잠시만요…</div>
+
+<script>
+// QR 주소(?coil=C-014)로 열었을 때만 그 타래를 엶. 출력 태그가 값을 이미 따옴표로 감싸 주므로 JSON.stringify를 쓰지 않음 (v10까지 빈 값이 '""'로 들어가 '"" 번 타래를 찾지 못했습니다'가 떴음)
+var START_COIL = (function () { try { var p = new URLSearchParams(location.search); return p.get('coil') || p.get('no') || ''; } catch (e) { return ''; } })(); // v29 깃허브판: 주소창 ?coil= 에서 읽음
+START_COIL = String(START_COIL || '').replace(/["'\s]/g, '');
+if (!/^[A-Za-z]*-?\d{1,5}$/.test(START_COIL)) START_COIL = '';
+var TK = 'coilinv_token', ME = null, INIT = null, CUR = null, MODE = 'gross', TYPE = '실사조정';
+function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } }
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function n(v) { var x = parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return isFinite(x) ? x : NaN; }
+function r2(x) { return Math.round(x * 100) / 100; }
+function toast(m, ms) { var t = $('toast'); t.textContent = m; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, ms || 2600); }
+function busy(on) { $('busy').style.display = on ? 'flex' : 'none'; }
+// 서버 부르기. 신호 문제(네트워크·응답 없음)면 e.net = true 로 알려 줌 → 대기함에 보관
+function isNet(m) { return navigator.onLine === false || /network|네트워크|timeout|응답 없음|failed to fetch|NetworkError|연결/i.test(m); }
+var API = 'https://script.google.com/macros/s/AKfycbzkBCcsgRhWZK3SGpM0MP1HwDYyZLvzNSZkOdCogANwlLe3Gg9_K7e8mFJuHvIVzChJ/exec';
+function rawCall(fn, args, quiet) {
+  return new Promise(function (ok, no) {
+    if (!quiet) busy(true);
+    var done = false, timer = setTimeout(function () { if (done) return; done = true; busy(false); var e = new Error('응답 없음'); e.net = true; no(e); }, 40000);
+    // v29 깃허브판: 화면은 깃허브에서 바로 뜨고, 자료만 구글(Apps Script)과 주고받음
+    fetch(API, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }) })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (done) return; done = true; clearTimeout(timer); busy(false);
+        if (j && j.ok) return ok(j.v);
+        throw { message: (j && j.e) || '서버 응답이 이상합니다', srv: true };
+      })
+      .catch(function (e) {
+        if (done && !(e && e.srv)) return; done = true; clearTimeout(timer); busy(false);
+        var m = (e && e.message) || String(e), er = new Error(m.replace(/^Error:\s*/, ''));
+        er.net = !(e && e.srv) || isNet(m); er.login = m.indexOf('[로그인]') >= 0;
+        if (er.login) { ls(TK, null); showLogin(); }
+        no(er);
+      });
+  });
+}
+function call(fn) {
+  var args = [].slice.call(arguments, 1);
+  return rawCall(fn, args).catch(function (e) { toast(e.message.replace('[로그인]', ''), 4500); throw e; });
+}
+function seg(id, fn) {
+  $(id).addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    [].forEach.call($(id).children, function (c) { c.classList.toggle('on', c === b); });
+    fn && fn(b.dataset.v);
+  });
+}
+function segSet(id, v) { [].forEach.call($(id).children, function (c) { c.classList.toggle('on', c.dataset.v === v); }); }
+function chips(id, list, inputId) {
+  $(id).innerHTML = list.map(function (x) { return '<button type="button">' + esc(x) + '</button>'; }).join('');
+  $(id).onclick = function (e) { var b = e.target.closest('button'); if (!b) return; $(inputId).value = b.textContent; $(inputId).dispatchEvent(new Event('input')); };
+}
+
+// 보빈 종류 버튼: 누르면 무게 칸에 들어감
+function bobChips(id, inputId, after) {
+  var l = (INIT && INIT.bobbins) || [];
+  $(id).innerHTML = l.length ? l.map(function (b) { return '<button type="button" data-kg="' + b.kg + '" data-name="' + esc(b.name) + '">' + esc(b.name) + ' ' + b.kg + 'kg</button>'; }).join('') :
+    '<span class="muted">' + (ME && ME.admin ? '⚙️관리에서 보빈 종류를 적어 두면 버튼이 생깁니다.' : '보빈 종류 목록이 아직 없어요. 무게를 직접 넣거나 관리자에게 알려 주세요.') + '</span>';
+  $(id).onclick = function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    [].forEach.call($(id).querySelectorAll('button'), function (x) { x.classList.toggle('on', x === b); });
+    $(inputId).value = b.dataset.kg; $(inputId).dataset.name = b.dataset.name; after && after();
+  };
+  $(inputId).oninput = function () {
+    var v = $(inputId).value; delete $(inputId).dataset.name;
+    [].forEach.call($(id).querySelectorAll('button'), function (x) { var on = x.dataset.kg === v; x.classList.toggle('on', on); if (on) $(inputId).dataset.name = x.dataset.name; });
+    after && after();
+  };
+}
+// ── 코일 종류 ──
+var A_TYPE = '';
+function typeList() { return (INIT && INIT.types) || [{ name: '일반 환선', tare: 1, alert: 50 }]; }
+function typeOf(name) { var l = typeList(); return l.filter(function (t) { return t.name === name; })[0] || l[0]; }
+function renderTypes() {
+  var l = typeList(); if (!A_TYPE || !l.some(function (t) { return t.name === A_TYPE; })) A_TYPE = l[0].name;
+  $('aType').innerHTML = l.map(function (t) { return '<button data-v="' + esc(t.name) + '"' + (t.name === A_TYPE ? ' class="on"' : '') + '>' + esc(t.name) + '</button>'; }).join('');
+  $('aInroll').innerHTML = l.filter(function (t) { return t.spec; }).map(function (t) { return '<button type="button" style="border-color:var(--org);color:var(--org);font-weight:700" data-ir="' + esc(t.name) + '">' + esc(t.name) + '</button>'; }).join('');
+  setATare();
+  $('eType').innerHTML = l.map(function (t) { return '<option>' + esc(t.name) + '</option>'; }).join('');
+  $('typeRows').innerHTML = l.map(function (t, i) {
+    return '<div class="it" data-type="' + esc(t.name) + '" style="padding:8px 0;border-bottom:1px solid var(--line)"><b>' + esc(t.name) + '</b>' +
+      '<div style="display:flex;gap:10px;align-items:center;margin-top:6px"><input class="tAlert" style="width:110px" inputmode="decimal" value="' + (t.alert == null ? '' : t.alert) + '"' + (t.alert == null ? ' disabled placeholder="알림 없음"' : '') + '><span>kg 아래면 알림</span>' +
+      '<label style="display:flex;gap:6px;align-items:center;margin:0;white-space:nowrap"><input type="checkbox" class="tNone" style="width:auto"' + (t.alert == null ? ' checked' : '') + '> 알림 없음</label></div></div>';
+  }).join('');
+}
+// in-roll 버튼: 규격과 종류를 같이 채움. 다른 규격을 고르거나 직접 쓰면 일반 환선
+$('aInroll').onclick = function (e) {
+  var b = e.target.closest('[data-ir]'); if (!b) return;
+  var t = typeOf(b.dataset.ir); A_TYPE = t.name; $('aSpec').value = t.spec;
+  [].forEach.call($('aInroll').children, function (x) { x.classList.toggle('on', x === b); });
+  setATare(); aPrev(); $('aTare').focus();
+};
+$('aSpec').addEventListener('input', function () { if (A_TYPE !== '일반 환선') { A_TYPE = '일반 환선'; [].forEach.call($('aInroll').children, function (x) { x.classList.remove('on'); }); setATare(); } });
+$('aType').onclick = function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  A_TYPE = b.dataset.v; [].forEach.call($('aType').children, function (c) { c.classList.toggle('on', c === b); });
+  setATare(); aPrev();
+};
+// 종류에 기본 빈 보빈이 있으면 채우고, 없으면(in-roll) 비워서 직접 쓰게 함
+function setATare() {
+  var t = typeOf(A_TYPE).tare;
+  $('aTare').value = t == null ? '' : t;
+  $('aTare').placeholder = t == null ? '빈 보빈 무게를 직접 쓰세요 (꼭)' : '';
+  $('aTareHint').innerHTML = t == null ? '<b style="color:var(--red)">' + esc(A_TYPE) + '은 빈 보빈 무게를 직접 써야 합니다.</b>' : '기본 ' + t + 'kg. 보빈이 다른 타래만 숫자를 고쳐 쓰세요.';
+  $('aTypeNow').innerHTML = '종류: <b>' + esc(A_TYPE) + '</b>' + (A_TYPE === '일반 환선' ? '' : ' (다른 규격을 누르거나 직접 쓰면 일반 환선)');
+}
+$('typeRows').onchange = function (e) {
+  var c = e.target.closest('.tNone'); if (!c) return;
+  var inp = c.closest('[data-type]').querySelector('.tAlert');
+  inp.disabled = c.checked; inp.placeholder = c.checked ? '알림 없음' : ''; if (!c.checked && !inp.value) inp.value = 50;
+};
+$('typeSave').onclick = function () {
+  var rows = [].map.call($('typeRows').querySelectorAll('[data-type]'), function (d) {
+    return { name: d.dataset.type, alert: d.querySelector('.tNone').checked ? '' : d.querySelector('.tAlert').value };
+  });
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].alert !== '' && !(n(rows[i].alert) > 0)) return toast(rows[i].name + ': 알림 무게를 숫자로 넣거나 ‘알림 없음’을 켜 주세요.');
+  }
+  admin('setTypes', { rows: rows }).then(function (l) { INIT.types = l; renderTypes(); toast('알림 무게를 저장했습니다'); refreshStock(); }, function () {});
+};
+function renderBobbins() { bobChips('aBob', 'aTare', function () { aPrev(); }); bobChips('tbBob', 'tbKg', function () { uPrev(); updPrev(); }); bobChips('tmBob', 'tmKg'); $('bobTxt').value = INIT.bobbinTxt || ''; }
+
+// ── 로그인 ──
+function showLogin() { ls('coilinv_snap', null); STARTED = false; $('meBtn').classList.add('hide'); ['nav', 'tab-move', 'tab-stock', 'tab-hist', 'tab-add', 'tab-admin'].forEach(function (i) { $(i).classList.add('hide'); }); $('login').classList.remove('hide'); $('who').textContent = ''; }
+var loginPinTmp = '';
+$('lgBtn').onclick = function () {
+  var pin = $('lgPin').value;
+  call('login', $('lgName').value, pin).then(function (r) { ls(TK, r.token); ls('coilinv_name', r.name); $('lgPin').value = ''; loginPinTmp = r.mustChange ? pin : ''; start(); }, function () {});
+};
+try { $('lgName').value = ls('coilinv_name') || ''; } catch (e) {}
+function modal(id, on) { $(id).classList.toggle('hide', !on); }
+$('meBtn').onclick = function () { $('meTitle').textContent = '👤 ' + ME.name + ' (' + (ME.admin ? '관리자' : '팀원') + ')'; modal('meModal', true); };
+$('meClose').onclick = function () { modal('meModal', false); };
+$('mePinBtn').onclick = function () { modal('meModal', false); openPin(false); };
+function openPin(force) {
+  ['pinOld', 'pinNew', 'pinNew2'].forEach(function (id) { $(id).value = ''; });
+  var hasTmp = !!(force && loginPinTmp);
+  if (hasTmp) $('pinOld').value = loginPinTmp;
+  $('pinOldWrap').classList.toggle('hide', hasTmp);
+  $('pinTitle').textContent = force ? '🔑 새 PIN을 정해주세요' : '🔑 PIN 바꾸기';
+  $('pinNote').textContent = (force ? '관리자가 준 임시 PIN을 쓰고 있습니다. 나만 아는 숫자로 바꿔주세요. ' : '') + '바꾼 PIN은 작업기록 앱에도 똑같이 적용됩니다.';
+  $('pinCancel').classList.toggle('hide', !!force);
+  $('pinErr').textContent = '';
+  modal('pinModal', true);
+}
+$('pinCancel').onclick = function () { modal('pinModal', false); };
+$('pinBtn').onclick = function () {
+  var o = $('pinOld').value.trim(), nw = $('pinNew').value.trim(), n2 = $('pinNew2').value.trim(), err = $('pinErr');
+  if (!o) { err.textContent = '지금 PIN을 적어주세요.'; return; }
+  if (!/^\d{4,8}$/.test(nw)) { err.textContent = '새 PIN은 숫자 4~8자리로 적어주세요.'; return; }
+  if (nw !== n2) { err.textContent = '새 PIN 두 번이 서로 다릅니다.'; return; }
+  if (nw === o) { err.textContent = '지금 PIN과 다른 숫자로 정해주세요.'; return; }
+  if (nw === '2027') { err.textContent = '2027은 임시 PIN이라 쓸 수 없습니다.'; return; }
+  rawCall('changePin', [ls(TK), o, nw]).then(function () {
+    loginPinTmp = ''; if (ME) ME.mustChange = false; modal('pinModal', false);
+    toast('✅ PIN을 바꿨습니다. 두 앱 모두 새 PIN으로 들어오세요', 4000);
+  }, function (e) { err.textContent = e.message; $('pinOldWrap').classList.remove('hide'); });
+};
+$('lgPin').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('lgBtn').click(); });
+$('logoutBtn').onclick = function () { if (!confirm('로그아웃할까요? 다시 들어오려면 이름과 PIN이 필요합니다.')) return; var t = ls(TK); ls(TK, null); if (t) rawCall('logout', [t], true).catch(function () {}); modal('meModal', false); showLogin(); };
+
+// v24: 빨리 열기 — 휴대폰에 기억한 지난 자료(coilinv_snap)로 화면을 먼저 보여 주고, 새 자료는 뒤에서 받아 바꿈
+var STARTED = false;
+function applyInit(r, fresh) {
+    INIT = r; ME = r.me;
+    $('login').classList.add('hide'); $('nav').classList.remove('hide');
+    $('who').textContent = ME.name + (ME.admin ? ' (관리자)' : ''); $('meBtn').classList.remove('hide');
+    $('worklogLink').href = r.worklogSite;
+    $('navAdmin').classList.toggle('hide', !ME.admin);
+    $('navAdd').classList.toggle('hide', !ME.admin);
+    $('stkModeBtn').classList.toggle('hide', !ME.admin);
+    $('editToggle').classList.toggle('hide', !ME.admin);
+    $('fileBox').classList.toggle('hide', !ME.admin);
+    $('uWho').textContent = ME.name;
+    updLabels();
+    $('footer').textContent = '코일 관리 ' + r.version;
+    var last = ls('coilinv_worker');
+    $('mWorker').innerHTML = r.users.map(function (u) { return '<option' + (u === (last || ME.name) ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('');
+    $('hWorker').innerHTML = '<option value="">전체</option>' + r.users.map(function (u) { return '<option>' + esc(u) + '</option>'; }).join('');
+    $('tgtList').innerHTML = r.targets.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('');
+    $('locList').innerHTML = r.locs.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('');
+    renderBobbins(); renderTypes();
+    chips('aSpecChips', r.specs, 'aSpec'); chips('aKindChips', r.kinds, 'aKind'); chips('aLocChips', r.locs, 'aLoc');
+    $('links').innerHTML = (r.sheetUrl ? '<a class="btn gray" style="margin-bottom:8px" href="' + esc(r.sheetUrl) + '" target="_blank">📄 코일 재고 관리대장 시트 열기</a>' : '') +
+      '';
+    renderStock(r.stock);
+    if (!STARTED) {
+      STARTED = true;
+      $('uJob').value = ls('coilinv_job') || ''; $('uKw').value = ls('coilinv_kw') || '';
+      renderRecent();
+      tab('move');
+      if (START_COIL) { $('coilNo').value = START_COIL; loadCoil(START_COIL); START_COIL = ''; }
+      else if (!ME.mustChange && liveAllowed()) startLive(true);
+      showPending();
+    }
+    if (fresh) { if (ME.mustChange) { stopLive(); openPin(true); } flushQueue(); }
+}
+function saveSnap() { try { if (INIT) ls('coilinv_snap', JSON.stringify(INIT)); } catch (e) {} }
+function loadJobs() {
+  rawCall('getJobs', [ls(TK), true], true).then(function (l) {
+    INIT.jobs = l; saveSnap();
+    if (CUR) autoJob('u', CUR.spec);
+    if (BATCH && BATCH.items[0]) autoJob('b', BATCH.items[0].coil.spec);
+  }, function () {});
+}
+function start() {
+  var t = ls(TK);
+  if (!t) return showLogin();
+  var snap = null; try { snap = JSON.parse(ls('coilinv_snap') || 'null'); } catch (e) {}
+  if (snap && snap.me && snap.me.name === ls('coilinv_name')) { try { applyInit(snap, false); } catch (e) { snap = null; } } else snap = null;
+  (snap ? rawCall('getInit', [t], true) : call('getInit', t)).then(function (r) {
+    var jobs = INIT && INIT.jobs;
+    applyInit(r, true);
+    if (jobs) INIT.jobs = jobs;
+    saveSnap(); loadJobs();
+  }, function (e) {
+    if (e && e.login) return;
+    if (e && e.net) toast(snap ? '📵 신호가 약해 지난번 자료를 보여 줍니다. 신호가 돌아오면 다시 열어 주세요' : '📵 신호가 없어 연결하지 못했습니다. 신호가 돌아오면 다시 열어 주세요', 5000);
+    else if (snap) toast(e.message, 4500);
+  });
+}
+
+// ── 탭 ──
+function tab(name) {
+  if (name !== 'move') stopLive();
+  ['move', 'stock', 'hist', 'add', 'admin'].forEach(function (t) { $('tab-' + t).classList.toggle('hide', t !== name); });
+  [].forEach.call($('nav').children, function (b) { b.classList.toggle('on', b.dataset.tab === name); });
+  if (name === 'hist' && !$('hFrom').value) setRange(7);
+  window.scrollTo(0, 0);
+}
+$('nav').onclick = function (e) { var b = e.target.closest('button'); if (b) tab(b.dataset.tab); };
+
+// ── 타래 찾기 ──
+function recentList() { try { return JSON.parse(ls('coilinv_recent') || '[]'); } catch (e) { return []; } }
+function renderRecent() {
+  var l = recentList();
+  $('recentCoils').innerHTML = l.length ? '<span class="muted" style="align-self:center">최근:</span>' + l.map(function (x) { return '<button type="button">' + esc(x) + '</button>'; }).join('') : '';
+}
+$('recentCoils').onclick = function (e) { var b = e.target.closest('button'); if (b) { if (BATCH) return addBatch(b.textContent); $('coilNo').value = b.textContent; loadCoil(b.textContent); } };
+$('coilGo').onclick = function () { if (STK) { addStk($('coilNo').value); $('coilNo').value = ''; return; } if (BATCH) { addBatch($('coilNo').value); $('coilNo').value = ''; return; } loadCoil($('coilNo').value); };
+$('coilNo').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('coilGo').onclick(); });
+
+// ── v17: 작업기록 앱의 작업 목록에서 작업번호 고르기 (오늘 + 최근 3일). 고르면 kW 자동, 코일 규격과 코일선경이 맞으면 자동 선택 ──
+var JOB_MANUAL = { u: false, b: false };
+function jobs() { return (INIT && INIT.jobs) || []; }
+function firstNum(t) { var m = String(t || '').match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : NaN; }
+function fits(j, spec) { var a = firstNum(j.wire), b = firstNum(spec); return isFinite(a) && isFinite(b) && Math.abs(a - b) < 0.001; }
+function renderJobs(pre, spec) {
+  var L = jobs(), cur = $(pre + 'Job').value.trim(), box = $(pre + 'Jobs');
+  if (!L.length) { box.innerHTML = '<div class="muted" style="padding:8px 10px">최근 3일 작업기록이 없습니다. 작업번호를 아래에 직접 넣으세요.</div>'; return; }
+  var h = '', lastHead = '';
+  L.forEach(function (j, i) {
+    var head = j.today ? '오늘' : '최근 3일';
+    if (head !== lastHead) { h += '<div class="jh">' + head + '</div>'; lastHead = head; }
+    h += '<button type="button" data-job="' + i + '" class="' + (j.no === cur ? 'on' : '') + '"><b>' + esc(j.no) + '</b> ' + esc(j.desc || '') +
+      (spec && fits(j, spec) ? ' <span class="fit">✔ 규격 맞음</span>' : '') +
+      '<div class="m">' + (j.kw ? esc(j.kw) + 'kW · ' : '') + (j.wire ? '선경 ' + esc(j.wire) + ' · ' : '') + esc(j.src) + ' · ' + esc(String(j.at).slice(5, 16)) + (j.who ? ' · ' + esc(j.who) : '') + '</div></button>';
+  });
+  box.innerHTML = h;
+}
+function pickJob(pre, j) {
+  $(pre + 'Job').value = j.no;
+  if (j.kw && isFinite(n(j.kw))) $(pre + 'Kw').value = n(j.kw);
+}
+// 코일 규격에 맞는 작업이 있으면 자동 선택 (여러 개면 가장 최근). 사람이 직접 고르거나 쓴 뒤에는 건드리지 않음
+function autoJob(pre, spec) {
+  if (!JOB_MANUAL[pre]) { var m = jobs().filter(function (j) { return fits(j, spec); }); if (m.length) pickJob(pre, m[0]); }
+  renderJobs(pre, spec);
+}
+['u', 'b'].forEach(function (pre) {
+  $(pre + 'Jobs').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-job]'); if (!b) return;
+    JOB_MANUAL[pre] = true; pickJob(pre, jobs()[+b.dataset.job]);
+    renderJobs(pre, pre === 'u' ? (CUR && CUR.spec) : (BATCH && BATCH.items[0] && BATCH.items[0].coil.spec));
+  });
+  $(pre + 'Job').addEventListener('input', function () { JOB_MANUAL[pre] = true; });
+});
+document.addEventListener('click', function (e) {
+  if (!e.target.closest('[data-jre]')) return;
+  call('getJobs', ls(TK)).then(function (l) { INIT.jobs = l; saveSnap(); renderJobs('u', CUR && CUR.spec); renderJobs('b', BATCH && BATCH.items[0] && BATCH.items[0].coil.spec); toast('작업 목록을 새로 불러왔습니다 (' + l.length + '개)'); }, function () {});
+});
+
+// ── v16: 여러 개 한 번에 ──
+// BATCH = null(한 개씩) 또는 { items: [{coil, val, empty}], busy: {번호: 1} }
+// 작업번호 칸(bJob)은 나중에 작업기록 앱 목록에서 고르는 방식으로 바꿀 자리: jobValue() 만 고치면 됨
+var BATCH = null, B_WARN = 0;
+function jobValue() { return $('bJob').value.trim(); }
+function bLast(c) { return r2(c.rem + c.tare); }
+var USE_MODE = 'one';
+function modeBusy() { return (BATCH && BATCH.items.length) ? '찍어 둔 ' + BATCH.items.length + '개 목록' : (STK && STK.items.length) ? '재고 조사에 찍어 둔 ' + STK.items.length + '개' : ''; }
+seg('useMode', function (v) {
+  if (v === USE_MODE) return;
+  var b = modeBusy();
+  if (b && !confirm(b + '을(를) 저장하지 않고 지울까요?')) { segSet('useMode', USE_MODE); return; }
+  USE_MODE = v;
+  BATCH = null; STK = null;
+  $('batchBox').classList.add('hide'); $('stkBox').classList.add('hide');
+  if (v === 'many') {
+    BATCH = { items: [], busy: {} };
+    $('bJob').value = $('bJob').value || ls('coilinv_job') || ''; $('bKw').value = $('bKw').value || ls('coilinv_kw') || '';
+    $('coilBox').classList.add('hide'); CUR = null; $('batchBox').classList.remove('hide');
+    $('scanHint').textContent = 'QR을 연달아 찍으세요. 안 되면 번호를 넣고 [추가].'; $('coilGo').textContent = '추가';
+    renderBatch(); renderJobs('b', '');
+  } else if (v === 'stk') {
+    STK = { items: [], busy: {}, info: null };
+    $('coilBox').classList.add('hide'); CUR = null; $('stkBox').classList.remove('hide');
+    $('scanHint').textContent = '재고 조사: QR을 연달아 찍으세요. 안 되면 번호를 넣고 [추가].'; $('coilGo').textContent = '추가';
+    renderStk(); loadStk();
+  } else {
+    $('coilGo').textContent = '찾기';
+    $('scanHint').textContent = 'QR이 안 되면 라벨 아래 번호를 넣으세요.';
+  }
+});
+// ── v18: 한 달 재고 조사 ──
+var STK = null;
+function loadStk() {
+  admin('stocktake').then(function (r) { if (!STK) return; STK.info = r; renderStkInfo(); }, function () {});
+}
+function stkLine(c, extra) { return '<b>' + esc(c.no) + '</b> ' + esc(c.spec) + 'mm ' + esc(c.kind || '') + ' · ' + c.rem + 'kg' + (c.loc ? ' · 📍' + esc(c.loc) : '') + (extra || ''); }
+function renderStkInfo() {
+  var r = STK.info; if (!r) return;
+  var tot = r.todo.length + r.checked.length;
+  $('stkProg').innerHTML = '<b>' + esc(r.month) + '</b> 재고 조사: <b>' + r.checked.length + ' / ' + tot + '</b> 타래 확인' + (r.todo.length ? ' · 남은 것 ' + r.todo.length + '개' : ' 🎉 다 했어요') +
+    (r.checked.length ? '<br>앱보다 많았던 양 +' + r.plus + 'kg · 적었던 양 ' + r.minus + 'kg' : '');
+  $('stkTodo').innerHTML = r.todo.map(function (c) { return '<div class="it"><a href="#" data-stk="' + esc(c.no) + '">' + stkLine(c, c.tareSet ? '' : ' <span class="tag red">빈 보빈 무게 없음</span>') + '</a></div>'; }).join('') || '<div class="muted">없습니다 👍</div>';
+  $('stkDone').innerHTML = r.checked.map(function (c) { return '<div class="it">' + stkLine(c) + ' <span class="tag ' + (Math.abs(c.diff) < 0.05 ? 'grn' : 'org') + '">' + (c.diff > 0 ? '+' : '') + c.diff + 'kg</span> <span class="muted">' + esc(c.at) + ' ' + esc(c.by || '') + '</span></div>'; }).join('') || '<div class="muted">아직 없습니다.</div>';
+}
+function addStk(no, raw) {
+  no = String(no || '').trim().toUpperCase(); if (!no) return toast('번호를 넣어주세요.');
+  var key = raw || no;
+  if (STK.busy[key]) return;
+  var dup = STK.items.filter(function (it) { return it.coil.no === no || it.raw === key; })[0];
+  if (dup) return bToast('⚠️ ' + dup.coil.no + ' 는 이미 목록에 있어요.');
+  STK.busy[key] = 1;
+  rawCall('getCoil', [ls(TK), no]).then(function (r) {
+    delete STK.busy[key]; var c = r.coil;
+    if (STK.items.some(function (it) { return it.coil.no === c.no; })) return bToast('⚠️ ' + c.no + ' 는 이미 목록에 있어요.');
+    if (!c.tareSet) return toast('⛔ ' + c.no + ' 는 빈 보빈 무게가 없어요. 타래를 열고 ✏️ 정보 수정에서 빈 보빈 무게를 넣어 주세요.', 5000);
+    var was = STK.info && STK.info.checked.filter(function (x) { return x.no === c.no; })[0];
+    if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}
+    STK.items.push({ coil: c, raw: key, val: '' });
+    renderStk(); toast('➕ ' + c.no + ' 추가' + (was ? ' (이번 달 이미 잰 타래)' : '') + ' (' + STK.items.length + '개)', 2000);
+    var ins = document.querySelectorAll('#stkList .sVal'); if (ins.length && !LIVE) ins[ins.length - 1].focus();
+  }, function (e) {
+    delete STK.busy[key];
+    toast(e && (e.net || e.login) ? e.message.replace('[로그인]', '') : no + ' 번 타래를 찾지 못했습니다.', 3500);
+  });
+}
+function sCalc(it) {
+  var v = n(it.val), c = it.coil;
+  if (!isFinite(v) || v <= 0) return { ok: false, msg: '저울 무게를 넣으세요' };
+  if (v < c.tare) return { ok: false, bad: true, msg: '⚠️ 보빈(' + c.tare + 'kg)보다 가벼움' };
+  var left = r2(v - c.tare), d = r2(left - c.rem);
+  return { ok: true, left: left, diff: d };
+}
+function sRes(k) {
+  if (!k.ok) return esc(k.msg);
+  var a = Math.abs(k.diff);
+  return '실제 남은 선 <b>' + k.left + 'kg</b> · ' + (a < 0.05 ? '<span style="color:var(--grn)">✔ 앱과 맞음</span>' : '앱보다 <b style="color:var(--org)">' + a + 'kg ' + (k.diff > 0 ? '많음' : '적음') + '</b>');
+}
+function renderStk() {
+  var it = STK ? STK.items : [];
+  $('stkList').innerHTML = it.map(function (x, i) {
+    var c = x.coil, k = sCalc(x);
+    return '<div class="it"><div class="t"><b style="font-size:17px">' + esc(c.no) + '</b><span>' + esc(c.spec) + 'mm ' + esc(c.kind) + (c.loc ? ' · 📍' + esc(c.loc) : '') + '</span><button class="btn gray sm" data-sdel="' + i + '">✕</button></div>' +
+      '<div class="muted">앱 숫자: 남은 선 ' + c.rem + 'kg + 보빈 ' + c.tare + 'kg = 저울 ' + bLast(c) + 'kg 이어야 함</div>' +
+      '<input class="sVal" data-i="' + i + '" inputmode="decimal" placeholder="지금 저울 무게 (보빈째, kg)" value="' + esc(x.val) + '" style="font-size:20px;margin-top:6px">' +
+      '<div class="sRes" style="margin-top:4px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : '') + '">' + sRes(k) + '</div></div>';
+  }).join('') || '<div class="muted">아직 찍은 타래가 없습니다. 위에서 QR을 찍으세요.</div>';
+  $('stkSave').textContent = it.length ? '모두 저장 (' + it.length + '개)' : '모두 저장';
+}
+$('stkList').addEventListener('input', function (e) {
+  var x = e.target.closest('.sVal'); if (!x) return;
+  var it = STK.items[+x.dataset.i]; it.val = x.value;
+  var k = sCalc(it), row = x.parentNode.querySelector('.sRes');
+  row.style.cssText = 'margin-top:4px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : '');
+  row.innerHTML = sRes(k);
+});
+$('stkList').addEventListener('click', function (e) { var d = e.target.closest('[data-sdel]'); if (d) { STK.items.splice(+d.dataset.sdel, 1); renderStk(); } });
+$('stkTodo').addEventListener('click', function (e) { var a = e.target.closest('[data-stk]'); if (a) { e.preventDefault(); addStk(a.dataset.stk); } });
+$('stkSave').onclick = function () {
+  if (!STK || !STK.items.length) return toast('먼저 QR을 찍어 타래를 추가하세요.');
+  if (!STK.info) return toast('조사 목록을 불러오는 중입니다. 잠시 뒤에 다시 눌러 주세요.');
+  var bad = STK.items.filter(function (x) { return !sCalc(x).ok; });
+  if (bad.length) return toast('⚠️ ' + bad.map(function (x) { return x.coil.no; }).join(', ') + ' 의 저울 무게를 확인하세요.', 4500);
+  var big = STK.items.filter(function (x) { return Math.abs(sCalc(x).diff) >= 3; }).map(function (x) { return '· ' + x.coil.no + ' ' + (sCalc(x).diff > 0 ? '+' : '') + sCalc(x).diff + 'kg'; });
+  if (!confirm(STK.items.length + '개 타래의 무게를 저울 무게로 맞출까요?' + (big.length ? '\n\n⚠️ 차이가 큰 타래 (저울·보빈 다시 확인)\n' + big.join('\n') : ''))) return;
+  var tag = STK.info.tag, list = STK.items.slice(), saved = 0, kept = 0, fail = [];
+  list.reduce(function (p, x) {
+    return p.then(function () {
+      var a = { no: x.coil.no, type: '실사조정', mode: 'gross', value: n(x.val), worker: ME.name, target: tag, memo: '재고조사', reqId: newReq() };
+      return submit('saveMove', a, x.coil.no + ' 재고조사 저울 ' + a.value + 'kg').then(function (r) {
+        if (r) saved++; else kept++;
+        STK.items = STK.items.filter(function (y) { return y !== x; });
+      }, function () { fail.push(x.coil.no); });
+    });
+  }, Promise.resolve()).then(function () {
+    renderStk(); refreshStock(); loadStk();
+    toast((saved ? '✅ ' + saved + '개 무게를 맞췄습니다' : '') + (kept ? ' 📦 ' + kept + '개는 신호가 약해 휴대폰에 보관' : '') + (fail.length ? ' ⛔ 저장 못 함: ' + fail.join(', ') + ' (목록에 남겨 둠)' : ''), 6000);
+  });
+};
+function bToast(m) { if (Date.now() - B_WARN > 2500) { B_WARN = Date.now(); toast(m, 2500); } }
+function addBatch(no, raw) {
+  no = String(no || '').trim().toUpperCase(); if (!no) return toast('번호를 넣어주세요.');
+  var key = raw || no;
+  if (BATCH.busy[key]) return;
+  var dup = BATCH.items.filter(function (it) { return it.coil.no === no || it.raw === key; })[0];
+  if (dup) return bToast('⚠️ ' + dup.coil.no + ' 는 이미 목록에 있어요.');
+  BATCH.busy[key] = 1;
+  rawCall('getCoil', [ls(TK), no]).then(function (r) {
+    delete BATCH.busy[key]; var c = r.coil;
+    if (BATCH.items.some(function (it) { return it.coil.no === c.no; })) return bToast('⚠️ ' + c.no + ' 는 이미 목록에 있어요.');
+    if (c.status === '소진') return toast('⛔ ' + c.no + ' 는 이미 다 쓴(소진) 타래입니다.', 3500);
+    if (!c.tareSet) return toast('⛔ ' + c.no + ' 는 빈 보빈 무게가 없어서 한 개씩 모드로 기록해 주세요.', 4500);
+    if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}
+    BATCH.items.push({ coil: c, raw: key, val: '', empty: false });
+    autoJob('b', BATCH.items[0].coil.spec);
+    renderBatch(); toast('➕ ' + c.no + ' 추가 (' + BATCH.items.length + '개)', 1500);
+    var ins = document.querySelectorAll('#bList .bVal'); if (ins.length && !LIVE) ins[ins.length - 1].focus();
+  }, function (e) {
+    delete BATCH.busy[key];
+    toast(e && (e.net || e.login) ? e.message.replace('[로그인]', '') : no + ' 번 타래를 찾지 못했습니다.', 3500);
+  });
+}
+function bCalc(it) {
+  var v = n(it.val), g = bLast(it.coil), T = it.coil.tare;
+  if (!isFinite(v) || v <= 0) return { ok: false, msg: '저울 무게를 넣으세요' };
+  if (v > g) return { ok: false, bad: true, msg: '⚠️ 지난번(' + g + 'kg)보다 무거움' };
+  if (v < T) return { ok: false, bad: true, msg: '⚠️ 보빈(' + T + 'kg)보다 가벼움' };
+  return { ok: true, used: r2(g - v), left: r2(v - T) };
+}
+function renderBatch() {
+  var it = BATCH ? BATCH.items : [];
+  $('bList').innerHTML = it.map(function (x, i) {
+    var c = x.coil, k = bCalc(x);
+    return '<div class="it" data-i="' + i + '"><div class="t"><b style="font-size:17px">' + esc(c.no) + '</b><span>' + esc(c.spec) + 'mm ' + esc(c.kind) + '</span><button class="btn gray sm" data-bdel="' + i + '">✕</button></div>' +
+      '<div class="muted">지난번 저울 ' + bLast(c) + 'kg · 남은 선 ' + c.rem + 'kg · 보빈 ' + c.tare + 'kg</div>' +
+      '<div class="row" style="margin-top:6px;align-items:center"><input class="bVal" data-i="' + i + '" inputmode="decimal" placeholder="지금 저울 무게 (kg)" value="' + esc(x.val) + '" style="font-size:20px">' +
+      '<button class="btn gray sm" data-bempty="' + i + '" style="flex:none">🏁 다 씀</button></div>' +
+      '<div class="bRes" style="margin-top:4px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : '') + '">' + (k.ok ? (x.empty ? '🏁 다 씀 · ' : '') + '쓴 양 <b>' + k.used + 'kg</b> · 남은 선 ' + k.left + 'kg' : esc(k.msg)) + '</div></div>';
+  }).join('');
+  bSum();
+}
+function bSum() {
+  var it = BATCH ? BATCH.items : [], tot = 0, ok = 0;
+  it.forEach(function (x) { var k = bCalc(x); if (k.ok) { ok++; tot += k.used; } });
+  $('bSum').innerHTML = it.length ? '찍은 코일 <b>' + it.length + '개</b> · 무게 넣은 것 ' + ok + '개 · 쓴 양 합계 <b>' + r2(tot) + 'kg</b>' : '아직 찍은 코일이 없습니다. 위에서 QR을 찍으세요.';
+  $('bSave').textContent = it.length ? '모두 저장 (' + it.length + '개)' : '모두 저장';
+}
+$('bList').addEventListener('input', function (e) {
+  var x = e.target.closest('.bVal'); if (!x) return;
+  var it = BATCH.items[+x.dataset.i]; it.val = x.value; it.empty = false;
+  var k = bCalc(it), row = x.closest('.it').querySelector('.bRes');
+  row.style.cssText = 'margin-top:4px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : '');
+  row.innerHTML = k.ok ? '쓴 양 <b>' + k.used + 'kg</b> · 남은 선 ' + k.left + 'kg' : esc(k.msg);
+  bSum();
+});
+$('bList').addEventListener('click', function (e) {
+  var d = e.target.closest('[data-bdel]'); if (d) { BATCH.items.splice(+d.dataset.bdel, 1); renderBatch(); return; }
+  var m = e.target.closest('[data-bempty]'); if (m) { var it = BATCH.items[+m.dataset.bempty]; if (!(it.coil.tare > 0)) return toast('보빈이 없는 타래는 관리자에게 무게 맞추기를 부탁하세요.', 4000); it.val = String(it.coil.tare); it.empty = true; renderBatch(); }
+});
+$('bClear').onclick = function () { if (BATCH && BATCH.items.length && confirm('찍어 둔 목록을 비울까요? (저장 안 한 것은 사라집니다)')) { BATCH.items = []; renderBatch(); } };
+$('bSave').onclick = function () {
+  if (!BATCH || !BATCH.items.length) return toast('먼저 QR을 찍어 코일을 추가하세요.');
+  var job = jobValue(), kw = $('bKw').value.trim();
+  if (!job) return toast('작업번호를 넣어주세요.');
+  if (!kw) return toast('kW를 넣어주세요.');
+  var bad = BATCH.items.filter(function (x) { return !bCalc(x).ok; });
+  if (bad.length) return toast('⚠️ ' + bad.map(function (x) { return x.coil.no; }).join(', ') + ' 의 저울 무게를 확인하세요.', 4500);
+  var w = [];
+  BATCH.items.forEach(function (x) { var k = bCalc(x); if (!x.empty && k.used > RANGE.use[1]) w.push('· ' + x.coil.no + ' 한 번에 ' + k.used + 'kg'); if (k.used === 0) w.push('· ' + x.coil.no + ' 쓴 양 0kg'); });
+  var kn = n(kw); if (!isFinite(kn) || kn <= 0 || kn > 5000) w.push('· kW ' + kw + ' (보통 0.1 ~ 5000)');
+  var em = BATCH.items.filter(function (x) { return x.empty; }).map(function (x) { return x.coil.no; });
+  if (!confirm('작업 ' + job + ' (' + kw + 'kW) 으로 ' + BATCH.items.length + '개를 저장할까요?' + (em.length ? '\n🏁 다 씀(소진): ' + em.join(', ') : '') + (w.length ? '\n\n⚠️ 확인해 주세요\n' + w.join('\n') : ''))) return;
+  ls('coilinv_job', job); ls('coilinv_kw', kw); $('uJob').value = job; $('uKw').value = kw;
+  var list = BATCH.items.slice(), saved = 0, kept = 0, tot = 0, fail = [];
+  list.reduce(function (p, x) {
+    return p.then(function () {
+      var k = bCalc(x), a = { no: x.coil.no, type: '출고', mode: 'gross', value: n(x.val), worker: ME.name, target: job, kw: kw, memo: x.empty ? '다 씀' : '', reqId: newReq() };
+      return submit('saveMove', a, x.coil.no + ' 저울 ' + a.value + 'kg (' + job + ')').then(function (r) {
+        if (r) { saved++; tot += -r.delta; } else kept++;
+        BATCH.items = BATCH.items.filter(function (y) { return y !== x; });
+      }, function (e) { fail.push(x.coil.no); });
+    });
+  }, Promise.resolve()).then(function () {
+    renderBatch(); refreshStock();
+    toast((saved ? '✅ ' + saved + '개 저장 · 쓴 양 합계 ' + r2(tot) + 'kg' : '') + (kept ? ' 📦 ' + kept + '개는 신호가 약해 휴대폰에 보관' : '') + (fail.length ? ' ⛔ 저장 못 함: ' + fail.join(', ') + ' (목록에 남겨 둠)' : ''), 6000);
+  });
+};
+function loadCoil(no) {
+  stopLive();
+  if (!String(no).trim()) return toast('번호를 넣어주세요.');
+  $('notFound').classList.add('hide');
+  rawCall('getCoil', [ls(TK), no]).then(function (r) {
+    CUR = r.coil;
+    var l = recentList().filter(function (x) { return x !== CUR.no; }); l.unshift(CUR.no); ls('coilinv_recent', JSON.stringify(l.slice(0, 6))); renderRecent();
+    $('coilNo').value = CUR.no;
+    showCoil(r);
+  }, function (e) {
+    if (e && (e.net || e.login)) return toast(e.message.replace('[로그인]', ''), 4500);
+    $('coilBox').classList.add('hide'); CUR = null;
+    $('notFound').innerHTML = '⚠️ ' + esc(String(no).trim().toUpperCase()) + ' 번 타래를 찾지 못했습니다.<br>번호를 다시 확인하고, 그래도 안 되면 <b>관리자에게 알려 주세요</b> (등록이 안 된 타래입니다).';
+    $('notFound').classList.remove('hide');
+  });
+}
+function showCoil(r) {
+  var c = r.coil;
+  $('coilBox').classList.remove('hide');
+  $('cNo').textContent = c.no;
+  $('cSpec').textContent = c.spec + 'mm ' + (c.kind || '');
+  $('cRem').textContent = c.rem + 'kg';
+  $('cTare').innerHTML = c.tareSet && !c.tare ? '보빈 없음' : c.tareSet ? '보빈 포함 <b>' + r2(c.rem + c.tare) + 'kg</b> (보빈 ' + c.tare + 'kg)' : '<span style="color:var(--org)">빈 보빈 무게 미정</span>';
+  $('tareBox').classList.toggle('hide', !!c.tareSet); $('tbKg').value = ''; delete $('tbKg').dataset.name;
+  [].forEach.call($('tbBob').querySelectorAll('button'), function (x) { x.classList.remove('on'); });
+  $('cTags').innerHTML = '<span class="tag ' + (c.status === '소진' ? 'red' : 'grn') + '">' + esc(c.status) + '</span>' + (c.type && c.type !== '일반 환선' ? '<span class="tag org">' + esc(c.type) + '</span>' : '') +
+    (c.loc ? '<span class="tag">📍' + esc(c.loc) + '</span>' : '') + (c.maker ? '<span class="tag">' + esc(c.maker) + '</span>' : '') +
+    (c.memo ? '<div class="muted" style="margin-top:4px">' + esc(c.memo) + '</div>' : '');
+  $('eSpec').value = c.spec; $('eKind').value = c.kind; $('eTare').value = c.tareSet ? c.tare : ''; $('eMaker').value = c.maker; $('eType').value = c.type || '일반 환선'; $('eLoc').value = c.loc; $('eMemo').value = c.memo; segSet('eStatus', c.status);
+  $('editBox').classList.add('hide');
+  $('uEmpty').classList.toggle('hide', c.status === '소진');
+  var older = c.status === '소진' ? [] : sameGroup(c).filter(function (x) { return x.no !== c.no && x.status !== '소진' && x.reg && c.reg && x.reg < c.reg; });
+  if (older.length) $('cTags').insertAdjacentHTML('beforeend', '<div style="margin-top:6px;color:var(--org);font-weight:700">💡 같은 규격 ' + older.map(function (x) { return esc(x.no); }).slice(0, 3).join(', ') + ' 이(가) 먼저 들어왔어요. 그것부터 쓰세요.</div>');
+  $('cHist').innerHTML = histHtml(r.history, true) || '<div class="muted">아직 기록이 없습니다.</div>';
+  $('mVal').value = ''; $('mMemo').value = ''; $('uVal').value = ''; $('uMemo').value = '';
+  updPrev(); uPrev(); autoJob('u', c.spec);
+}
+$('editToggle').onclick = function () { $('editBox').classList.toggle('hide'); };
+seg('eStatus');
+$('eSave').onclick = function () {
+  var st = $('eStatus').querySelector('.on');
+  call('editCoil', ls(TK), CUR.no, { spec: $('eSpec').value, kind: $('eKind').value, tare: $('eTare').value, ctype: $('eType').value, maker: $('eMaker').value, loc: $('eLoc').value, status: st ? st.dataset.v : CUR.status, memo: $('eMemo').value })
+    .then(function (r) { toast(r.changed ? '고쳤습니다.' : '바뀐 내용이 없습니다.'); loadCoil(CUR.no); refreshStock(); }, function () {});
+};
+
+// ── 출고/입고/실사 ──
+seg('mType', function (v) { TYPE = v; updLabels(); });
+seg('mMode', function (v) { MODE = v; updLabels(); });
+function updLabels() {
+  $('modeKg').textContent = TYPE === '출고' ? '쓴 양(kg)' : TYPE === '입고' ? '추가한 양(kg)' : '실제 잔량(kg)';
+  $('mValLbl').textContent = MODE === 'gross' ? '저울에 올린 총무게 (타래째, kg)' : $('modeKg').textContent;
+  $('mTgtLbl').innerHTML = TYPE === '출고' ? '작업대상 (작업번호·모터·설비) <span style="color:var(--red)">*출고는 꼭</span>' : '작업대상 (선택)';
+  $('mSave').textContent = TYPE + ' 저장';
+  updPrev();
+}
+$('mVal').addEventListener('input', updPrev);
+function calcAfter() {
+  if (!CUR) return null;
+  var v = n($('mVal').value); if (!isFinite(v)) return null;
+  var b = CUR.rem, a;
+  if (MODE === 'gross') { var T = curTare(); if (!isFinite(T)) return null; a = r2(v - T); }
+  else a = TYPE === '출고' ? r2(b - v) : TYPE === '입고' ? r2(b + v) : r2(v);
+  return { before: b, after: a, delta: r2(a - b) };
+}
+function updPrev() {
+  var c = calcAfter();
+  if (!c) { $('mPrev').innerHTML = MODE === 'gross' ? (CUR && !isFinite(curTare()) ? '<b style="color:var(--org)">위에서 보빈 종류를 먼저 골라 주세요.</b>' : '저울 무게에서 빈 보빈 ' + (CUR ? curTare() : '-') + 'kg를 빼서 남은 코일 무게를 계산합니다.') : '무게를 넣으면 저장 후 잔량이 보입니다.'; return; }
+  var bad = c.after < 0 || (TYPE === '출고' && c.delta > 0) || (TYPE === '입고' && c.delta < 0);
+  $('mPrev').innerHTML = '지금 ' + c.before + 'kg → 저장 후 <b style="color:' + (bad ? 'var(--red)' : 'var(--ink)') + '">' + c.after + 'kg</b> (' + (c.delta > 0 ? '+' : '') + c.delta + 'kg)' +
+    (bad ? '<div style="color:var(--red);font-weight:700;margin-top:4px">⚠️ 값이 맞지 않습니다. 구분이나 입력 방법을 확인하세요.</div>' : '');
+}
+$('mSave').onclick = function () {
+  if (!CUR) return;
+  var a = { no: CUR.no, type: TYPE, mode: MODE, value: $('mVal').value, worker: $('mWorker').value, target: $('mTarget').value, memo: $('mMemo').value };
+  if (!isFinite(n(a.value))) return toast('무게를 넣어주세요.');
+  if (TYPE === '출고' && !a.target.trim()) return toast('작업번호를 넣어주세요.');
+  if (MODE === 'gross') { if (!isFinite(curTare())) return toast('먼저 보빈 종류를 골라 주세요 (빈 보빈 무게).', 4000); tareArgs(a); }
+  var rw = moveWarn(a);
+  if (rw.length && !confirm('⚠️ 확인해 주세요 (그래도 저장은 됩니다)\n\n' + rw.join('\n') + '\n\n이대로 저장할까요?\n(취소를 누르면 고칠 수 있어요)')) return;
+  ls('coilinv_worker', a.worker);
+  a.reqId = newReq();
+  submit('saveMove', a, CUR.no + ' ' + TYPE + ' ' + a.value + 'kg').then(function (r) {
+    if (!r) { $('mVal').value = ''; return; }
+    toast(r.no + ' ' + TYPE + ' 저장: ' + r.before + ' → ' + r.after + 'kg', 3500);
+    if (r.low) { $('lowBanner').textContent = '⚠️ ' + r.low; $('lowBanner').classList.remove('hide'); } else $('lowBanner').classList.add('hide');
+    loadCoil(r.no); refreshStock();
+  }, function () {});
+};
+// ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
+var LIVE = null, LIVE_OK = null;
+function liveAllowed() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
+  if (LIVE_OK === false) return false;
+  try { var pp = document.permissionsPolicy || document.featurePolicy; if (pp && pp.allowsFeature) return pp.allowsFeature('camera'); } catch (e) {}
+  return true;
+}
+// 코일 라벨 QR만 받음: 앱 주소?coil=C-014(옛 라벨 ?c=) 또는 C-014. 다른 QR(제품·작업기록 앱 등)은 무시
+function qrNo(t) {
+  t = String(t || '').trim();
+  var m = t.match(/[?&](?:coil|c)=([^&#]+)/); if (m) return decodeURIComponent(m[1]).trim();
+  var pre = ((INIT && INIT.prefix) || 'C-').replace(/-$/, '');
+  m = t.match(new RegExp('^' + pre + '-?\\d{1,5}$', 'i')); if (m) return m[0];
+  return '';
+}
+var LAST_QR = { t: '', n: 0, warned: 0 };
+function gotQR(t, live) {
+  var no = qrNo(t);
+  if (!no) {
+    if (Date.now() - LAST_QR.warned > 4000) { LAST_QR.warned = Date.now(); toast('코일 라벨 QR이 아닙니다. 코일 라벨을 비춰 주세요.', 2500); }
+    return false;
+  }
+  if (STK) { addStk(no, t); return false; } // v18 재고 조사
+  if (BATCH) { addBatch(no, t); return false; } // 여러 개 모드: 카메라는 켜 둔 채 계속 찍기
+  if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}
+  $('coilNo').value = no; loadCoil(no);
+  return true;
+}
+// v14 인식률 높이기: 휴대폰에 내장된 QR 읽기(BarcodeDetector)가 있으면 먼저 쓰고, 없으면 jsQR.
+// 화면 가운데(네모 안)를 원래 화질로 잘라 읽고, 번갈아 전체 화면도 읽음. 코일 라벨 형식만 받으므로 한 번 읽으면 바로 엶.
+var BD = null;
+try { if ('BarcodeDetector' in window) BarcodeDetector.getSupportedFormats().then(function (f) { if (f.indexOf('qr_code') >= 0) BD = new BarcodeDetector({ formats: ['qr_code'] }); }); } catch (e) {}
+function decode(ctx, w, h, inv) {
+  if (!window.jsQR) return null;
+  var d = ctx.getImageData(0, 0, w, h), r = jsQR(d.data, w, h, { inversionAttempts: inv ? 'attemptBoth' : 'dontInvert' });
+  return r && r.data ? r.data : null;
+}
+function bdRead(src) {
+  if (!BD) return Promise.resolve(null);
+  return BD.detect(src).then(function (a) { for (var i = 0; i < a.length; i++) if (qrNo(a[i].rawValue)) return a[i].rawValue; return a.length ? a[0].rawValue : null; }, function () { return null; });
+}
+// 사진·화면에서 가운데 정사각형(크기 비율 f)을 잘라 최대 m픽셀로 캔버스에 그림
+function cropTo(c, src, sw, sh, f, m) {
+  var side = Math.round(Math.min(sw, sh) * f), sx = Math.round((sw - side) / 2), sy = Math.round((sh - side) / 2), o = Math.min(m, side);
+  c.width = o; c.height = o; var ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(src, sx, sy, side, side, 0, 0, o, o);
+  return ctx;
+}
+function fullTo(c, src, sw, sh, m) {
+  var s = Math.min(1, m / Math.max(sw, sh)), w = Math.round(sw * s), h = Math.round(sh * s);
+  c.width = w; c.height = h; var ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(src, 0, 0, w, h);
+  return ctx;
+}
+function startLive(auto) {
+  if (LIVE) return;
+  $('scanHint').textContent = '카메라를 여는 중…';
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then(function (st) {
+    LIVE_OK = true; LIVE = { st: st, cv: document.createElement('canvas'), k: 0 };
+    // 초점 자동 계속 맞추기, 불빛(플래시) 버튼 — 되는 휴대폰만
+    try {
+      var tr = st.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {};
+      if (cap.focusMode && cap.focusMode.indexOf('continuous') >= 0) tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function () {});
+      if (cap.torch) { LIVE.tr = tr; LIVE.torch = false; $('scanTorch').classList.remove('hide'); }
+    } catch (e) {}
+    var v = $('scanVid'); v.srcObject = st; v.play && v.play();
+    $('scanBox').classList.remove('hide'); $('scanBtn').classList.add('hide');
+    $('scanHint').textContent = 'QR이 안 되면 라벨 아래 번호를 넣으세요.';
+    (function loop() {
+      if (!LIVE) return;
+      if (!(v.readyState >= 2 && v.videoWidth)) return setTimeout(loop, 150);
+      if (BD && LIVE.k++ % 2 === 0) {
+        bdRead(v).then(function (t) { if (!LIVE) return; if (t && gotQR(t, true)) return; setTimeout(loop, 60); });
+        return;
+      }
+      var k = (LIVE.j = (LIVE.j || 0) + 1) % 3, c = LIVE.cv, vw = v.videoWidth, vh = v.videoHeight, ctx, t;
+      if (k === 2) { ctx = fullTo(c, v, vw, vh, 800); t = decode(ctx, c.width, c.height, false); }
+      else { ctx = cropTo(c, v, vw, vh, k ? 0.5 : 0.75, 720); t = decode(ctx, c.width, c.height, false); }
+      if (t && gotQR(t, true)) return;
+      setTimeout(loop, 100);
+    })();
+  }, function (e) {
+    LIVE_OK = false;
+    $('scanBtn').textContent = '📷 QR 사진 찍기';
+    $('scanHint').textContent = 'QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.';
+    if (!auto) toast('이 화면에서는 카메라를 바로 못 열어서, 사진으로 찍습니다. 버튼을 한 번 더 눌러주세요.', 4500);
+  });
+}
+function stopLive() {
+  if (!LIVE) return;
+  try { LIVE.st.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+  LIVE = null; $('scanVid').srcObject = null; $('scanTorch').classList.add('hide');
+  $('scanBox').classList.add('hide'); $('scanBtn').classList.remove('hide');
+}
+$('scanStop').onclick = stopLive;
+$('scanTorch').onclick = function () {
+  if (!LIVE || !LIVE.tr) return; LIVE.torch = !LIVE.torch;
+  LIVE.tr.applyConstraints({ advanced: [{ torch: LIVE.torch }] }).catch(function () { toast('이 휴대폰은 불빛을 켤 수 없습니다.'); });
+};
+$('scanBtn').onclick = function () { if (liveAllowed()) startLive(false); else $('scanFile').click(); };
+$('scanFile').onchange = function () {
+  var f = this.files && this.files[0]; this.value = ''; if (!f) return;
+  if (!window.jsQR && !BD) return toast('QR 읽기 준비가 아직 안 됐습니다. 잠시 후 다시 해 주세요.');
+  busy(true);
+  var url = URL.createObjectURL(f), img = new Image();
+  img.onload = function () {
+    bdRead(img).then(function (found) {
+      // 전체(여러 크기) → 가운데 잘라서(여러 크기) 순서로, 흑백 반전까지 시도
+      var c = document.createElement('canvas'), W = img.width, H = img.height, tries = [
+        function () { return fullTo(c, img, W, H, 1200); }, function () { return cropTo(c, img, W, H, 0.6, 1200); },
+        function () { return fullTo(c, img, W, H, 800); }, function () { return cropTo(c, img, W, H, 0.4, 1000); },
+        function () { return fullTo(c, img, W, H, 1800); }, function () { return cropTo(c, img, W, H, 0.8, 1600); }];
+      for (var i = 0; i < tries.length && !found; i++) { var ctx = tries[i](); found = decode(ctx, c.width, c.height, true); }
+      URL.revokeObjectURL(url); busy(false);
+      if (found) gotQR(found); else toast('QR을 못 읽었습니다. 라벨이 화면 가운데 오게, 한 뼘 거리에서 흔들리지 않게 다시 찍거나 번호를 넣어 주세요.', 5000);
+    });
+  };
+  img.onerror = function () { busy(false); toast('사진을 열지 못했습니다.'); };
+  img.src = url;
+};
+// 탭을 옮기면 카메라 끔
+document.addEventListener('visibilitychange', function () { if (document.hidden) stopLive(); });
+
+// ── 작업자용: 작업번호 + kW + 사용량만 ──
+$('uVal').addEventListener('input', uPrev);
+// 빈 보빈 무게: 정해진 타래는 그 값, 아직 없는 타래는 위에서 고른 값 (안 골랐으면 NaN)
+function curTare() { if (!CUR) return NaN; if (CUR.tareSet) return CUR.tare; var t = n($('tbKg').value); return isFinite(t) && t > 0 ? t : NaN; }
+function tareArgs(a) { if (CUR && !CUR.tareSet) { a.tare = curTare(); a.bobbin = $('tbKg').dataset.name || ''; } return a; }
+function lastGross() { return CUR ? r2(CUR.rem + curTare()) : NaN; }
+function uPrev() {
+  var v = n($('uVal').value), g = lastGross(), T = curTare();
+  if (CUR && !isFinite(T)) { $('uPrev').innerHTML = '<b style="color:var(--org)">먼저 위에서 보빈 종류를 골라 주세요.</b> 지난번 남은 코일 ' + CUR.rem + 'kg (보빈 빼고)'; return; }
+  if (!CUR || !isFinite(v)) { $('uPrev').innerHTML = CUR ? '지난번 저울 무게 <b>' + g + 'kg</b> (보빈 포함). 지금 무게를 넣으면 쓴 양이 계산됩니다.' : '저울 무게를 넣으면 쓴 양이 자동으로 계산됩니다.'; return; }
+  var used = r2(g - v), bad = used < 0 || v < T;
+  $('uPrev').innerHTML = '지난번 ' + g + 'kg → 지금 ' + v + 'kg = 쓴 양 <b style="color:' + (bad ? 'var(--red)' : 'var(--ink)') + '">' + used + 'kg</b>' +
+    (used < 0 ? '<div style="color:var(--red);font-weight:700;margin-top:4px">⚠️ 무게가 늘었습니다. 저울을 다시 확인하세요.</div>' :
+     v < T ? '<div style="color:var(--red);font-weight:700;margin-top:4px">⚠️ 보빈 무게(' + T + 'kg)보다 작습니다.</div>' :
+     '<div class="muted" style="margin-top:4px">남은 선 ' + r2(v - T) + 'kg (빈 보빈 ' + T + 'kg 뺌)</div>');
+}
+var SKIPW = false;
+// v15: 다 씀 — 저울 무게 = 빈 보빈 무게로 저장 → 남은 선 0 → 자동으로 '소진'
+$('uEmpty').onclick = function () {
+  if (!CUR) return;
+  if (!$('uJob').value.trim()) return toast('작업번호를 넣어주세요.');
+  if (!$('uKw').value.trim()) return toast('kW를 넣어주세요.');
+  var T = curTare();
+  if (!isFinite(T)) return toast('먼저 보빈 종류를 골라 주세요 (빈 보빈 무게).', 4000);
+  if (T <= 0) return toast('보빈이 없는 타래는 관리자에게 무게 맞추기를 부탁하세요.', 4000);
+  if (!confirm(CUR.no + ' 를 다 쓴 것으로 기록할까요?\n\n남은 선 ' + CUR.rem + 'kg를 작업 ' + $('uJob').value.trim() + '에 쓴 것으로 계산하고, 이 타래는 \'소진\'이 됩니다.')) return;
+  $('uVal').value = r2(T); uPrev(); SKIPW = true;
+  try { $('uSave').onclick(); } finally { SKIPW = false; }
+};
+$('uSave').onclick = function () {
+  if (!CUR) return;
+  var a = { no: CUR.no, type: '출고', mode: 'gross', value: $('uVal').value, worker: ME.name, target: $('uJob').value.trim(), kw: $('uKw').value.trim(), memo: $('uMemo').value };
+  if (!a.target) return toast('작업번호를 넣어주세요.');
+  if (!a.kw) return toast('kW를 넣어주세요.');
+  if (!isFinite(curTare())) return toast('먼저 보빈 종류를 골라 주세요 (빈 보빈 무게).', 4000);
+  tareArgs(a);
+  var v = n(a.value), g = lastGross();
+  if (!isFinite(v) || v <= 0) return toast('저울 무게(kg)를 넣어주세요.');
+  if (v > g) return toast('⚠️ 지난번(' + g + 'kg)보다 무게가 늘었습니다. 저울을 다시 확인하거나 관리자에게 무게 맞추기를 부탁하세요.', 5000);
+  if (v < curTare()) return toast('⚠️ 보빈 무게(' + curTare() + 'kg)보다 작습니다. 다시 확인하세요.', 5000);
+  var used = r2(g - v), w = [];
+  if (used === 0) w.push('· 쓴 양이 0kg 입니다 (무게가 그대로)');
+  if (used > RANGE.use[1]) w.push('· 한 번에 ' + used + 'kg를 쓴 것으로 계산됩니다 (보통 ' + RANGE.use[1] + 'kg 이하)');
+  var kw = n(a.kw); if (!isFinite(kw) || kw <= 0 || kw > 5000) w.push('· kW ' + a.kw + ' (보통 0.1 ~ 5000)');
+  if (w.length && !SKIPW && !confirm('⚠️ 확인해 주세요 (그래도 저장은 됩니다)\n\n' + w.join('\n') + '\n\n이대로 저장할까요?\n(취소를 누르면 고칠 수 있어요)')) return;
+  ls('coilinv_job', a.target); ls('coilinv_kw', a.kw);
+  a.reqId = newReq();
+  submit('saveMove', a, CUR.no + ' 저울 ' + v + 'kg (' + a.target + ')').then(function (r) {
+    if (!r) { $('uVal').value = ''; return; }
+    toast(r.no + ' 쓴 양 ' + r2(-r.delta) + 'kg 기록. 남은 선 ' + r.after + 'kg' + (r.tareMsg ? ' (' + r.tareMsg + ')' : ''), 4000);
+    if (r.low) { $('lowBanner').textContent = '⚠️ ' + r.low; $('lowBanner').classList.remove('hide'); } else $('lowBanner').classList.add('hide');
+    loadCoil(r.no); refreshStock();
+  }, function () {});
+};
+// ── 범위 경고 (벗어나면 경고만, 저장은 됨) ──
+var RANGE = { gross: [0.3, 200], use: [0.01, 60], stock: [0, 200], tare: [0, 20] };
+function outOf(v, r) { return !isFinite(v) || v < r[0] || v > r[1]; }
+function moveWarn(a) {
+  var w = [], v = n(a.value), c = calcAfter();
+  if (a.mode === 'gross' && outOf(v, RANGE.gross)) w.push('· 저울 총무게 ' + v + 'kg (보통 ' + RANGE.gross.join(' ~ ') + 'kg)');
+  if (a.mode !== 'gross' && a.type !== '실사조정' && outOf(v, RANGE.use)) w.push('· ' + (a.type === '출고' ? '쓴 양' : '추가한 양') + ' ' + v + 'kg (한 번에 보통 ' + RANGE.use.join(' ~ ') + 'kg)');
+  if (a.mode !== 'gross' && a.type === '실사조정' && outOf(v, RANGE.stock)) w.push('· 실제 잔량 ' + v + 'kg (보통 ' + RANGE.stock.join(' ~ ') + 'kg)');
+  if (c && a.type === '출고' && Math.abs(c.delta) > RANGE.use[1]) w.push('· 한 번에 ' + Math.abs(c.delta) + 'kg를 쓰는 것으로 계산됩니다');
+  if (c && c.after < 0) w.push('· 저장 후 잔량이 0보다 작아집니다 (저장이 안 될 수 있어요)');
+  return w;
+}
+function addWarn(a) {
+  var w = [], v = n(a.value), t = String(a.tare).trim() === '' ? NaN : n(a.tare);
+  if (isFinite(t) && outOf(t, RANGE.tare)) w.push('· 빈 보빈 ' + t + 'kg (보통 ' + RANGE.tare.join(' ~ ') + 'kg)');
+  if (outOf(v, a.mode === 'gross' ? RANGE.gross : RANGE.stock)) w.push('· 무게 ' + v + 'kg (보통 ' + (a.mode === 'gross' ? RANGE.gross : RANGE.stock).join(' ~ ') + 'kg)');
+  var sp = n(a.spec); if (!isFinite(sp) || sp < 0.05 || sp > 6) w.push('· 규격 ' + a.spec + 'mm (보통 0.05 ~ 6mm)');
+  return w;
+}
+// ── 전송 대기함 (신호가 없으면 휴대폰에 보관 → 신호가 돌아오면 자동으로 보냄, 요청ID로 두 번 저장 안 됨) ──
+function newReq() { return 'Q' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase(); }
+function getQ() { try { return JSON.parse(ls('coilinv_queue') || '[]'); } catch (e) { return []; } }
+function setQ(q) { ls('coilinv_queue', JSON.stringify(q)); showPending(); }
+function submit(fn, a, label) {
+  if (!a.ts) a.ts = Date.now(); // v18: 실제로 쓴 시각 (늦게 보내도 이 시각으로 남음)
+  var q = getQ(); q.push({ fn: fn, a: a, label: label, at: new Date().toLocaleString() }); setQ(q);
+  return rawCall(fn, [ls(TK), a]).then(function (r) {
+    setQ(getQ().filter(function (x) { return x.a.reqId !== a.reqId; })); return r;
+  }, function (e) {
+    if (e.net) { toast('📦 신호가 약해 휴대폰에 보관했어요. 신호가 돌아오면 자동으로 보냅니다', 5000); return null; }
+    setQ(getQ().filter(function (x) { return x.a.reqId !== a.reqId; }));
+    toast(e.message.replace('[로그인]', ''), 4500); throw e;
+  });
+}
+var flushing = false;
+function flushQueue() {
+  var q = getQ(); if (flushing || !q.length || !ls(TK) || navigator.onLine === false) return;
+  flushing = true; var sent = 0, dropped = [];
+  q.reduce(function (p, it) {
+    return p.then(function () {
+      return rawCall(it.fn, [ls(TK), it.a], true).then(function () { sent++; setQ(getQ().filter(function (x) { return x.a.reqId !== it.a.reqId; })); },
+        function (e) { if (e.net || e.login) throw e; dropped.push(it.label + ': ' + e.message); setQ(getQ().filter(function (x) { return x.a.reqId !== it.a.reqId; })); });
+    });
+  }, Promise.resolve()).then(function () {
+    if (sent) toast('✅ 대기 중이던 ' + sent + '건을 보냈습니다', 3500);
+    if (dropped.length) alertBox('⛔ 대기 중이던 기록 중 저장하지 못한 것이 있습니다 (재고가 그 사이 바뀌었을 수 있어요). 다시 넣어 주세요:\n' + dropped.join('\n'));
+    if (sent) { refreshStock(); if (CUR) loadCoil(CUR.no); }
+  }, function () {}).then(function () { flushing = false; });
+}
+function alertBox(m) { $('qBox').textContent = m; $('qBox').style.whiteSpace = 'pre-line'; $('qBox').classList.remove('hide'); }
+function showPending() {
+  var q = getQ(), b = $('qBox');
+  if (!q.length) { if (!b.dataset.keep) b.classList.add('hide'); return; }
+  b.style.whiteSpace = '';
+  b.innerHTML = '📦 전송 대기 <b>' + q.length + '건</b> · 휴대폰에 보관 중이에요. ' + (navigator.onLine === false ? '신호가 돌아오면' : '곧') + ' 자동으로 보냅니다. <button class="btn sm gray" id="qSend">지금 보내기</button>';
+  b.classList.remove('hide');
+  $('qSend').onclick = flushQueue;
+}
+window.addEventListener('online', flushQueue);
+window.addEventListener('offline', showPending);
+setInterval(flushQueue, 60000);
+
+// ── 이력 html ──
+function histHtml(rows, small) {
+  var mine = function (o) { return ME && (ME.admin || o.by === ME.name); };
+  return rows.map(function (o) {
+    var d = n(o.delta), col = o.type === '출고' ? 'red' : o.type === '입고' || o.type === '신규등록' ? 'grn' : 'org';
+    var canCancel = !o.cancelled && ['출고', '입고', '실사조정'].indexOf(o.type) >= 0 && mine(o);
+    return '<div class="it' + (o.cancelled ? ' x' : '') + '"><div class="t"><span><span class="tag ' + col + '">' + esc(o.type) + '</span> ' + (small ? '' : '<b>' + esc(o.no) + '</b> ' + esc(o.spec) + 'mm ') +
+      '<b>' + (d > 0 ? '+' : '') + esc(o.delta) + 'kg</b></span><span class="muted">' + esc(o.at) + '</span></div>' +
+      '<div class="muted">' + esc(o.before) + ' → ' + esc(o.after) + 'kg · ' + esc(o.worker) + (o.target ? ' · ' + esc(o.target) : '') + (o.kw ? ' · ' + esc(o.kw) + 'kW' : '') + (o.mode === '저울 총무게' ? ' · 저울 ' + esc(o.gross) + 'kg' : '') +
+      (o.memo ? ' · ' + esc(o.memo) : '') + (o.cancelled ? ' · (취소됨)' : '') + '</div>' +
+      (canCancel ? '<div style="text-align:right"><button class="btn gray sm" data-cancel="' + esc(o.id) + '">↩️ 취소</button></div>' : '') + '</div>';
+  }).join('');
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-cancel]'); if (!b) return;
+  if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = '정말 취소? 한 번 더 누르세요'; b.style.background = 'var(--red2)'; return; }
+  call('cancelMove', ls(TK), b.dataset.cancel).then(function (r) { toast('취소했습니다. 잔량 ' + r.after + 'kg'); if (CUR) loadCoil(CUR.no); if (!$('tab-hist').classList.contains('hide')) $('hGo').click(); refreshStock(); }, function () {});
+});
+
+// ── 재고현황 ──
+var OPEN = {};
+function gKey(x) { return x.spec + '|' + x.kind + '|' + (x.type || '일반 환선'); }
+function sameGroup(c) { var k = gKey(c), g = ((INIT && INIT.stock) || []).filter(function (s) { return gKey(s) === k; })[0]; return g ? g.coils : []; }
+// 같은 규격에서 가장 먼저 들어온(사용중) 타래 번호
+function firstUse(coils) { var u = coils.filter(function (c) { return c.status !== '소진' && c.reg; }).sort(function (a, b) { return a.reg < b.reg ? -1 : 1; }); return u.length > 1 ? u[0].no : ''; }
+// v15: 한 달 넘게 안 찍힌 타래 (재고 점검)
+function renderOld(list) {
+  var lim = new Date(Date.now() - 30 * 864e5), old = [];
+  list.forEach(function (s) { s.coils.forEach(function (c) { if (c.status === '소진') return; var t = c.changed || c.reg; var d = t ? new Date(String(t).replace(' ', 'T')) : null; if (d && !isNaN(d) && d < lim) old.push({ c: c, d: t }); }); });
+  old.sort(function (a, b) { return a.d < b.d ? -1 : 1; });
+  $('oldBox').classList.toggle('hide', !old.length);
+  $('oldList').innerHTML = old.map(function (o) { return '<div class="it"><div class="t"><a href="#" data-coil="' + esc(o.c.no) + '"><b>' + esc(o.c.no) + '</b></a><span>' + esc(o.c.spec) + 'mm ' + esc(o.c.kind) + ' · ' + o.c.rem + 'kg</span><span class="muted">' + esc(String(o.d).slice(0, 10)) + (o.c.loc ? ' · 📍' + esc(o.c.loc) : '') + '</span></div></div>'; }).join('');
+}
+function renderStock(list) {
+  INIT.stock = list;
+  var low = list.filter(function (s) { return s.low; });
+  var txt = low.length ? '⚠️ 재고 부족 ' + low.length + '개: ' + low.map(function (s) { return s.spec + 'mm ' + s.kind + (s.type && s.type !== '일반 환선' ? ' ' + s.type : '') + (s.order ? '(발주완료)' : ''); }).join(', ') : '';
+  $('stockWarn').textContent = txt; $('stockWarn').classList.toggle('hide', !low.length);
+  var noOrder = low.filter(function (s) { return !s.order; });
+  $('lowBanner').textContent = noOrder.length ? '⚠️ 발주 안 된 부족 규격 ' + noOrder.length + '개 — 재고현황에서 확인' : '';
+  $('lowBanner').classList.toggle('hide', !noOrder.length);
+  var tot = 0, cnt = 0; list.forEach(function (x) { tot += x.total; cnt += x.count; });
+  $('stockTiles').innerHTML = '<div class="tile"><div class="v">' + r2(tot) + '<small style="font-size:14px">kg</small></div><div class="l">전체 재고</div></div>' +
+    '<div class="tile"><div class="v">' + cnt + '</div><div class="l">사용중 타래</div></div>' +
+    '<div class="tile' + (low.length ? ' red' : '') + '"><div class="v">' + low.length + '</div><div class="l">부족 규격</div></div>';
+  if (!list.length) { $('stockBody').innerHTML = '<div class="muted">아직 등록된 타래가 없습니다. ➕ 코일 등록에서 등록하세요.</div>'; return; }
+  $('stockBody').innerHTML = list.map(function (s) {
+    var k = s.spec + '|' + s.kind + '|' + (s.type || '일반 환선'), sf = s.safety == null ? 0 : s.safety, full = Math.max(sf * 2, s.total, 1);
+    var h = '<div class="sk' + (s.low ? ' low' : '') + '" data-open="' + esc(k) + '">' +
+      '<div class="top"><span class="nm">' + esc(s.spec) + 'mm <small style="font-weight:600;color:var(--sub)">' + esc(s.kind) + (s.type && s.type !== '일반 환선' ? ' · ' + esc(s.type) : '') + '</small></span><span class="kg">' + s.total + '<small style="font-size:14px">kg</small></span></div>' +
+      '<div class="bar"><i style="width:' + Math.min(100, s.total / full * 100).toFixed(1) + '%"></i>' + (s.safety == null ? '' : '<b style="left:' + Math.min(100, sf / full * 100).toFixed(1) + '%"></b>') + '</div>' +
+      '<div class="muted">타래 ' + s.count + '개 · ' + (s.safety == null ? '알림 없음' : '알림 ' + s.safety + 'kg') + (s.low ? ' · <b style="color:var(--red)">' + r2(s.safety - s.total) + 'kg 부족</b>' : '') +
+      (s.order ? ' · <span class="tag org">발주완료 ' + esc(s.orderAt.slice(5, 10)) + '</span>' : '') + ' ' + (OPEN[k] ? '▲' : '▼') + '</div>';
+    if (OPEN[k]) {
+      var fu = firstUse(s.coils);
+      h += '<div class="sub">' + s.coils.map(function (c) {
+        return '<div style="display:flex;justify-content:space-between;gap:6px;padding:6px 0' + (c.status === '소진' ? ';opacity:.5' : '') + '"><a href="#" data-coil="' + esc(c.no) + '"><b>' + esc(c.no) + '</b></a>' + (c.no === fu ? '<span class="tag org">먼저 쓰기</span>' : '') + '<span><b>' + c.rem + 'kg</b></span><span class="muted">' + esc(c.loc || '') + ' ' + (c.status === '소진' ? '소진' : '') + '</span></div>';
+      }).join('') +
+        '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><button class="btn sm ' + (s.order ? 'gray' : '') + '" data-order="' + esc(k) + '" data-done="' + (s.order ? '0' : '1') + '">' + (s.order ? '발주완료 풀기' : '✅ 발주완료 표시') + '</button>' +
+        (ME.admin ? '<span class="muted">알림 무게는 ⚙️관리 → 부족 알림 무게</span>' : '') +
+        '</div></div>';
+    }
+    return h + '</div>';
+  }).join('');
+}
+$('oldList').onclick = function (e) { var a = e.target.closest('[data-coil]'); if (a) { e.preventDefault(); tab('move'); $('coilNo').value = a.dataset.coil; loadCoil(a.dataset.coil); } };
+$('stockBody').onclick = function (e) {
+  var a = e.target.closest('[data-coil]');
+  if (a) { e.preventDefault(); tab('move'); $('coilNo').value = a.dataset.coil; loadCoil(a.dataset.coil); return; }
+  var o = e.target.closest('[data-order]');
+  if (o) { var p = o.dataset.order.split('|'); call('setOrder', ls(TK), p[0], p[1], o.dataset.done === '1', '', p[2]).then(function () { toast(o.dataset.done === '1' ? '발주완료로 표시했습니다. 입고하면 자동으로 풀립니다.' : '발주 표시를 풀었습니다.', 3500); refreshStock(); }, function () {}); return; }
+  var sf = e.target.closest('[data-safe]');
+  if (sf) { var q = sf.dataset.safe.split('|'), inp = document.querySelector('[data-safe-in="' + sf.dataset.safe + '"]'); call('setSafety', ls(TK), q[0], q[1], inp.value).then(function () { toast('안전재고를 바꿨습니다.'); refreshStock(); }, function () {}); return; }
+  if (e.target.closest('input')) return;
+  var r = e.target.closest('[data-open]'); if (r) { OPEN[r.dataset.open] = !OPEN[r.dataset.open]; renderStock(INIT.stock); }
+};
+function refreshStock() { rawCall('getStock', [ls(TK)], true).then(renderStock, function () {}); }
+// v25: 재고 파일 받기 (관리자). 열쇠를 받은 뒤 링크를 눌러야 받음 (휴대폰 팝업 차단 때문)
+$('fileGo').onclick = function () {
+  admin('stockFileKey').then(function (r) {
+    $('fileLink').innerHTML = '<a class="btn" href="' + esc(r.url) + '" target="_blank" id="fileA">⬇️ 여기를 눌러 받기</a><div class="muted" style="margin-top:6px">5분 안에 눌러 주세요. 타래별 목록과 규격별 합계가 들어 있습니다. 휴대폰 [다운로드] 폴더에 저장됩니다.</div>';
+    $('fileA').onclick = function () { setTimeout(function () { $('fileLink').innerHTML = ''; }, 800); };
+  }, function () {});
+};
+$('stockRe').onclick = function () { call('getStock', ls(TK)).then(renderStock, function () {}); };
+
+// ── 이력 찾기 ──
+function ymd(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function setRange(days) {
+  var t = new Date();
+  $('hTo').value = days < 0 ? '' : ymd(t);
+  $('hFrom').value = days < 0 ? '' : ymd(new Date(t.getTime() - days * 864e5));
+}
+$('hRange').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (c) { c.classList.toggle('on', c === b); }); setRange(Number(b.dataset.d)); $('hGo').click(); };
+$('hGo').onclick = function () {
+  var f = { from: $('hFrom').value, to: $('hTo').value, worker: $('hWorker').value, type: $('hType').value, target: $('hTarget').value.trim(), no: $('hNo').value.trim() };
+  call('getHistory', ls(TK), f).then(function (r) {
+    $('hList').innerHTML = histHtml(r.rows, false) || '<div class="muted">찾은 기록이 없습니다.</div>';
+    var ks = Object.keys(r.used);
+    $('hUsedBox').classList.toggle('hide', !ks.length);
+    var bs = Object.keys(r.usedBy || {});
+    $('hUsedBy').innerHTML = bs.length ? '<table>' + bs.map(function (k) { return '<tr><td>👷 ' + esc(k) + '</td><td class="n"><b>' + r.usedBy[k] + 'kg</b></td></tr>'; }).join('') + '</table>' : '';
+    $('hUsed').innerHTML = '<table>' + ks.map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="n"><b>' + r.used[k] + 'kg</b></td></tr>'; }).join('') + '</table>' +
+      (f.target ? '<div class="muted" style="margin-top:6px">작업대상 “' + esc(f.target) + '”에 들어간 양입니다.</div>' : '');
+  }, function () {});
+};
+
+// ── 코일 등록 (라벨에 적힌 순수 코일 무게) ──
+var A_MODE = 'kg';
+$('aVal').addEventListener('input', aPrev);
+function aPrev() {
+  var v = n($('aVal').value), t = n($('aTare').value);
+  if (!isFinite(v)) { $('aPrev').textContent = '코일 무게를 넣으세요.'; return; }
+  $('aPrev').innerHTML = '남은 코일 <b>' + r2(v) + 'kg</b>' + (isFinite(t) && t > 0 ? ' · 저울에 달면 보빈 포함 약 <b>' + r2(v + t) + 'kg</b>' : isFinite(t) ? ' · 보빈 없음 (저울 무게 = 코일 무게)' : typeOf(A_TYPE).tare == null ? ' · <b style="color:var(--red)">빈 보빈 무게를 써 주세요</b>' : ' · 빈 보빈을 비우면 기본 ' + typeOf(A_TYPE).tare + 'kg');
+}
+$('aSave').onclick = function () {
+  var a = { no: '', spec: $('aSpec').value, kind: $('aKind').value, maker: $('aMaker').value, tare: $('aTare').value, ctype: A_TYPE, mode: A_MODE, value: $('aVal').value, loc: $('aLoc').value, memo: $('aMemo').value };
+  if (!a.spec.trim()) return toast('규격을 넣어주세요.');
+  if (!isFinite(n(a.value))) return toast('무게를 넣어주세요.');
+  if (typeOf(A_TYPE).tare == null && !(String(a.tare).trim() !== '' && n(a.tare) >= 0)) { $('aTare').focus(); return toast(A_TYPE + '은 빈 보빈 무게를 직접 써 주세요 (kg).', 4000); }
+  var rw = addWarn(a);
+  if (rw.length && !confirm('⚠️ 확인해 주세요 (그래도 저장은 됩니다)\n\n' + rw.join('\n') + '\n\n이대로 등록할까요?')) return;
+  a.reqId = newReq();
+  a.bobbin = $('aTare').dataset.name || '';
+  submit('addCoil', a, '코일 등록 ' + a.spec + 'mm ' + a.value + 'kg').then(function (r) {
+    if (!r) { ['aVal', 'aMemo'].forEach(function (i) { $(i).value = ''; }); return; }
+    $('aDone').classList.remove('hide');
+    $('aDone').innerHTML = '<div class="ok">등록했습니다: ' + esc(r.no) + ' (' + r.rem + 'kg)</div><div class="muted">아래 버튼으로 라벨을 뽑아 이 코일에 바로 붙이세요. 그다음 코일을 등록하면 섞이지 않습니다.</div>' +
+      '<button class="btn" data-label="' + esc(r.no) + '" style="font-size:20px;padding:16px">🏷️ 이 코일 라벨 인쇄</button>';
+    ['aVal', 'aMemo'].forEach(function (i) { $(i).value = ''; }); setATare(); delete $('aTare').dataset.name;
+    [].forEach.call($('aBob').querySelectorAll('button'), function (x) { x.classList.remove('on'); }); aPrev(); refreshStock(); window.scrollTo(0, 0);
+  }, function () {});
+};
+document.addEventListener('click', function (e) { var b = e.target.closest('[data-label]'); if (b) openLabels(b.dataset.label); });
+
+// ── 관리 ──
+function openLabels(nos) {
+  window.open(INIT.appUrl + '?page=labels&nos=' + encodeURIComponent(nos || ''), '_blank');
+}
+$('lbGo').onclick = function () { var v = $('lbNos').value.trim(); if (!v) return toast('다시 뽑을 타래 번호를 넣어 주세요.'); openLabels(v); };
+
+function admin(action, args) { return call('adminCall', ls(TK), action, args || {}); }
+$('bobSave').onclick = function () {
+  admin('setBobbins', { text: $('bobTxt').value }).then(function (r) {
+    INIT.bobbins = r.bobbins; INIT.bobbinTxt = r.text; renderBobbins();
+    toast(r.bobbins.length ? '보빈 종류 ' + r.bobbins.length + '개를 저장했습니다' : '보빈 종류를 비웠습니다');
+  }, function () {});
+};
+$('tmLoad').onclick = function () {
+  admin('tareMissing').then(function (l) {
+    $('tmBox').classList.toggle('hide', !l.length);
+    $('tmList').innerHTML = l.length ? l.map(function (c) { return '<label class="it" style="display:flex;gap:8px;align-items:center;margin:0"><input type="checkbox" style="width:auto" value="' + esc(c.no) + '"' + (c.no.charAt(0) === '(' ? ' disabled' : ' checked') + '><span><b>' + esc(c.no) + '</b> ' + esc(c.spec) + 'mm ' + esc(c.kind || '') + ' · ' + c.rem + 'kg ' + esc(c.loc || '') + '</span></label>'; }).join('') : '';
+    if (!l.length) toast('모든 타래에 빈 보빈 무게가 정해져 있습니다 👍');
+  }, function () {});
+};
+$('tmSave').onclick = function () {
+  var nos = [].map.call($('tmList').querySelectorAll('input:checked'), function (x) { return x.value; }), t = n($('tmKg').value);
+  if (!nos.length) return toast('타래를 체크해 주세요.');
+  if (!isFinite(t) || t <= 0) return toast('보빈 종류를 고르거나 무게를 넣어 주세요.');
+  if (!confirm(nos.length + '개 타래의 빈 보빈 무게를 ' + t + 'kg로 정할까요?')) return;
+  admin('setTares', { nos: nos, tare: t, bobbin: $('tmKg').dataset.name || '' }).then(function (r) {
+    toast(r.count + '개 타래에 빈 보빈 ' + t + 'kg를 정했습니다'); $('tmLoad').onclick(); refreshStock();
+  }, function () {});
+};
+// ── v18: 규격별 월 사용량 ──
+var MON = null, MON_I = 0;
+$('monBox').addEventListener('toggle', function () { if ($('monBox').open && !MON) loadMon(); });
+function loadMon() { call('getMonthly', ls(TK)).then(function (r) { MON = r; MON_I = 0; renderMon(); }, function () {}); }
+function renderMon() {
+  if (!MON) return;
+  $('monChips').innerHTML = MON.months.map(function (m, i) { return '<button data-mi="' + i + '"' + (i === MON_I ? ' class="on"' : '') + '>' + (i === 0 ? '이번 달' : (+m.slice(5)) + '월') + '</button>'; }).join('') + '<button data-mre="1">🔄</button>';
+  var m = MON.months[MON_I], t = MON.total[m] || { used: 0, inn: 0, adj: 0, jobs: 0 };
+  $('monSum').innerHTML = '<b>' + esc(m) + '</b> · 쓴 양 <b>' + t.used + 'kg</b> · 들어온 양 ' + t.inn + 'kg · 작업 ' + t.jobs + '건' + (t.adj ? ' · 재고 맞춤 ' + (t.adj > 0 ? '+' : '') + t.adj + 'kg' : '');
+  var rows = MON.rows.filter(function (x) { var y = x.m[m]; return x.stock > 0 || (y && (y.used || y.inn || y.adj)); });
+  $('monBody').innerHTML = rows.length ? '<table><tr><th>규격·선종</th><th>쓴 양</th><th>들어옴</th><th>지금 재고</th><th>버팀</th></tr>' + rows.map(function (x) {
+    var y = x.m[m] || { used: 0, inn: 0 }, low = x.cover != null && x.cover < 1;
+    return '<tr' + (low ? ' class="low"' : '') + '><td><b>' + esc(x.spec) + '</b>mm ' + esc(x.kind) + '</td><td>' + (y.used ? '<b>' + y.used + '</b>' : '-') + '</td><td>' + (y.inn || '-') + '</td><td>' + x.stock + '</td><td>' + (x.cover == null ? '-' : x.cover + '달') + '</td></tr>';
+  }).join('') + '</table><div class="muted" style="margin-top:6px">kg 단위. 빨간 줄 = 한 달도 못 버팀 (지난 3달 평균 기준). 버팀이 ‘-’면 지난 3달에 쓴 기록이 없는 것.</div>' : '<div class="muted">아직 기록이 없습니다.</div>';
+}
+$('monChips').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; if (b.dataset.mre) { MON = null; return loadMon(); } MON_I = +b.dataset.mi; renderMon(); };
+$('logoutAll').onclick = function () {
+  if (!confirm('이 휴대폰만 빼고 모든 휴대폰을 로그아웃할까요?\n다들 이름과 PIN으로 다시 들어오면 됩니다.')) return;
+  admin('logoutAll').then(function (r) { toast('🔒 다른 휴대폰 ' + r.count + '개를 로그아웃했습니다', 4000); }, function () {});
+};
+// v23: 코일 관리자 고르기
+$('caLoad').onclick = function () {
+  admin('users').then(function (l) {
+    $('caList').innerHTML = l.map(function (u) { var me = u.name === ME.name; return '<label class="it" style="display:flex;gap:10px;align-items:center;margin:0;min-height:44px"><input type="checkbox" style="width:22px;height:22px" value="' + esc(u.name) + '"' + (u.admin ? ' checked' : '') + (me ? ' disabled' : '') + '><span><b>' + esc(u.name) + '</b>' + (me ? ' (나)' : '') + (u.wlAdmin ? ' <span class="tag">작업기록 관리자</span>' : '') + '</span></label>'; }).join('') || '<div class="muted">명단이 비어 있습니다.</div>';
+    $('caSave').classList.toggle('hide', !l.length);
+  }, function () {});
+};
+$('caSave').onclick = function () {
+  var names = [].map.call($('caList').querySelectorAll('input:checked'), function (x) { return x.value; });
+  if (names.indexOf(ME.name) < 0) names.push(ME.name);
+  if (!confirm('코일 관리자: ' + names.join(', ') + '\n이대로 저장할까요?')) return;
+  admin('setCoilAdmins', { names: names }).then(function (r) { toast('🛡️ 코일 관리자: ' + r.names.join(', '), 4000); $('caLoad').onclick(); }, function () {});
+};
+function bkShow(r) { $('bkInfo').innerHTML = '마지막 백업: ' + esc(r.last || '아직 없음') + (r.url ? '<br><a href="' + esc(r.url) + '" target="_blank">백업 폴더 열기</a>' : '') + (r.count ? ' · 날짜 폴더 ' + r.count + '개' : ''); }
+$('bkLoad').onclick = function () { admin('backupInfo').then(bkShow, function () {}); };
+$('bkNow').onclick = function () { admin('backupNow').then(function (r) { toast('💾 백업했습니다'); bkShow({ last: r.info, url: r.url }); }, function () {}); };
+$('elGo').onclick = function () {
+  admin('editLog').then(function (rows) {
+    $('elList').innerHTML = rows.map(function (r) { return '<div class="it"><div class="t"><b>' + esc(r[2]) + '</b><span class="muted">' + esc(r[0]) + '</span></div><div class="muted">' + esc(r[1]) + ' · ' + esc(r[3]) + ': ' + esc(r[4]) + ' → ' + esc(r[5]) + '</div></div>'; }).join('') || '<div class="muted">아직 수정한 기록이 없습니다.</div>';
+  }, function () {});
+};
+
+updLabels();
+start();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
+</script>
+</body>
+</html>
