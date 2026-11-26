@@ -155,7 +155,8 @@ tr.sub td{background:#fafbfd;font-size:14px}
         <div class="bar2"><span>QR을 네모 안에 맞추세요</span><span><button class="btn gray sm hide" id="scanTorch">💡 불빛</button> <button class="btn gray sm" id="scanStop">닫기</button></span></div>
       </div>
       <button class="btn" id="scanBtn">📷 QR 찍기</button>
-      <input type="file" id="scanFile" accept="image/*" capture="environment" class="hide">
+      <label class="btn hide" id="scanPhoto" for="scanFile" style="display:block;text-align:center">📷 QR 사진 찍기</label>
+      <input type="file" id="scanFile" accept="image/*" capture="environment" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
       <div class="muted" id="scanHint" style="margin:8px 0 4px">QR이 안 되면 라벨 아래 번호를 넣으세요.</div>
       <div class="numin"><input id="coilNo" placeholder="번호 (예: 14)" inputmode="text"><button class="btn" id="coilGo">찾기</button></div>
       <div class="warn hide" id="notFound" style="margin:8px 0 0"></div>
@@ -569,7 +570,6 @@ $('pinBtn').onclick = function () {
   if (!/^\d{4,8}$/.test(nw)) { err.textContent = '새 PIN은 숫자 4~8자리로 적어주세요.'; return; }
   if (nw !== n2) { err.textContent = '새 PIN 두 번이 서로 다릅니다.'; return; }
   if (nw === o) { err.textContent = '지금 PIN과 다른 숫자로 정해주세요.'; return; }
-  if (nw === '2027') { err.textContent = '2027은 임시 PIN이라 쓸 수 없습니다.'; return; }
   rawCall('changePin', [ls(TK), o, nw]).then(function () {
     loginPinTmp = ''; if (ME) ME.mustChange = false; modal('pinModal', false);
     toast('✅ PIN을 바꿨습니다. 두 앱 모두 새 PIN으로 들어오세요', 4000);
@@ -1052,6 +1052,7 @@ function startLive(auto) {
   $('scanHint').textContent = '카메라를 여는 중…';
   navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then(function (st) {
     LIVE_OK = true; LIVE = { st: st, cv: document.createElement('canvas'), k: 0 };
+    clearTimeout(LIVE_WAIT); $('scanPhoto').classList.add('hide');
     // 초점 자동 계속 맞추기, 불빛(플래시) 버튼 — 되는 휴대폰만
     try {
       var tr = st.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {};
@@ -1075,24 +1076,34 @@ function startLive(auto) {
       setTimeout(loop, 100);
     })();
   }, function (e) {
-    LIVE_OK = false;
-    $('scanBtn').textContent = '📷 QR 사진 찍기';
-    $('scanHint').textContent = 'QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.';
-    if (!auto) toast('이 화면에서는 카메라를 바로 못 열어서, 사진으로 찍습니다. 버튼을 한 번 더 눌러주세요.', 4500);
+    clearTimeout(LIVE_WAIT); if (LIVE) return;
+    photoMode(e && e.name === 'NotAllowedError'
+      ? '카메라 허용이 꺼져 있어 사진으로 찍습니다. (바로 켜려면 휴대폰 설정 → 앱/사이트 권한 → 카메라 허용)'
+      : 'QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.', auto);
   });
+  // v30: 카메라가 6초 넘게 답이 없으면 사진 찍기로 바꿈 (눌러도 반응 없는 것 방지)
+  LIVE_WAIT = setTimeout(function () { if (!LIVE) photoMode('카메라가 열리지 않아 사진으로 찍습니다. 아래 버튼을 눌러 주세요.', false); }, 6000);
+}
+// v30: 사진 찍기는 휴대폰이 직접 처리하는 버튼(label)으로 → 어떤 휴대폰·화면에서도 눌리면 바로 카메라가 열림
+var LIVE_WAIT = null;
+function photoMode(msg, auto) {
+  LIVE_OK = false;
+  $('scanBtn').classList.add('hide'); $('scanPhoto').classList.remove('hide');
+  $('scanHint').textContent = msg;
+  if (!auto) toast('📷 QR 사진 찍기 버튼을 눌러 주세요.', 3500);
 }
 function stopLive() {
   if (!LIVE) return;
   try { LIVE.st.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
   LIVE = null; $('scanVid').srcObject = null; $('scanTorch').classList.add('hide');
-  $('scanBox').classList.add('hide'); $('scanBtn').classList.remove('hide');
+  $('scanBox').classList.add('hide'); if (LIVE_OK !== false) $('scanBtn').classList.remove('hide');
 }
 $('scanStop').onclick = stopLive;
 $('scanTorch').onclick = function () {
   if (!LIVE || !LIVE.tr) return; LIVE.torch = !LIVE.torch;
   LIVE.tr.applyConstraints({ advanced: [{ torch: LIVE.torch }] }).catch(function () { toast('이 휴대폰은 불빛을 켤 수 없습니다.'); });
 };
-$('scanBtn').onclick = function () { if (liveAllowed()) startLive(false); else $('scanFile').click(); };
+$('scanBtn').onclick = function () { if (liveAllowed()) startLive(false); else photoMode('QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.', false); };
 $('scanFile').onchange = function () {
   var f = this.files && this.files[0]; this.value = ''; if (!f) return;
   if (!window.jsQR && !BD) return toast('QR 읽기 준비가 아직 안 됐습니다. 잠시 후 다시 해 주세요.');
@@ -1369,7 +1380,11 @@ document.addEventListener('click', function (e) { var b = e.target.closest('[dat
 
 // ── 관리 ──
 function openLabels(nos) {
-  window.open(INIT.appUrl + '?page=labels&nos=' + encodeURIComponent(nos || ''), '_blank');
+  // v30: 라벨 화면은 로그인한 사람이 앱에서 받은 10분짜리 열쇠로만 열림 (주소만 알아서는 재고 목록이 안 보이게)
+  var w = window.open('', '_blank');
+  rawCall('labelUrl', [ls(TK), nos || '']).then(function (u) {
+    if (w) w.location.href = u; else location.href = u;
+  }).catch(function (e) { if (w) w.close(); toast(e.message.replace('[로그인]', ''), 4500); });
 }
 $('lbGo').onclick = function () { var v = $('lbNos').value.trim(); if (!v) return toast('다시 뽑을 타래 번호를 넣어 주세요.'); openLabels(v); };
 
