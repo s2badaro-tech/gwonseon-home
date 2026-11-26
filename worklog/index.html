@@ -314,7 +314,7 @@ function start() {
   if (quick) { applyCfg(cached); buildForm(); showPending(); }
   call('getConfig', tok()).then(function (cfg) {
     if (cfg.login) { ls(LS.cfg, null); showLogin(); return; }
-    var same = quick && JSON.stringify(cached.kinds) === JSON.stringify(cfg.kinds) && cached.me.name === cfg.me.name && cached.me.admin === cfg.me.admin;
+    var same = quick && JSON.stringify(cached.kinds) === JSON.stringify(cfg.kinds) && cached.me.name === cfg.me.name && cached.me.admin === cfg.me.admin && !!cached.me.owner === !!cfg.me.owner;
     ls(LS.cfg, JSON.stringify(cfg));
     applyCfg(cfg);
     if (!quick || (!same && !editId && !photo)) buildForm(); // 설정이 바뀌었으면 새 화면으로 (적던 내용은 그대로)
@@ -347,7 +347,7 @@ function doLogin() {
 function openMe() {
   if (!ME) { showLogin(); return; }
   document.getElementById('meName').textContent = ME.name;
-  document.getElementById('meRole').textContent = ME.admin ? '관리자' : '팀원';
+  document.getElementById('meRole').textContent = roleName(ME);
   openModal('meModal');
 }
 function openPin(force) {
@@ -924,14 +924,16 @@ function openRecent(k, id) {
 
 // ───── ⚙️ 관리자 메뉴 (관리자에게만 보임) ─────
 // 메뉴를 늘리려면 아래 목록에 { title, render } 를 하나 추가하면 됩니다. (서버 쪽은 Code.gs 의 ADMIN_ACTIONS)
+// owner: true = 운영자에게만 보임. 관리자에게는 나머지(기록 현황)만 보임
 var ADMIN_SECTIONS = [
-  { title: '👥 사람 등록·관리', open: true, render: admUsers },
+  { title: '👥 사람 등록·관리', open: true, owner: true, render: admUsers },
   { title: '📊 기록 현황', render: admStats },
-  { title: '🔒 수정 권한', render: admPerm },
-  { title: '📝 수정기록 (최근 80건)', render: admLog },
-  { title: '💾 백업 (매일 밤 자동)', render: admBackup },
-  { title: '🔗 바로가기 (시트·사진 폴더)', render: admLinks }
+  { title: '🔒 수정 권한', owner: true, render: admPerm },
+  { title: '📝 수정기록 (최근 80건)', owner: true, render: admLog },
+  { title: '💾 백업 (매일 밤 자동)', owner: true, render: admBackup },
+  { title: '🔗 바로가기 (시트·사진 폴더)', owner: true, render: admLinks }
 ];
+function roleName(u) { return u.owner ? '운영자' : u.admin ? '관리자' : '팀원'; }
 function admPerm(el) {
   adm('getOpts').then(function (o) {
     el.innerHTML = '<div class="note">찾아보기·최근 기록에서 잘못 적힌 기록을 누가 고칠 수 있는지 정합니다. 고친 내용은 어느 쪽이든 \'수정기록\' 탭에 모두 남습니다.</div>' +
@@ -976,13 +978,15 @@ function adm(action, args) { return call('adminCall', tok(), action, args || {})
 function admErr(el) { return function (e) { el.innerHTML = '<div class="err">' + esc(e) + '</div>'; }; }
 function buildAdmin() {
   var box = document.getElementById('adminBox'); box.innerHTML = '';
-  ADMIN_SECTIONS.forEach(function (s) {
+  var list = ADMIN_SECTIONS.filter(function (s) { return !s.owner || (ME && ME.owner); });
+  if (!(ME && ME.owner)) box.innerHTML = '<div class="note" style="margin-bottom:8px">관리자는 기록 현황을 보고, 남이 쓴 기록도 고칠 수 있습니다. 다른 관리 기능은 운영자만 씁니다.</div>';
+  list.forEach(function (s) {
     var d = document.createElement('details'); d.className = 'adm';
     d.innerHTML = '<summary>' + esc(s.title) + '</summary><div class="in"></div>';
     var el = d.querySelector('.in');
     d.addEventListener('toggle', function () { if (d.open) { el.innerHTML = '<div class="note">불러오는 중…</div>'; s.render(el); } });
     box.appendChild(d);
-    if (s.open) d.open = true;
+    if (s.open || list.length === 1) d.open = true;
   });
 }
 function admUsers(el, after) {
@@ -990,17 +994,17 @@ function admUsers(el, after) {
   adm('listUsers').then(function (users) {
     ADM.users = users;
     var h = '<label for="auName">새로 등록할 이름</label><input id="auName" placeholder="예) 홍길동" onkeydown="if(event.key===\'Enter\')admAdd()">' +
-      '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:15px"><input type="checkbox" id="auAdmin" style="width:22px;height:22px"> 관리자로 등록 (이 관리 메뉴도 보임)</label>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:15px"><input type="checkbox" id="auAdmin" style="width:22px;height:22px"> 관리자로 등록 (기록 현황 보기 + 남의 기록도 고치기)</label>' +
       '<button class="btn" id="auBtn" style="margin-top:10px" onclick="admAdd()">➕ 등록하고 임시 PIN 받기</button>' +
       '<div id="auPin"></div>' +
       '<div class="count" style="margin-top:16px">등록된 사람 ' + users.length + '명</div>';
     users.forEach(function (u, i) {
       var self = ME && u.name === ME.name;
       h += '<div class="urow"><span class="n">' + esc(u.name) + '</span>' +
-        (u.admin ? '<span class="tag">관리자</span>' : '<span class="tag g">팀원</span>') +
+        (u.owner ? '<span class="tag">운영자</span>' : u.admin ? '<span class="tag">관리자</span>' : '<span class="tag g">팀원</span>') +
         (u.temp ? '<span class="tag w">임시 PIN 사용 중</span>' : '') + (self ? ' <span class="note">(나)</span>' : '') +
         '<div class="note">등록 ' + esc(u.reg || '-') + ' · 마지막 접속 ' + esc(u.last || '아직 없음') + '</div>' +
-        (self ? '' : '<div class="ub"><button onclick="admReset(' + i + ')">🔑 PIN 초기화</button>' +
+        (self || u.owner ? '' : '<div class="ub"><button onclick="admReset(' + i + ')">🔑 PIN 초기화</button>' +
           '<button onclick="admRole(' + i + ')">' + (u.admin ? '팀원으로' : '관리자로') + '</button>' +
           '<button class="del" onclick="admDel(' + i + ')">🗑 삭제</button></div>') + '</div>';
     });
