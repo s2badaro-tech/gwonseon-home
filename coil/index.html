@@ -148,7 +148,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
   <section id="tab-move" class="hide">
     <div id="lowBanner" class="warn hide"></div>
     <div class="card">
-      <div class="seg" id="useMode" style="margin-bottom:10px"><button data-v="one" class="on">한 개씩</button><button data-v="many">여러 개</button><button data-v="stk" id="stkModeBtn" class="hide">📋 재고조사</button></div>
+      <div class="seg" id="useMode" style="margin-bottom:10px"><button data-v="many" class="on">📦 코일 사용</button><button data-v="one" id="oneModeBtn" class="hide">🔎 타래 보기</button><button data-v="stk" id="stkModeBtn" class="hide">📋 재고조사</button></div>
       <div id="scanBox" class="hide">
         <video id="scanVid" playsinline muted autoplay></video>
         <div class="aim"></div>
@@ -183,19 +183,21 @@ tr.sub td{background:#fafbfd;font-size:14px}
     </div>
     <!-- v16: 여러 개 한 번에 — 작업번호·kW 한 번, QR 연달아 찍기, 줄마다 저울 무게, [모두 저장] -->
     <div id="batchBox" class="card hide">
-      <h3 style="margin-top:0">📚 여러 코일 한 번에</h3>
-      <div class="muted">작업번호와 kW를 한 번 넣고, QR을 연달아 찍으세요. 찍은 코일이 아래에 쌓입니다. 줄마다 저울 무게만 넣고 [모두 저장].</div>
+      <h3 style="margin-top:0">📦 작업 하나에 쓴 코일</h3>
+      <div class="muted">① 작업을 고르세요 (끝날 때까지 그대로) ② 쓴 타래마다 QR을 찍거나 번호를 넣고, 지금 저울 무게를 넣으세요 ③ [저장]. 선경이 여러 개거나 같은 선경을 여러 타래 써도 계속 쌓으면 됩니다.</div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="bJobs"></div><div id="bFit"></div>
       <div class="row">
         <div><label>작업번호 <span style="color:var(--red)">*</span></label><input id="bJob" list="tgtList" placeholder="목록에 없으면 직접"></div>
         <div><label>kW <span style="color:var(--red)">*</span></label><input id="bKw" inputmode="decimal" placeholder="예: 37"></div>
       </div>
+      <button class="btn gray sm" id="bEnd" style="margin-top:6px">✅ 이 작업 끝 (다른 작업 고르기)</button>
       <div id="bList" class="list" style="margin-top:8px"></div>
       <div class="preview" id="bSum">아직 찍은 코일이 없습니다.</div>
       <div style="height:12px"></div>
-      <button class="btn" id="bSave" style="font-size:20px;padding:16px">모두 저장</button>
+      <button class="btn" id="bSave" style="font-size:20px;padding:16px">저장</button>
       <div style="height:8px"></div>
       <button class="btn gray sm" id="bClear">목록 비우기</button>
+      <div id="bDone" style="margin-top:12px"></div>
     </div>
     <!-- v31: 한 개씩도 코일을 찍기 전에 작업 목록이 보이게 (작업 먼저 고르고 QR 찍기) -->
     <div class="card" id="jobCard">
@@ -628,7 +630,8 @@ function applyInit(r, fresh) {
       $('uJob').value = ls('coilinv_job') || ''; $('uKw').value = ls('coilinv_kw') || '';
       renderRecent(); renderJobs('u', ''); // v31: 코일 찍기 전에도 작업 목록
       tab('move');
-      if (START_COIL) { $('coilNo').value = START_COIL; loadCoil(START_COIL); START_COIL = ''; }
+      setUse('many'); // v37: 코일 사용 = 작업 하나에 여러 타래
+      if (START_COIL) { addBatch(START_COIL); START_COIL = ''; }
       else if (!ME.mustChange && liveAllowed() && CAM_PERM === 'granted') startLive(true); // v33: 이미 허용된 휴대폰만 자동으로 켬 (누르지 않았는데 허용 창을 띄우면 크롬이 '차단'으로 기억할 수 있음)
       showPending();
     }
@@ -684,6 +687,8 @@ $('coilNo').addEventListener('keydown', function (e) { if (e.key === 'Enter') $(
 var JOB_MANUAL = { u: false, b: false };
 function jobs() { return (INIT && INIT.jobs) || []; }
 function firstNum(t) { var m = String(t || '').match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : NaN; }
+// v37: 작업 선경 중 이 코일과 맞는 선경 (없으면 null)
+function fitW(j, spec) { var b = firstNum(spec); if (!isFinite(b)) return null; var m = wireSpecs(j.wire).filter(function (a) { return Math.abs(a - b) < 0.001; })[0]; return m == null ? null : m; }
 function fits(j, spec) { var b = firstNum(spec); return isFinite(b) && wireSpecs(j.wire).some(function (a) { return Math.abs(a - b) < 0.001; }); }
 // v32: 작업의 코일선경 '1.2×8, 0.9×7' → [1.2, 0.9]
 function wireSpecs(w) { var out = []; String(w || '').split(/[,/+]/).forEach(function (p) { var x = firstNum(p); if (isFinite(x) && out.indexOf(x) < 0) out.push(x); }); return out; }
@@ -729,7 +734,7 @@ function renderJobs(pre, spec) {
     var head = j.today ? '오늘' : '최근 3일';
     if (head !== lastHead) { h += '<div class="jh">' + head + '</div>'; lastHead = head; }
     h += '<button type="button" data-job="' + i + '" class="' + (j.no === cur ? 'on' : '') + '"><b>' + esc(j.no) + '</b> ' + esc(j.desc || '') +
-      (spec && fits(j, spec) ? ' <span class="fit">✔ 규격 맞음</span>' : '') +
+      (spec && fitW(j, spec) != null ? ' <span class="fit">✔ 선경 맞음 (' + fitW(j, spec) + 'mm)</span>' : '') +
       '<div class="m">' + (j.kw ? esc(j.kw) + 'kW · ' : '') + (j.wire ? '선경 ' + esc(j.wire) + ' · ' : '') + esc(srcName(j.src)) + ' · ' + esc(String(j.at).slice(5, 16)) + (j.who ? ' · ' + esc(j.who) : '') + '</div></button>';
   });
   box.innerHTML = h; box.scrollTop = top; // v31: 고른 뒤 목록이 맨 위로 튀지 않게
@@ -741,6 +746,7 @@ function pickJob(pre, j) {
   var k = $(pre + 'Kw');
   if (j.kw && isFinite(n(j.kw))) { k.value = n(j.kw); k.placeholder = '예: 37'; }
   else { k.value = ''; k.placeholder = '이 작업엔 kW가 없어요. 직접 넣기'; } // v35: 앞 작업 kW가 남아 잘못 저장되지 않게
+  if (pre === 'b') { ls('coilinv_job', j.no); ls('coilinv_kw', k.value); loadDone(); } // v37: 작업 고정 + 이 작업에 쓴 코일
 }
 // 코일 규격에 맞는 작업이 있으면 자동 선택 (여러 개면 가장 최근). 사람이 직접 고르거나 쓴 뒤에는 건드리지 않음
 function autoJob(pre, spec) {
@@ -772,20 +778,24 @@ function jobValue() { return $('bJob').value.trim(); }
 function bLast(c) { return r2(c.rem + c.tare); }
 var USE_MODE = 'one';
 function modeBusy() { return (BATCH && BATCH.items.length) ? '찍어 둔 ' + BATCH.items.length + '개 목록' : (STK && STK.items.length) ? '재고 조사에 찍어 둔 ' + STK.items.length + '개' : ''; }
-seg('useMode', function (v) {
+var B_STASH = null; // v37: 타래 보기로 잠깐 갈 때 찍어 둔 목록을 보관
+seg('useMode', setUse);
+function setUse(v) {
   if (v === USE_MODE) return;
-  var b = modeBusy();
+  var b = (v === 'one' && BATCH) ? '' : modeBusy();
   if (b && !confirm(b + '을(를) 저장하지 않고 지울까요?')) { segSet('useMode', USE_MODE); return; }
-  USE_MODE = v;
+  USE_MODE = v; segSet('useMode', v); $('oneModeBtn').classList.toggle('hide', v !== 'one');
+  if (BATCH && v === 'one') { B_STASH = BATCH; $('uJob').value = $('bJob').value; $('uKw').value = $('bKw').value; }
   BATCH = null; STK = null;
   $('batchBox').classList.add('hide'); $('stkBox').classList.add('hide');
   $('jobCard').classList.toggle('hide', v !== 'one'); // v31
   if (v === 'many') {
-    BATCH = { items: [], busy: {} };
+    BATCH = B_STASH || { items: [], busy: {} }; B_STASH = null;
     $('bJob').value = $('bJob').value || ls('coilinv_job') || ''; $('bKw').value = $('bKw').value || ls('coilinv_kw') || '';
+    JOB_MANUAL.b = !!$('bJob').value.trim();
     $('coilBox').classList.add('hide'); CUR = null; $('batchBox').classList.remove('hide');
     $('scanHint').textContent = 'QR을 연달아 찍으세요. 안 되면 번호를 넣고 [추가].'; $('coilGo').textContent = '추가';
-    renderBatch(); renderJobs('b', '');
+    renderBatch(); renderJobs('b', BATCH.items[0] ? BATCH.items[0].coil.spec : ''); loadDone();
   } else if (v === 'stk') {
     STK = { items: [], busy: {}, info: null };
     $('coilBox').classList.add('hide'); CUR = null; $('stkBox').classList.remove('hide');
@@ -796,7 +806,37 @@ seg('useMode', function (v) {
     $('scanHint').textContent = 'QR이 안 되면 라벨 아래 번호를 넣으세요.';
     renderJobs('u', CUR && CUR.spec);
   }
-});
+}
+// v37: 타래 하나 자세히 (정보·이력·관리, 보빈 무게 없는 타래 기록)
+function openOne(no) { tab('move'); if (USE_MODE !== 'one') setUse('one'); $('coilNo').value = no; loadCoil(no); }
+// v37: 이 작업에 쓴 코일 (저장된 기록, 누가 저장했든) + 선경별 합계
+var DONE_Q = 0;
+function loadDone() {
+  var job = jobValue(), box = $('bDone'); if (!box) return;
+  if (!job) { box.innerHTML = ''; return; }
+  var q = ++DONE_Q;
+  box.innerHTML = '<div class="muted">“' + esc(job) + '”에 쓴 코일을 불러오는 중…</div>';
+  rawCall('getHistory', [ls(TK), { target: job, type: '출고' }], true).then(function (r) {
+    if (q !== DONE_Q) return;
+    var L = (r.rows || []).filter(function (x) { return x.target === job && x.type === '출고' && !x.cancelled; }).reverse();
+    if (!L.length) { box.innerHTML = '<div class="muted">📋 “' + esc(job) + '”에 저장된 코일 기록이 아직 없어요.</div>'; return; }
+    var by = {}, ks = [], tot = 0, nos = {};
+    L.forEach(function (x) { var u = -n(x.delta) || 0, k = x.spec + 'mm'; if (!by[k]) { by[k] = { kg: 0, c: {} }; ks.push(k); } by[k].kg += u; by[k].c[x.no] = 1; nos[x.no] = 1; tot += u; });
+    ks.sort(function (a, b) { return firstNum(a) - firstNum(b); });
+    box.innerHTML = '<h3 style="margin:0 0 6px">📋 이 작업에 쓴 코일 (저장됨)</h3>' +
+      '<table><tr class="muted"><td>선경</td><td class="n">타래</td><td class="n">쓴 양</td></tr>' +
+      ks.map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="n">' + Object.keys(by[k].c).length + '타래</td><td class="n"><b>' + r2(by[k].kg) + 'kg</b></td></tr>'; }).join('') +
+      '<tr><td><b>합계</b></td><td class="n"><b>' + Object.keys(nos).length + '타래</b></td><td class="n"><b>' + r2(tot) + 'kg</b></td></tr></table>' +
+      '<details style="margin-top:6px"><summary>기록 ' + L.length + '줄 보기</summary><table>' +
+      L.map(function (x) { return '<tr><td><b>' + esc(x.no) + '</b> <span class="muted">' + esc(x.spec) + 'mm ' + esc(x.kind) + '</span><div class="muted">' + esc(x.worker) + ' · ' + esc(String(x.at).slice(5, 16)) + '</div></td><td class="n"><b>' + r2(-n(x.delta)) + 'kg</b></td></tr>'; }).join('') + '</table></details>';
+  }, function () { if (q === DONE_Q) box.innerHTML = '<div class="muted">저장된 기록을 못 불러왔어요. 신호를 확인하세요.</div>'; });
+}
+$('bJob').addEventListener('change', function () { ls('coilinv_job', $('bJob').value.trim()); loadDone(); });
+$('bEnd').onclick = function () {
+  if (BATCH && BATCH.items.length) return toast('⚠️ 저장 안 한 코일이 ' + BATCH.items.length + '개 있어요. 먼저 [저장]하거나 목록을 비우세요.', 4000);
+  $('bJob').value = ''; $('bKw').value = ''; ls('coilinv_job', null); ls('coilinv_kw', null); JOB_MANUAL.b = false;
+  $('bFit').innerHTML = ''; $('bDone').innerHTML = ''; renderJobs('b', ''); toast('작업을 끝냈어요. 다음 작업을 고르세요.', 2500);
+};
 // ── v18: 한 달 재고 조사 ──
 var STK = null;
 function loadStk() {
@@ -897,7 +937,7 @@ function addBatch(no, raw) {
     delete BATCH.busy[key]; var c = r.coil;
     if (BATCH.items.some(function (it) { return it.coil.no === c.no; })) return bToast('⚠️ ' + c.no + ' 는 이미 목록에 있어요.');
     if (c.status === '소진') return toast('⛔ ' + c.no + ' 는 이미 다 쓴(소진) 타래입니다.', 3500);
-    if (!c.tareSet) return toast('⛔ ' + c.no + ' 는 빈 보빈 무게가 없어서 한 개씩 모드로 기록해 주세요.', 4500);
+    if (!c.tareSet) { toast('ℹ️ ' + c.no + ' 는 빈 보빈 무게가 없어요. 보빈 종류를 골라 이 화면에서 기록하세요.', 5000); return openOne(c.no); }
     if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}
     BATCH.items.push({ coil: c, raw: key, val: '', empty: false });
     autoJob('b', BATCH.items[0].coil.spec);
@@ -919,7 +959,7 @@ function renderBatch() {
   var it = BATCH ? BATCH.items : [];
   $('bList').innerHTML = it.map(function (x, i) {
     var c = x.coil, k = bCalc(x);
-    return '<div class="it" data-i="' + i + '"><div class="t"><b style="font-size:17px">' + esc(c.no) + '</b><span>' + esc(c.spec) + 'mm ' + esc(c.kind) + '</span><button class="btn gray sm" data-bdel="' + i + '">✕</button></div>' +
+    return '<div class="it" data-i="' + i + '"><div class="t"><b style="font-size:17px">' + esc(c.no) + '</b><span>' + esc(c.spec) + 'mm ' + esc(c.kind) + '</span><span><button class="btn gray sm" data-bview="' + i + '">🔎</button> <button class="btn gray sm" data-bdel="' + i + '">✕</button></span></div>' +
       '<div class="muted">지난번 저울 ' + bLast(c) + 'kg · 남은 선 ' + c.rem + 'kg · 보빈 ' + c.tare + 'kg</div>' +
       '<div class="row" style="margin-top:6px;align-items:center"><input class="bVal" data-i="' + i + '" inputmode="decimal" placeholder="지금 저울 무게 (kg)" value="' + esc(x.val) + '" style="font-size:20px">' +
       '<button class="btn gray sm" data-bempty="' + i + '" style="flex:none">🏁 다 씀</button></div>' +
@@ -931,7 +971,7 @@ function bSum() {
   var it = BATCH ? BATCH.items : [], tot = 0, ok = 0;
   it.forEach(function (x) { var k = bCalc(x); if (k.ok) { ok++; tot += k.used; } });
   $('bSum').innerHTML = it.length ? '찍은 코일 <b>' + it.length + '개</b> · 무게 넣은 것 ' + ok + '개 · 쓴 양 합계 <b>' + r2(tot) + 'kg</b>' : '아직 찍은 코일이 없습니다. 위에서 QR을 찍으세요.';
-  $('bSave').textContent = it.length ? '모두 저장 (' + it.length + '개)' : '모두 저장';
+  $('bSave').textContent = it.length ? '저장 (' + it.length + '개)' : '저장';
 }
 $('bList').addEventListener('input', function (e) {
   var x = e.target.closest('.bVal'); if (!x) return;
@@ -942,6 +982,7 @@ $('bList').addEventListener('input', function (e) {
   bSum();
 });
 $('bList').addEventListener('click', function (e) {
+  var bv = e.target.closest('[data-bview]'); if (bv) { openOne(BATCH.items[+bv.dataset.bview].coil.no); return; }
   var d = e.target.closest('[data-bdel]'); if (d) { BATCH.items.splice(+d.dataset.bdel, 1); renderBatch(); return; }
   var m = e.target.closest('[data-bempty]'); if (m) { var it = BATCH.items[+m.dataset.bempty]; if (!(it.coil.tare > 0)) return toast('보빈이 없는 타래는 관리자에게 무게 맞추기를 부탁하세요.', 4000); it.val = String(it.coil.tare); it.empty = true; renderBatch(); }
 });
@@ -969,7 +1010,7 @@ $('bSave').onclick = function () {
       }, function (e) { fail.push(x.coil.no); });
     });
   }, Promise.resolve()).then(function () {
-    renderBatch(); refreshStock();
+    renderBatch(); refreshStock(); loadDone();
     toast((saved ? '✅ ' + saved + '개 저장 · 쓴 양 합계 ' + r2(tot) + 'kg' : '') + (kept ? ' 📦 ' + kept + '개는 신호가 약해 휴대폰에 보관' : '') + (fail.length ? ' ⛔ 저장 못 함: ' + fail.join(', ') + ' (목록에 남겨 둠)' : ''), 6000);
   });
 };
@@ -1064,7 +1105,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v36', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v37', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1406,10 +1447,10 @@ function renderStock(list) {
     return h + '</div>';
   }).join('');
 }
-$('oldList').onclick = function (e) { var a = e.target.closest('[data-coil]'); if (a) { e.preventDefault(); tab('move'); $('coilNo').value = a.dataset.coil; loadCoil(a.dataset.coil); } };
+$('oldList').onclick = function (e) { var a = e.target.closest('[data-coil]'); if (a) { e.preventDefault(); openOne(a.dataset.coil); } };
 $('stockBody').onclick = function (e) {
   var a = e.target.closest('[data-coil]');
-  if (a) { e.preventDefault(); tab('move'); $('coilNo').value = a.dataset.coil; loadCoil(a.dataset.coil); return; }
+  if (a) { e.preventDefault(); openOne(a.dataset.coil); return; }
   var o = e.target.closest('[data-order]');
   if (o) { var p = o.dataset.order.split('|'); call('setOrder', ls(TK), p[0], p[1], o.dataset.done === '1', '', p[2]).then(function () { toast(o.dataset.done === '1' ? '발주완료로 표시했습니다. 입고하면 자동으로 풀립니다.' : '발주 표시를 풀었습니다.', 3500); refreshStock(); }, function () {}); return; }
   var sf = e.target.closest('[data-safe]');
