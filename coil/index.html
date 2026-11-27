@@ -55,6 +55,13 @@ textarea{min-height:60px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .chips button{border:1px solid var(--line);background:#fff;border-radius:16px;padding:6px 11px;font-size:14px}
 .chips button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+/* v43: 선경에 맞는 코일 — 한 줄에 3개, 9개까지, 나머지는 펼쳐 보기. 누르면 파란색 */
+.fitg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:4px}
+.fitg button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:12px;padding:7px 2px;font-size:15px;min-height:54px;line-height:1.3;text-align:center;white-space:nowrap;overflow:hidden}
+.fitg button.first{border-color:var(--grn);color:var(--grn);border-width:2px}
+.fitg button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.fitg button.fmore{display:none}.fitg.open button.fmore{display:block}
+.fitMore{display:block;width:100%;margin-top:6px;border:1px dashed var(--line);background:#f6f8fb;border-radius:10px;padding:10px;font-size:15px;color:var(--pri);font-weight:700}
 .big{font-size:34px;font-weight:800}
 .coilhead{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
 .tag{display:inline-block;font-size:13px;padding:2px 8px;border-radius:10px;background:#eef1f5;color:var(--sub);margin:2px 2px 0 0}
@@ -716,18 +723,34 @@ function renderFit(pre, j) {
   var by = {}; f.list.forEach(function (c) { var k = String(firstNum(c.spec)); (by[k] = by[k] || []).push(c); });
   var h = '<div class="muted" style="margin-top:8px">🧵 <b>' + esc(j.no) + '</b> 선경에 맞는 코일 — 눌러서 ' + (pre === 'b' ? '목록에 넣기' : '열기') + '</div>';
   f.ws.forEach(function (w) {
-    var l = by[String(w)] || [];
-    h += '<div class="chips" style="margin-top:4px"><span class="muted" style="align-self:center">' + w + 'mm:</span>' + (l.length ? l.slice(0, 8).map(function (c, i) {
-      return '<button type="button" data-fit="' + esc(c.no) + '"' + (i === 0 ? ' style="border-color:var(--grn);color:var(--grn);font-weight:700"' : '') + '>' + esc(c.no) + ' ' + c.rem + 'kg' + (i === 0 ? ' (먼저)' : '') + '</button>';
-    }).join('') + (l.length > 8 ? '<span class="muted" style="align-self:center">외 ' + (l.length - 8) + '개</span>' : '') : '<span class="muted" style="align-self:center">재고 없음</span>') + '</div>';
+    var l = (by[String(w)] || []).slice();
+    // v43: 5kg 이하로 남은 타래만 '먼저' 표시, 그것부터 앞에 (나머지는 들어온 순서 그대로)
+    l = l.filter(function (c) { return n(c.rem) <= 5; }).concat(l.filter(function (c) { return !(n(c.rem) <= 5); }));
+    h += '<div style="margin-top:8px;font-size:15px"><b>' + w + 'mm</b> <span class="muted">· ' + l.length + '타래</span></div>';
+    if (!l.length) { h += '<div class="muted" style="margin-top:2px">재고 없음</div>'; return; }
+    var open = !!FIT_OPEN[pre + w];
+    h += '<div class="fitg' + (open ? ' open' : '') + '" data-fw="' + w + '">' + l.map(function (c, i) {
+      var low = n(c.rem) <= 5;
+      return '<button type="button" data-fit="' + esc(c.no) + '" class="' + (low ? 'first' : '') + (i >= 9 ? ' fmore' : '') + '"><b>' + esc(c.no) + '</b><br>' + c.rem + 'kg' + (low ? ' 먼저' : '') + '</button>';
+    }).join('') + '</div>';
+    if (l.length > 9) h += '<button type="button" class="fitMore" data-fmore="' + w + '">' + (open ? '▲ 접기' : '▼ 펼쳐 보기 (' + (l.length - 9) + '개 더)') + '</button>';
   });
-  box.innerHTML = h;
+  box.innerHTML = h; markFit();
   return f.list[0];
+}
+var FIT_OPEN = {};
+// v43: 고른(목록에 넣은) 코일은 파란색
+function markFit() {
+  var sel = {}; if (BATCH) BATCH.items.forEach(function (x) { sel[x.coil.no] = 1; }); if (CUR && CUR.no) sel['u:' + CUR.no] = 1;
+  ['u', 'b'].forEach(function (pre) { var box = $(pre + 'Fit'); if (!box) return; box.querySelectorAll('[data-fit]').forEach(function (b) { b.classList.toggle('on', !!(pre === 'b' ? sel[b.dataset.fit] : sel['u:' + b.dataset.fit])); }); });
 }
 ['u', 'b'].forEach(function (pre) {
   $(pre + 'Fit').addEventListener('click', function (e) {
+    var m = e.target.closest('[data-fmore]');
+    if (m) { var w = m.dataset.fmore, g = $(pre + 'Fit').querySelector('.fitg[data-fw="' + w + '"]'), o = !FIT_OPEN[pre + w]; FIT_OPEN[pre + w] = o; if (g) g.classList.toggle('open', o); m.textContent = o ? '▲ 접기' : '▼ 펼쳐 보기 (' + (g ? g.querySelectorAll('.fmore').length : 0) + '개 더)'; return; }
     var b = e.target.closest('[data-fit]'); if (!b) return;
     if (pre === 'b') { if (BATCH) addBatch(b.dataset.fit); return; }
+    $(pre + 'Fit').querySelectorAll('[data-fit].on').forEach(function (x) { x.classList.remove('on'); }); b.classList.add('on');
     $('coilNo').value = b.dataset.fit; loadCoil(b.dataset.fit);
   });
 });
@@ -1004,7 +1027,7 @@ function renderBatch() {
       }).join('');
   }).join('');
   if (fi != null) { var f = document.querySelector('#bList .bVal[data-i="' + fi + '"]'); if (f) { f.focus(); try { var L = f.value.length; f.setSelectionRange(L, L); } catch (e) {} } }
-  bSum(); bKeep();
+  bSum(); bKeep(); markFit();
 }
 function bSum() {
   var it = BATCH ? BATCH.items : [], tot = 0, ok = 0, G = bSpecs();
@@ -1157,7 +1180,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v42', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v43', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
