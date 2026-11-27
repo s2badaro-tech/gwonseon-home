@@ -184,7 +184,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
     <!-- v16: 여러 개 한 번에 — 작업번호·kW 한 번, QR 연달아 찍기, 줄마다 저울 무게, [모두 저장] -->
     <div id="batchBox" class="card hide">
       <h3 style="margin-top:0">📦 작업 하나에 쓴 코일</h3>
-      <div class="muted">① 작업 고르기 (끝날 때까지 그대로) ② 쓴 타래 QR을 <b>모두 연달아</b> 찍기 (번호 넣기도 됨) ③ 타래 번호를 보고 저울 무게를 적기 ④ 아래 [모두 저장] 한 번.</div>
+      <div class="muted">① 작업 고르기 (끝날 때까지 그대로) ② 쓴 타래 QR을 <b>모두 연달아</b> 찍기 (번호 넣기도 됨) ③ 타래 번호를 보고 저울 무게를 적기 (선을 다 썼으면 <b>0</b>) ④ 아래 [모두 저장] 한 번.</div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="bJobs"></div><div id="bFit"></div>
       <div class="row">
         <div><label>작업번호 <span style="color:var(--red)">*</span></label><input id="bJob" list="tgtList" placeholder="목록에 없으면 직접"></div>
@@ -930,53 +930,76 @@ $('stkSave').onclick = function () {
   });
 };
 function bToast(m) { if (Date.now() - B_WARN > 2500) { B_WARN = Date.now(); toast(m, 2500); } }
+// v40: 미리 받아 둔 재고 목록에서 타래를 바로 찾음 (찍을 때마다 서버를 기다리지 않음)
+function localCoil(no) {
+  var m = String(no).match(/(\d+)\s*$/); if (!m) return null;
+  var d = Number(m[1]), p = String(no).slice(0, m.index).replace(/[-\s]/g, '').toUpperCase(), hit = null;
+  ((INIT && INIT.stock) || []).some(function (g) { return (g.coils || []).some(function (c) {
+    var k = String(c.no).match(/(\d+)$/);
+    if (k && Number(k[1]) === d && (!p || String(c.no).toUpperCase().replace(/[-\s]/g, '').indexOf(p) === 0)) { hit = c; return true; }
+  }); });
+  return hit ? JSON.parse(JSON.stringify(hit)) : null;
+}
 function addBatch(no, raw) {
   no = String(no || '').trim().toUpperCase(); if (!no) return toast('번호를 넣어주세요.');
   var key = raw || no;
   if (BATCH.busy[key]) return;
   var dup = BATCH.items.filter(function (it) { return it.coil.no === no || it.raw === key; })[0];
   if (dup) return bToast('⚠️ ' + dup.coil.no + ' 는 이미 목록에 있어요.');
-  BATCH.busy[key] = 1;
-  rawCall('getCoil', [ls(TK), no]).then(function (r) {
-    delete BATCH.busy[key]; var c = r.coil;
-    if (BATCH.items.some(function (it) { return it.coil.no === c.no; })) return bToast('⚠️ ' + c.no + ' 는 이미 목록에 있어요.');
-    if (c.status === '소진') return toast('⛔ ' + c.no + ' 는 이미 다 쓴(소진) 타래입니다.', 3500);
-    if (!c.tareSet) { toast('ℹ️ ' + c.no + ' 는 빈 보빈 무게가 없어요. 보빈 종류를 골라 이 화면에서 기록하세요.', 5000); return openOne(c.no); }
+  var put = function (c) {
+    if (BATCH.items.some(function (it) { return it.coil.no === c.no; })) { bToast('⚠️ ' + c.no + ' 는 이미 목록에 있어요.'); return false; }
+    if (c.status === '소진') { toast('⛔ ' + c.no + ' 는 이미 다 쓴(소진) 타래입니다.', 3500); return false; }
+    if (!c.tareSet) { toast('ℹ️ ' + c.no + ' 는 빈 보빈 무게가 없어요. 보빈 종류를 골라 이 화면에서 기록하세요.', 5000); openOne(c.no); return false; }
     if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}
     BATCH.items.push({ coil: c, raw: key, val: '', empty: false });
     autoJob('b', BATCH.items[0].coil.spec);
     renderBatch(); toast('➕ ' + c.no + ' 추가 (' + BATCH.items.length + '개)', 1500);
-    // v38: 찍기와 무게 적기를 나눔 — 찍을 때마다 무게 칸으로 가지 않음 (카메라는 켜 둔 채 계속 찍기)
-  }, function (e) {
+    return true;
+  };
+  var loc = localCoil(no);
+  if (loc) {
+    if (!put(loc)) return;
+    // 뒤에서 조용히 최신 무게로 맞춤 (로딩 표시 없음). 다른 사람이 그사이 썼으면 숫자만 바뀜
+    rawCall('getCoil', [ls(TK), loc.no], true).then(function (r) {
+      var c = r.coil, it = BATCH && BATCH.items.filter(function (x) { return x.coil.no === c.no; })[0]; if (!it) return;
+      if (c.status === '소진') { BATCH.items.splice(BATCH.items.indexOf(it), 1); renderBatch(); return toast('⛔ ' + c.no + ' 는 이미 다 쓴(소진) 타래라 목록에서 뺐어요.', 4000); }
+      if (!c.tareSet) { BATCH.items.splice(BATCH.items.indexOf(it), 1); renderBatch(); toast('ℹ️ ' + c.no + ' 는 빈 보빈 무게가 없어요. 보빈 종류를 골라 이 화면에서 기록하세요.', 5000); return openOne(c.no); }
+      if (c.rem !== it.coil.rem || c.tare !== it.coil.tare || c.tareSet !== it.coil.tareSet) { it.coil = c; renderBatch(); }
+    }, function () {});
+    return;
+  }
+  BATCH.busy[key] = 1;
+  rawCall('getCoil', [ls(TK), no], true).then(function (r) { delete BATCH.busy[key]; put(r.coil); }, function (e) {
     delete BATCH.busy[key];
     toast(e && (e.net || e.login) ? e.message.replace('[로그인]', '') : no + ' 번 타래를 찾지 못했습니다.', 3500);
   });
 }
 function bCalc(it) {
-  var v = n(String(it.val).replace(",", ".")), g = bLast(it.coil), T = it.coil.tare;
-  if (!isFinite(v) || v <= 0) return { ok: false, msg: '저울 무게를 넣으세요' };
+  var raw = String(it.val == null ? '' : it.val).trim(), v = n(raw.replace(",", ".")), g = bLast(it.coil), T = it.coil.tare;
+  if (!raw || !isFinite(v) || v < 0) return { ok: false, msg: '저울 무게를 넣으세요 (선을 다 썼으면 0)' };
   if (v > g) return { ok: false, bad: true, msg: '⚠️ 지난번(' + g + 'kg)보다 무거움' };
-  if (v < T) return { ok: false, bad: true, msg: '⚠️ 보빈(' + T + 'kg)보다 가벼움' };
-  return { ok: true, used: r2(g - v), left: r2(v - T) };
+  if (v <= T) { if (!(T > 0) && v > 0) return { ok: false, bad: true, msg: '⚠️ 보빈(' + T + 'kg)보다 가벼움' }; return { ok: true, empty: true, used: r2(g - T), left: 0, gross: T }; } // v40: 0이나 빈 보빈 무게 이하 = 선 다 씀 → 남은 선 전부 이 작업에 씀
+  return { ok: true, used: r2(g - v), left: r2(v - T), gross: v };
 }
 // v38: 선경별로 묶은 목록. 줄마다 타래 번호 + 큰 무게 칸 (숫자 키패드)
 function bSpecs() { var by = {}, ks = []; (BATCH ? BATCH.items : []).forEach(function (x, i) { var k = String(firstNum(x.coil.spec)); if (!by[k]) { by[k] = []; ks.push(k); } by[k].push(i); }); ks.sort(function (a, b) { return a - b; }); return { by: by, ks: ks }; }
-function bResHtml(x) { var k = bCalc(x); return k.ok ? (x.empty ? '🏁 다 씀 · ' : '') + '쓴 양 <b>' + k.used + 'kg</b> · 남은 선 ' + k.left + 'kg' : esc(k.msg); }
+function bResHtml(x) { var k = bCalc(x); return k.ok ? (k.empty ? '<b style="color:var(--org)">🏁 다 씀</b> · ' : '') + '쓴 양 <b>' + k.used + 'kg</b> · 남은 선 ' + k.left + 'kg' : esc(k.msg); }
 function bResCss(x) { var k = bCalc(x); return 'margin-top:3px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : k.ok ? '' : 'color:var(--sub)'); }
 function bKeep() { if (!BATCH) return; ls('coilinv_batch', BATCH.items.length ? JSON.stringify(BATCH.items.map(function (x) { return { coil: x.coil, raw: x.raw, val: x.val, empty: x.empty }; })) : null); }
 function renderBatch() {
-  var it = BATCH ? BATCH.items : [], G = bSpecs();
+  var it = BATCH ? BATCH.items : [], G = bSpecs(), ae = document.activeElement, fi = ae && ae.classList && ae.classList.contains('bVal') ? ae.dataset.i : null; // v40: 적는 중이던 칸 유지
   $('bList').innerHTML = G.ks.map(function (k) {
     return '<div style="margin:12px 0 2px;padding:6px 10px;background:var(--pri2);border-radius:8px;font-size:16px"><b>🧵 ' + esc(k) + 'mm</b> · ' + G.by[k].length + '타래 <span data-gsum="' + esc(k) + '" class="muted"></span></div>' +
       G.by[k].map(function (i) {
         var x = it[i], c = x.coil;
         return '<div class="it" data-i="' + i + '" style="padding:8px 0"><div class="t" style="align-items:center"><b style="font-size:20px">' + esc(c.no) + '</b><span class="muted">' + esc(c.kind) + ' · 지난번 ' + bLast(c) + 'kg</span>' +
           '<span><button class="btn gray sm" data-bview="' + i + '" title="자세히">🔎</button> <button class="btn gray sm" data-bdel="' + i + '" title="빼기">✕</button></span></div>' +
-          '<div class="row" style="margin-top:6px;align-items:center;gap:8px"><input class="bVal" data-i="' + i + '" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="저울 무게 kg" value="' + esc(x.val) + '" style="font-size:24px;height:56px;flex:1;min-width:0">' +
-          '<button class="btn gray" data-bempty="' + i + '" style="flex:none;width:auto;padding:0 10px;height:56px;font-size:14px;line-height:1.2' + (x.empty ? ';background:var(--org,#f59e0b);color:#fff' : '') + '">' + (x.empty ? '↩ 되돌리기' : '🏁 선 다 씀<br><span style="font-size:11px">(빈 보빈)</span>') + '</button></div>' +
+          '<div class="row" style="margin-top:6px;align-items:center;gap:8px"><input class="bVal" data-i="' + i + '" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="저울 무게 kg (다 썼으면 0)" value="' + esc(x.val) + '" style="font-size:24px;height:56px;flex:1;min-width:0">' +
+          '<button class="btn gray" data-bnext="' + i + '" style="flex:none;width:auto;padding:0 16px;height:56px;font-size:17px">다음 ▶</button></div>' +
           '<div class="bRes" style="' + bResCss(x) + '">' + bResHtml(x) + '</div></div>';
       }).join('');
   }).join('');
+  if (fi != null) { var f = document.querySelector('#bList .bVal[data-i="' + fi + '"]'); if (f) { f.focus(); try { var L = f.value.length; f.setSelectionRange(L, L); } catch (e) {} } }
   bSum(); bKeep();
 }
 function bSum() {
@@ -996,22 +1019,18 @@ $('bList').addEventListener('input', function (e) {
 // v38: 키패드의 [다음]을 누르면 다음 빈 칸으로
 $('bList').addEventListener('keydown', function (e) {
   if (e.key !== 'Enter' || !e.target.classList.contains('bVal')) return;
-  e.preventDefault();
-  var all = [].slice.call(document.querySelectorAll('#bList .bVal')), k = all.indexOf(e.target);
-  var nx = all.slice(k + 1).concat(all.slice(0, k)).filter(function (el) { return !el.value.trim(); })[0];
-  if (nx) nx.focus(); else { e.target.blur(); $('bBar').scrollIntoView({ block: 'end' }); }
+  e.preventDefault(); bNext(e.target);
 });
+function bNext(el) {
+  var all = [].slice.call(document.querySelectorAll('#bList .bVal')), k = all.indexOf(el);
+  var nx = all.slice(k + 1).concat(all.slice(0, Math.max(k, 0))).filter(function (x) { return !x.value.trim(); })[0];
+  if (nx) { nx.scrollIntoView({ block: 'center' }); nx.focus(); } else { if (el) el.blur(); $('bBar').scrollIntoView({ block: 'end' }); toast('✔ 무게를 다 적었어요. 아래 [모두 저장]을 누르세요.', 2500); }
+}
 $('bList').addEventListener('click', function (e) {
   var bv = e.target.closest('[data-bview]'); if (bv) { openOne(BATCH.items[+bv.dataset.bview].coil.no); return; }
   var d = e.target.closest('[data-bdel]'); if (d) { BATCH.items.splice(+d.dataset.bdel, 1); renderBatch(); return; }
-  var m = e.target.closest('[data-bempty]'); if (m) {
-    var it = BATCH.items[+m.dataset.bempty];
-    if (it.empty) { it.val = it.prev || ''; it.empty = false; delete it.prev; renderBatch(); return; } // v39: 잘못 눌렀으면 되돌리기
-    if (!(it.coil.tare > 0)) return toast('보빈이 없는 타래는 관리자에게 무게 맞추기를 부탁하세요.', 4000);
-    // v39: '다 씀'은 이 타래 선을 전부 썼다는 뜻 → 저울 무게가 빈 보빈 무게(예: 1kg)로 바뀜. 적어 둔 무게가 있으면 먼저 물어봄
-    if (String(it.val).trim() && !confirm(it.coil.no + ' 선을 전부 다 썼나요?\n\n그러면 저울 무게가 빈 보빈 무게 ' + it.coil.tare + 'kg로 바뀌고, 적어 둔 ' + it.val + 'kg는 지워집니다.\n(무게를 다 적었다는 뜻이면 [취소]를 누르세요)')) return;
-    it.prev = it.val; it.val = String(it.coil.tare); it.empty = true; renderBatch(); toast('🏁 ' + it.coil.no + ' 선 다 씀 (빈 보빈 ' + it.coil.tare + 'kg). 잘못 눌렀으면 [되돌리기]', 3500);
-  }
+  var nb = e.target.closest('[data-bnext]'); if (nb) { bNext(document.querySelector('#bList .bVal[data-i="' + nb.dataset.bnext + '"]')); } // v40: [다음] 버튼 = 키패드 [다음]
+
 });
 $('bClear').onclick = function () { if (BATCH && BATCH.items.length && confirm('찍어 둔 목록을 비울까요? (저장 안 한 것은 사라집니다)')) { BATCH.items = []; renderBatch(); } };
 $('bSave').onclick = function () {
@@ -1024,15 +1043,15 @@ $('bSave').onclick = function () {
   var bad = BATCH.items.filter(function (x) { return !bCalc(x).ok; });
   if (bad.length) return toast('⚠️ ' + bad.map(function (x) { return x.coil.no; }).join(', ') + ' 의 저울 무게를 확인하세요.', 4500);
   var w = [];
-  BATCH.items.forEach(function (x) { var k = bCalc(x); if (!x.empty && k.used > RANGE.use[1]) w.push('· ' + x.coil.no + ' 한 번에 ' + k.used + 'kg'); if (k.used === 0) w.push('· ' + x.coil.no + ' 쓴 양 0kg'); });
+  BATCH.items.forEach(function (x) { var k = bCalc(x); if (!k.empty && k.used > RANGE.use[1]) w.push('· ' + x.coil.no + ' 한 번에 ' + k.used + 'kg'); if (k.used === 0) w.push('· ' + x.coil.no + ' 쓴 양 0kg'); });
   var kn = n(kw); if (!isFinite(kn) || kn <= 0 || kn > 5000) w.push('· kW ' + kw + ' (보통 0.1 ~ 5000)');
-  var em = BATCH.items.filter(function (x) { return x.empty; }).map(function (x) { return x.coil.no; });
+  var em = BATCH.items.filter(function (x) { return bCalc(x).empty; }).map(function (x) { return x.coil.no; });
   if (!confirm('작업 ' + job + ' (' + kw + 'kW) 으로 ' + BATCH.items.length + '개를 저장할까요?' + (em.length ? '\n🏁 다 씀(소진): ' + em.join(', ') : '') + (w.length ? '\n\n⚠️ 확인해 주세요\n' + w.join('\n') : ''))) return;
   ls('coilinv_job', job); ls('coilinv_kw', kw); $('uJob').value = job; $('uKw').value = kw;
   var list = BATCH.items.slice(), saved = 0, kept = 0, tot = 0, fail = [];
   list.reduce(function (p, x) {
     return p.then(function () {
-      var k = bCalc(x), a = { no: x.coil.no, type: '출고', mode: 'gross', value: n(String(x.val).replace(",", ".")), worker: ME.name, target: job, kw: kw, memo: x.empty ? '다 씀' : '', reqId: newReq() };
+      var k = bCalc(x), a = { no: x.coil.no, type: '출고', mode: 'gross', value: k.gross, worker: ME.name, target: job, kw: kw, memo: k.empty ? '다 씀' : '', reqId: newReq() };
       return submit('saveMove', a, x.coil.no + ' 저울 ' + a.value + 'kg (' + job + ')').then(function (r) {
         if (r) { saved++; tot += -r.delta; } else kept++;
         BATCH.items = BATCH.items.filter(function (y) { return y !== x; });
@@ -1134,7 +1153,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v39', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v40', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
