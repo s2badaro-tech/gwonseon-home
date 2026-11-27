@@ -167,7 +167,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
           <b>① 홈 화면 앱으로 쓸 때:</b> 홈 화면의 <b>권선 작업실</b> 아이콘을 길게 누르기 → <b>ⓘ 앱 정보</b> → <b>권한</b> → <b>카메라</b> → <b>허용</b> (또는 '앱 사용 중에만 허용')<br>
           <b>② 크롬에서도:</b> <b>크롬</b> 앱 → 오른쪽 위 <b>⋮ → 설정 → 사이트 설정 → 카메라</b> → <b>s2badaro-tech.github.io</b> → <b>허용</b><br>
           <b>③ 그래도 안 되면:</b> 휴대폰 <b>설정 → 애플리케이션 → Chrome → 권한 → 카메라 → 허용</b><br>
-          바꾼 뒤 앱을 완전히 닫았다 다시 열면 [📷 QR 찍기]가 다시 나옵니다.</div>
+          바꾼 뒤 <b>[🎥 카메라 다시 열어 보기]</b>를 누르세요. 아래 작은 글씨에 '권한 막힘'이 계속 보이면 휴대폰이 크롬에 카메라를 막아 둔 것이라 ③을 확인해 주세요.</div>
         </details>
       </div>
       <div class="numin"><input id="coilNo" placeholder="번호 (예: 14)" inputmode="text"><button class="btn" id="coilGo">찾기</button></div>
@@ -1157,7 +1157,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v41', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v42', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1165,7 +1165,7 @@ function camDiag() {
   if (CAM_ERR) a.push('오류 ' + CAM_ERR);
   var d = $('camDiag'); if (d) d.textContent = a.join(' · ');
 }
-try { navigator.permissions.query({ name: 'camera' }).then(function (st) { CAM_PERM = st.state; camDiag(); if (st.state === 'denied') camBlocked(); st.onchange = function () { CAM_PERM = st.state; camDiag(); if (st.state === 'granted') { $('camHelp').classList.add('hide'); LIVE_OK = null; $('scanBtn').classList.remove('hide'); } }; }, function () {}); } catch (e) {}
+try { navigator.permissions.query({ name: 'camera' }).then(function (st) { CAM_PERM = st.state; camDiag(); if (st.state === 'denied') camBlocked(); st.onchange = function () { CAM_PERM = st.state; camDiag(); if (st.state === 'granted') { $('camHelp').classList.add('hide'); LIVE_OK = null; $('scanBtn').classList.remove('hide', 'gray'); $('scanBtn').textContent = '📷 QR 찍기'; } }; }, function () {}); } catch (e) {}
 setTimeout(camDiag, 1500); setTimeout(camDiag, 5000);
 // v32: QR이 왜 안 되는지 확인용 — 카메라에서 일어난 일을 서버 '진단기록'에 짧게 남김 (재고·기록과 무관)
 var CAM_N = { fr: 0, bd: 0, bdHit: 0, js: 0, jsHit: 0 }, CAM_LOGN = 0;
@@ -1241,7 +1241,7 @@ function startLive(auto) {
       if (cap.torch) { LIVE.tr = tr; LIVE.torch = false; $('scanTorch').classList.remove('hide'); }
     } catch (e) {}
     var v = $('scanVid'); v.srcObject = st; try { var pl = v.play && v.play(); if (pl && pl.catch) pl.catch(function (e) { CAM_ERR = '영상 ' + (e && e.name); camDiag(); }); } catch (e) {}
-    CAM_ERR = ''; CAM_PERM = 'granted'; $('camHelp').classList.add('hide'); camDiag(); // v34: 카메라가 실제로 열리면 안내 칸·'막힘' 글자 지움
+    CAM_ERR = ''; CAM_PERM = 'granted'; $('camHelp').classList.add('hide'); $('scanBtn').classList.remove('gray'); $('scanBtn').textContent = '📷 QR 찍기'; camDiag(); // v34: 카메라가 실제로 열리면 안내 칸·'막힘' 글자 지움
     setTimeout(function () { if (LIVE && LIVE.st === st) camLog('카메라 열림 ' + v.videoWidth + 'x' + v.videoHeight + ' 상태' + v.readyState); }, 3000);
     setTimeout(function () { if (LIVE && LIVE.st === st) camLog('10초 동안 QR 못 읽음'); }, 10000);
     $('scanBox').classList.remove('hide'); $('scanBtn').classList.add('hide');
@@ -1267,10 +1267,8 @@ function startLive(auto) {
     clearTimeout(LIVE_WAIT); if (LIVE) return;
     if (e && e.name === 'NotAllowedError' && CAM_PERM !== 'denied' && !LIVE_RETRY) { LIVE_RETRY = 1; camLog('한 번 더 시도'); return setTimeout(function () { startLive(auto); }, 500); } // v41: 잠깐 거절된 것일 수 있어 한 번 더
     LIVE_RETRY = 0;
-    if (e && e.name === 'NotAllowedError') camBlocked();
-    photoMode(e && e.name === 'NotAllowedError'
-      ? '[📷 QR 사진 찍기]를 누르면 휴대폰 카메라로 찍어서 번호를 읽어요.'
-      : 'QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.', auto);
+    if (e && e.name === 'NotAllowedError') { camBlocked(); if (!auto) toast('카메라가 아직 막혀 있어요. [📷 QR 사진 찍기]를 눌러 주세요.', 3500); return; }
+    photoMode('QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.', auto);
   });
   // v30: 카메라가 6초 넘게 답이 없으면 사진 찍기로 바꿈 (눌러도 반응 없는 것 방지)
   LIVE_WAIT = setTimeout(function () { if (!LIVE) camLog('6초 지나도 카메라 대답 없음'); if (!LIVE) photoMode('카메라가 아직 안 열렸어요. 허용 창이 떠 있으면 [허용]을 누르거나, 아래 사진 찍기 버튼을 쓰세요.', false, true); }, 6000); // v31: 늦게 허용해도 바로 켜지게 카메라 버튼은 남겨 둠
@@ -1293,8 +1291,10 @@ $('scanStop').onclick = stopLive;
 $('camHelpX').onclick = function () { $('camHelp').classList.add('hide'); ls('coilinv_camhide', String(Date.now())); };
 // v41: 카메라가 막힌 휴대폰은 처음부터 사진 찍기로 (누를 때마다 오류가 나지 않게). 안내 한 줄은 ✕ 누르면 3일 동안 안 보임
 var LIVE_RETRY = 0;
+// v42: 막혀 보여도 [카메라 다시 열어 보기] 버튼은 남겨 둠 → 누를 때마다 실제 카메라를 한 번 열어 봄(허용 창이 뜰 기회)
 function camBlocked() {
-  LIVE_OK = false; $('scanBtn').classList.add('hide'); $('scanPhoto').classList.remove('hide');
+  LIVE_OK = null; $('scanBtn').classList.remove('hide'); $('scanBtn').classList.add('gray'); $('scanBtn').textContent = '🎥 카메라 다시 열어 보기';
+  $('scanPhoto').classList.remove('hide');
   $('scanHint').textContent = '[📷 QR 사진 찍기]를 누르면 휴대폰 카메라로 찍어서 번호를 읽어요.';
   if (Date.now() - Number(ls('coilinv_camhide') || 0) > 3 * 864e5) $('camHelp').classList.remove('hide');
 }
@@ -1302,7 +1302,7 @@ $('scanTorch').onclick = function () {
   if (!LIVE || !LIVE.tr) return; LIVE.torch = !LIVE.torch;
   LIVE.tr.applyConstraints({ advanced: [{ torch: LIVE.torch }] }).catch(function () { toast('이 휴대폰은 불빛을 켤 수 없습니다.'); });
 };
-$('scanBtn').onclick = function () { if (liveAllowed()) startLive(false); else photoMode('QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.', false); };
+$('scanBtn').onclick = function () { if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && $('scanBtn').classList.contains('gray')) { LIVE_RETRY = 1; return startLive(false); } if (liveAllowed()) startLive(false); else photoMode('QR 사진을 찍으면 번호를 읽습니다. 안 되면 라벨 아래 번호를 넣으세요.', false); };
 $('scanFile').onchange = function () {
   var f = this.files && this.files[0]; this.value = ''; if (!f) return camLog('사진 찍기 취소(사진 없음)');
   camLog('사진 받음 ' + Math.round(f.size / 1024) + 'KB ' + f.type);
