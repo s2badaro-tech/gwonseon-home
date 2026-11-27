@@ -443,7 +443,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v51';
+const CO_VERSION = 'v52';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -580,6 +580,18 @@ async function history(f: any, limit: number, S?: any) {
   }
   return rows.map((r) => moveOut(r, !!cancelled[r.id]));
 }
+// v5 (4-3): 작업마다 '원래 선경×가닥 → 실제로 감은 조합 · 단면적 %'를 남김 (가닥 수 기준, 찍은 보빈 수가 아님)
+async function savePlan(job: string, p: any, who: string) {
+  const row = { job, orig: txt(p.orig), actual: txt(p.actual), ratio: isFinite(num(p.ratio)) ? num(p.ratio) : null, kind: txt(p.kind), by: who, at: nowStr() };
+  if (!row.orig) return;
+  await q(db.from('job_plans').upsert(row));
+}
+async function plansFor(jobs: string[]) {
+  const L = Array.from(new Set(jobs.filter(String))); if (!L.length) return {};
+  const out: any = {};
+  for (let i = 0; i < L.length; i += 200) (await q(db.from('job_plans').select('*').in('job', L.slice(i, i + 200)))).forEach((r: any) => { out[r.job] = { orig: r.orig, actual: r.actual, ratio: r.ratio === null ? null : Number(r.ratio), kind: r.kind }; });
+  return out;
+}
 async function getHistory(token: any, f: any) {
   await me(token, 'co');
   f = f || {};
@@ -593,7 +605,7 @@ async function getHistory(token: any, f: any) {
     sum[k] = r2((sum[k] || 0) - num(r.delta));
     by[r.worker || '-'] = r2((by[r.worker || '-'] || 0) - num(r.delta));
   });
-  return { rows, used: sum, usedBy: by, more: more ? rows[rows.length - 1].seq : 0 };
+  return { rows, used: sum, usedBy: by, more: more ? rows[rows.length - 1].seq : 0, plans: await plansFor(rows.map((r) => String(r.target || ''))) };
 }
 async function getCoil(token: any, no: any) {
   await me(token, 'co');
@@ -675,6 +687,7 @@ async function saveMove(token: any, a: any) {
   const id = await logRow({ no, type: a.type, spec: c.spec, kind: c.kind, worker: a.worker || m.name, target: a.target, mode: gross ? '저울 총무게' : '무게 직접', gross: gross ? v : '',
     delta, before, after, by: m.name, memo: [tareMsg, String(a.memo || '').trim(), at ? '늦게 보냄: ' + nowStr() : ''].filter(String).join(' / '), reqId: a.reqId, kw: a.kw, at });
   if (a.type === '입고') await clearOrder(c.spec, c.kind, c.type);
+  if (a.type === '출고' && a.plan && txt(a.target)) await savePlan(txt(a.target), a.plan, m.name);
   const low = await checkLow(c.spec, c.kind, c.type);
   return { id, no, before, after, delta, status, low, tare: c.tare, tareMsg };
 }

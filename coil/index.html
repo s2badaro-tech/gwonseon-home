@@ -59,7 +59,15 @@ textarea{min-height:60px}
 /* v43: 선경에 맞는 코일 — 한 줄에 3개, 9개까지, 나머지는 펼쳐 보기. 누르면 파란색 */
 .fitg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:4px}
 .fitg button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:12px;padding:7px 2px;font-size:15px;min-height:54px;line-height:1.3;text-align:center;white-space:nowrap;overflow:hidden}
-.fitg button.first{border-color:var(--grn);color:var(--grn);border-width:2px}
+.fitg button.first{border-color:var(--pri);color:var(--pri);border-width:3px;font-weight:700}
+.fitg button small{display:block;font-size:12px;color:var(--sub);font-weight:400}
+.fitg button.on small{color:#fff}
+.plan{margin-top:8px;padding:8px 10px;border-radius:10px;background:#f4f7fb;font-size:15px}
+.plan .short{margin-top:6px;padding:8px 10px;border-radius:8px;background:#fff3c4;color:#6b4e00;font-weight:700}
+.plan .combo{display:block;width:100%;text-align:left;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:16px}
+.plan .combo.on{border:3px solid var(--pri);background:var(--pri2)}
+body.flashG{box-shadow:inset 0 0 0 8px #1a9c4a}body.flashR{box-shadow:inset 0 0 0 8px #d0302f}
+.dupMsg{position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);background:#d0302f;color:#fff;font-size:26px;font-weight:900;padding:18px 26px;border-radius:16px;z-index:99}
 .fitg button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
 .fitg button.fmore{display:none}.fitg.open button.fmore{display:block}
 .fitMore{display:block;width:100%;margin-top:6px;border:1px dashed var(--line);background:#f6f8fb;border-radius:10px;padding:10px;font-size:15px;color:var(--pri);font-weight:700}
@@ -814,38 +822,150 @@ function fitW(j, spec) { var b = firstNum(spec); if (!isFinite(b)) return null; 
 function fits(j, spec) { var b = firstNum(spec); return isFinite(b) && wireSpecs(j.wire).some(function (a) { return Math.abs(a - b) < 0.001; }); }
 // v32: 작업의 코일선경 '1.2×8, 0.9×7' → [1.2, 0.9]
 function wireSpecs(w) { var out = []; String(w || '').split(/[,/+]/).forEach(function (p) { var x = firstNum(p); if (isFinite(x) && out.indexOf(x) < 0) out.push(x); }); return out; }
-// v32: 그 작업 선경에 맞는 사용중 코일 (선경 순서 → 먼저 들어온 순)
+// ── v52 (4-3): 단면적(스케) · 대체 조합 ──
+// 단면적 = (선경/2)² × π × 가닥수. 가닥 수는 작업 시작 때 정한 수 (찍은 보빈 수가 아님)
+function AREA(d) { return Math.PI * d * d / 4; }
+function r1(x) { return Math.round(x * 10) / 10; }
+function wireParts(w) {
+  var out = [];
+  String(w || '').split(/[,/+]/).forEach(function (p) {
+    var m = String(p).match(/(\d+(?:\.\d+)?)\s*(?:[x×*X]\s*(\d+))?/); if (!m) return;
+    var d = parseFloat(m[1]), k = m[2] ? parseInt(m[2], 10) : 1;
+    if (isFinite(d) && d > 0 && d < 10) out.push({ d: d, n: k > 0 ? k : 1 });
+  });
+  return out;
+}
+function partTxt(l) { return l.map(function (p) { return p.d + '×' + p.n; }).join(' + '); }
+function partArea(l) { return l.reduce(function (t, p) { return t + AREA(p.d) * p.n; }, 0); }
+// 선종별 재고: 굵기 → 쓸 수 있는 보빈 (일반 환선만, 다 쓴 것 빼고)
+function kindStock(kind) {
+  var m = {};
+  ((INIT && INIT.stock) || []).forEach(function (g) {
+    if ((g.type && g.type !== '일반 환선') || String(g.kind).toUpperCase() !== String(kind).toUpperCase()) return;
+    var d = firstNum(g.spec); if (!isFinite(d)) return;
+    var L = (g.coils || []).filter(function (c) { return c.status !== '소진'; });
+    if (!m[d]) m[d] = { n: 0, kg: 0 };
+    m[d].n += L.length; L.forEach(function (c) { m[d].kg += n(c.rem) || 0; });
+  });
+  return m;
+}
+// 이 굵기를 가장 많이 가진 선종 (없으면 AIW) — 추천은 같은 선종 안에서만
+function jobKind(d) {
+  var best = 'AIW', cnt = -1;
+  ((INIT && INIT.stock) || []).forEach(function (g) { if (Math.abs(firstNum(g.spec) - d) < 0.001 && (!g.type || g.type === '일반 환선')) { var k = (g.coils || []).filter(function (c) { return c.status !== '소진'; }).length; if (k > cnt || (k === cnt && g.kind === 'AIW')) { cnt = k; best = g.kind; } } });
+  return best || 'AIW';
+}
+// 추천 조합: 원래+한 단계 아래 → 더 아래 → (아래가 다 없을 때만) 위 단계. 총 단면적을 원래에 최대한 가깝게, 재고 보빈 수 안에서
+function recommend(p, kind, thin) {
+  var st = kindStock(kind), A = AREA(p.d) * p.n, ds = Object.keys(st).map(Number).filter(function (d) { return st[d].n > 0; }).sort(function (a, b) { return a - b; });
+  var lower = ds.filter(function (d) { return d < p.d - 1e-9; }).reverse(), upper = ds.filter(function (d) { return d > p.d + 1e-9; });
+  if (thin) lower = lower.slice(0, 2);
+  var have = st[p.d] ? st[p.d].n : 0, out = [];
+  function add(parts, tier) {
+    parts = parts.filter(function (x) { return x.n > 0; }); if (!parts.length) return;
+    var ar = partArea(parts), ratio = ar / A; if (ratio < 0.9 || ratio > 1.1) return;
+    var key = partTxt(parts); if (out.some(function (o) { return o.key === key; })) return;
+    out.push({ key: key, parts: parts, ratio: ratio, tier: tier });
+  }
+  function pair(d1, a1, d2, a2, tier) { // d1을 많이 쓰는 쪽부터, 나머지를 d2로 채움
+    var c = [];
+    for (var k1 = Math.min(p.n, a1); k1 >= 1; k1--) {
+      var base = (A - k1 * AREA(d1)) / AREA(d2);
+      [Math.floor(base), Math.ceil(base)].forEach(function (k2) { if (k2 >= 1 && k2 <= a2) c.push({ k1: k1, k2: k2, r: (k1 * AREA(d1) + k2 * AREA(d2)) / A }); });
+    }
+    c = c.filter(function (x) { return x.r >= 0.9 && x.r <= 1.1; }).sort(function (x, y) { return Math.abs(1 - x.r) - Math.abs(1 - y.r) || y.k1 - x.k1; });
+    c.slice(0, 2).forEach(function (b) { add([{ d: d1, n: b.k1 }, { d: d2, n: b.k2 }], tier); }); // 한 쌍에서 가장 가까운 두 가지
+  }
+  function single(d, a, tier) { var k = Math.round(A / AREA(d)); if (k >= 1 && k <= a) add([{ d: d, n: k }], tier); }
+  lower.forEach(function (d, i) { if (have > 0) pair(p.d, have, d, st[d].n, i); single(d, st[d].n, i + 0.5); if (lower[i + 1] != null) pair(d, st[d].n, lower[i + 1], st[lower[i + 1]].n, i + 0.7); });
+  if (!thin && !out.length) upper.forEach(function (d, i) { if (have > 0) pair(p.d, have, d, st[d].n, 50 + i); single(d, st[d].n, 50 + i + 0.5); });
+  out.sort(function (x, y) { return (x.tier - y.tier) || (Math.abs(1 - x.ratio) - Math.abs(1 - y.ratio)); });
+  return out.slice(0, 4);
+}
+// 고른 조합 (작업번호마다 휴대폰에 기억): { 작업번호: { kind, parts: [[원래], [고른 조합 or null]] } }
+function plans() { try { return JSON.parse(ls('coilinv_plans') || '{}'); } catch (e) { return {}; } }
+function planOf(job) { return job ? plans()[job] || null : null; }
+function setPlan(job, v) { var P = plans(); if (v) P[job] = v; else delete P[job]; var ks = Object.keys(P); if (ks.length > 30) delete P[ks[0]]; ls('coilinv_plans', JSON.stringify(P)); }
+var CURJOB = { u: null, b: null };
+// 저장할 때 같이 남기는 한 줄: 원래 1.3×5 → 실제 1.3×3 + 1.2×3 · 단면적 98%
+function planRecord(j) {
+  if (!j) return null; var parts = wireParts(j.wire); if (!parts.length) return null;
+  var pl = planOf(j.no) || {}, ch = pl.ch || {}, act = [];
+  parts.forEach(function (p, i) { act = act.concat(ch[i] ? ch[i] : [p]); });
+  return { orig: partTxt(parts), actual: partTxt(act), ratio: Math.round(partArea(act) / partArea(parts) * 100), kind: jobKind(parts[0].d) };
+}
+function allowedSpecs(j) { var r = planRecord(j); if (!r) return null; var s = {}; (r.orig + ' + ' + r.actual).split('+').forEach(function (x) { var d = firstNum(x); if (isFinite(d)) s[d] = 1; }); return s; }
+function planHtml(pre, j) {
+  var parts = wireParts(j.wire); if (!parts.length) return '';
+  var pl = planOf(j.no) || {}, ch = pl.ch || {}, thin = pl.thin || {}, h = '';
+  parts.forEach(function (p, i) {
+    var kind = jobKind(p.d), st = kindStock(kind), have = st[p.d] ? st[p.d].n : 0, short = have < p.n;
+    h += '<div class="plan"><b>목표 ' + p.d + '×' + p.n + '</b> · 단면적 ' + (AREA(p.d) * p.n).toFixed(2) + 'mm² <span class="muted">· ' + esc(kind) + ' ' + p.d + 'mm 보빈 ' + have + '개</span>';
+    var show = short || thin[i] || ch[i];
+    if (short) h += '<div class="short">⚠️ 재고 부족 (가닥 ' + p.n + ' · 보빈 ' + have + '개) · 추천 조합</div>';
+    if (show) {
+      var rec = recommend(p, kind, !short && thin[i]);
+      if (!rec.length) h += '<div class="muted" style="margin-top:6px">재고로 맞출 수 있는 조합이 없어요.</div>';
+      h += '<button type="button" class="combo' + (!ch[i] ? ' on' : '') + '" data-plan="' + pre + '|' + i + '|-">원래대로 ' + p.d + '×' + p.n + ' <span class="muted">(100%)</span></button>';
+      h += rec.map(function (r, k) { var on = ch[i] && partTxt(ch[i]) === r.key; return '<button type="button" class="combo' + (on ? ' on' : '') + '" data-plan="' + pre + '|' + i + '|' + k + '" data-parts="' + esc(JSON.stringify(r.parts)) + '"><b>' + esc(r.key) + '</b> · 원래 대비 <b>' + Math.round(r.ratio * 100) + '%</b></button>'; }).join('');
+    }
+    if (!short) h += '<div style="margin-top:6px"><button type="button" class="btn gray sm" data-thin="' + pre + '|' + i + '">' + (thin[i] ? '조합 닫기' : '선이 굵어 넣기 힘들면: 조합 바꾸기') + '</button></div>';
+    h += '</div>';
+  });
+  return h;
+}
+document.addEventListener('click', function (e) {
+  var t = e.target.closest('[data-thin]'), c = e.target.closest('[data-plan]'); if (!t && !c) return;
+  var q = (t || c).dataset[t ? 'thin' : 'plan'].split('|'), pre = q[0], i = +q[1], j = CURJOB[pre]; if (!j) return;
+  var pl = planOf(j.no) || {}; pl.ch = pl.ch || {}; pl.thin = pl.thin || {};
+  if (t) { pl.thin[i] = !pl.thin[i]; if (!pl.thin[i]) delete pl.ch[i]; }
+  else { if (q[2] === '-') delete pl.ch[i]; else pl.ch[i] = JSON.parse(c.dataset.parts); }
+  setPlan(j.no, pl); renderFit(pre, j);
+});
+// v52 (4-3a): 보빈 순서 = 같은 규격이 가장 적게 남은 선반의 보빈부터 → 그 선반 안에서는 적게 남은 보빈부터
+function shelfOrder(L) {
+  var tot = {}; L.forEach(function (c) { var k = c.loc || '(선반 없음)'; tot[k] = (tot[k] || 0) + (n(c.rem) || 0); });
+  return L.slice().sort(function (a, b) { var ka = a.loc || '(선반 없음)', kb = b.loc || '(선반 없음)'; return (tot[ka] - tot[kb]) || (ka < kb ? -1 : ka > kb ? 1 : 0) || ((n(a.rem) || 0) - (n(b.rem) || 0)); });
+}
+// 그 작업(과 고른 조합)의 굵기에 맞는 사용중 코일
 function fitCoils(j) {
-  var ws = wireSpecs(j && j.wire), L = [];
+  var ws = wireSpecs(j && j.wire), al = allowedSpecs(j); if (al) Object.keys(al).forEach(function (d) { d = Number(d); if (ws.indexOf(d) < 0) ws.push(d); });
+  var L = [];
   ((INIT && INIT.stock) || []).forEach(function (g) {
     var k = ws.findIndex(function (x) { return Math.abs(x - firstNum(g.spec)) < 0.001; }); if (k < 0) return;
-    (g.coils || []).forEach(function (c) { if (c.status !== '소진') L.push({ c: c, k: k }); });
+    (g.coils || []).forEach(function (c) { if (c.status !== '소진') L.push(c); });
   });
-  L.sort(function (a, b) { return (a.k - b.k) || (String(a.c.reg) < String(b.c.reg) ? -1 : String(a.c.reg) > String(b.c.reg) ? 1 : 0); });
-  return { ws: ws, list: L.map(function (x) { return x.c; }) };
+  return { ws: ws, list: L };
 }
 function renderFit(pre, j) {
-  var box = $(pre + 'Fit'); if (!j) { box.innerHTML = ''; return null; }
+  var box = $(pre + 'Fit'); CURJOB[pre] = j || null; if (!j) { box.innerHTML = ''; return null; }
   var f = fitCoils(j);
   if (!f.ws.length) { box.innerHTML = '<div class="muted" style="margin-top:6px">이 작업에는 코일선경이 안 적혀 있어요. QR을 찍거나 번호를 넣으세요.</div>'; return null; }
-  if (!f.list.length) { box.innerHTML = '<div class="warn" style="margin:6px 0 0">이 작업 선경(' + f.ws.join(', ') + 'mm)에 맞는 코일이 재고에 없어요.</div>'; return null; }
+  var h = planHtml(pre, j);
+  if (!f.list.length) { box.innerHTML = h + '<div class="warn" style="margin:6px 0 0">이 작업 선경(' + f.ws.join(', ') + 'mm)에 맞는 코일이 재고에 없어요.</div>'; return null; }
   var by = {}; f.list.forEach(function (c) { var k = String(firstNum(c.spec)); (by[k] = by[k] || []).push(c); });
-  var h = '<div class="muted" style="margin-top:8px">🧵 <b>' + esc(j.no) + '</b> 선경에 맞는 코일 — 눌러서 ' + (pre === 'b' ? '목록에 넣기' : '열기') + '</div>';
+  h += '<div class="muted" style="margin-top:8px">🧵 <b>' + esc(j.no) + '</b> 에 쓸 보빈 — 파란 테두리부터 쓰세요 (다른 선반 것을 써도 괜찮아요)</div>';
+  var first = null;
   f.ws.forEach(function (w) {
-    var l = (by[String(w)] || []).slice();
-    // v43: 5kg 이하로 남은 타래만 '먼저' 표시, 그것부터 앞에 (나머지는 들어온 순서 그대로)
-    l = l.filter(function (c) { return n(c.rem) <= 5; }).concat(l.filter(function (c) { return !(n(c.rem) <= 5); }));
+    var l = shelfOrder(by[String(w)] || []);
     h += '<div style="margin-top:8px;font-size:15px"><b>' + w + 'mm</b> <span class="muted">· ' + l.length + '타래</span></div>';
     if (!l.length) { h += '<div class="muted" style="margin-top:2px">재고 없음</div>'; return; }
+    if (!first) first = l[0];
     var open = !!FIT_OPEN[pre + w];
     h += '<div class="fitg' + (open ? ' open' : '') + '" data-fw="' + w + '">' + l.map(function (c, i) {
-      var low = n(c.rem) <= 5;
-      return '<button type="button" data-fit="' + esc(c.no) + '" class="' + (low ? 'first' : '') + (i >= 9 ? ' fmore' : '') + '"><b>' + esc(c.no) + '</b><br>' + c.rem + 'kg' + (low ? ' 먼저' : '') + '</button>';
+      return '<button type="button" data-fit="' + esc(c.no) + '" class="' + (i === 0 ? 'first' : '') + (i >= 9 ? ' fmore' : '') + '"><b>' + esc(c.no) + '</b><br>' + c.rem + 'kg<small>' + esc(c.loc || '선반 없음') + '</small></button>';
     }).join('') + '</div>';
     if (l.length > 9) h += '<button type="button" class="fitMore" data-fmore="' + w + '">' + (open ? '▲ 접기' : '▼ 펼쳐 보기 (' + (l.length - 9) + '개 더)') + '</button>';
   });
   box.innerHTML = h; markFit();
-  return f.list[0];
+  return first;
+}
+// v52 (4-3c): 찍을 때 진동 + 화면 테두리
+function flash(c) { document.body.classList.remove('flashG', 'flashR'); void document.body.offsetWidth; document.body.classList.add(c); setTimeout(function () { document.body.classList.remove(c); }, 450); }
+function okScan() { buzz(70); flash('flashG'); }
+function dupScan(no) {
+  buzz([220, 90, 220, 90, 220]); flash('flashR');
+  var d = document.createElement('div'); d.className = 'dupMsg'; d.textContent = '이미 찍음 · ' + no; document.body.appendChild(d); setTimeout(function () { d.remove(); }, 1400);
 }
 var FIT_OPEN = {};
 // v43: 고른(목록에 넣은) 코일은 파란색
@@ -876,11 +996,13 @@ function renderJobs(pre, spec) {
       '<div class="m">' + (j.kw ? esc(j.kw) + 'kW · ' : '') + (j.wire ? '선경 ' + esc(j.wire) + ' · ' : '') + esc(srcName(j.src)) + ' · ' + esc(String(j.at).slice(5, 16)) + (j.who ? ' · ' + esc(j.who) : '') + '</div></button>';
   });
   box.innerHTML = h; box.scrollTop = top; // v31: 고른 뒤 목록이 맨 위로 튀지 않게
+  // v52: 앱을 다시 열었을 때 고정해 둔 작업의 목표·조합·보빈 목록을 다시 보여 줌
+  if (cur && (!CURJOB[pre] || CURJOB[pre].no !== cur)) { var jj = L.filter(function (x) { return x.no === cur; })[0]; if (jj) { CURJOB[pre] = jj; renderFit(pre, jj); } }
 }
 // v31: 작업기록 앱 화면 이름에 맞춤 (시트 탭 이름은 그대로 마그네틱코일)
 function srcName(s) { return s === '코일' || s === '마그네틱코일' || s === '마그네틱 코일' ? '전자브레이크' : s; }
 function pickJob(pre, j) {
-  $(pre + 'Job').value = j.no;
+  $(pre + 'Job').value = j.no; CURJOB[pre] = j;
   var k = $(pre + 'Kw');
   if (j.kw && isFinite(n(j.kw))) { k.value = n(j.kw); k.placeholder = '예: 37'; }
   else { k.value = ''; k.placeholder = '이 작업엔 kW가 없어요. 직접 넣기'; } // v35: 앞 작업 kW가 남아 잘못 저장되지 않게
@@ -951,6 +1073,7 @@ function setUse(v) {
 function openOne(no) { tab('move'); if (USE_MODE !== 'one') setUse('one'); $('coilNo').value = no; loadCoil(no); }
 // v37: 이 작업에 쓴 코일 (저장된 기록, 누가 저장했든) + 선경별 합계
 var DONE_Q = 0;
+function planLine(p) { return p && p.orig ? '<div style="margin-top:6px;font-size:15px">🧮 원래 <b>' + esc(p.orig) + '</b> → 실제 <b>' + esc(p.actual || p.orig) + '</b>' + (p.ratio ? ' · 단면적 <b>' + p.ratio + '%</b>' : '') + '</div>' : ''; }
 function loadDone() {
   var job = jobValue(), box = $('bDone'); if (!box) return;
   if (!job) { box.innerHTML = ''; return; }
@@ -967,6 +1090,7 @@ function loadDone() {
       '<table><tr class="muted"><td>선경</td><td class="n">타래</td><td class="n">쓴 양</td></tr>' +
       ks.map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="n">' + Object.keys(by[k].c).length + '타래</td><td class="n"><b>' + r2(by[k].kg) + 'kg</b></td></tr>'; }).join('') +
       '<tr><td><b>합계</b></td><td class="n"><b>' + Object.keys(nos).length + '타래</b></td><td class="n"><b>' + r2(tot) + 'kg</b></td></tr></table>' +
+      planLine((r.plans || {})[job]) +
       '<details style="margin-top:6px"><summary>기록 ' + L.length + '줄 보기</summary><table>' +
       L.map(function (x) { return '<tr><td><b>' + esc(x.no) + '</b> <span class="muted">' + esc(x.spec) + 'mm ' + esc(x.kind) + '</span><div class="muted">' + esc(x.worker) + ' · ' + esc(String(x.at).slice(5, 16)) + '</div></td><td class="n"><b>' + r2(-n(x.delta)) + 'kg</b></td></tr>'; }).join('') + '</table></details>';
   }, function () { if (q === DONE_Q) box.innerHTML = '<div class="muted">저장된 기록을 못 불러왔어요. 신호를 확인하세요.</div>'; });
@@ -1081,15 +1205,18 @@ function addBatch(no, raw) {
   var key = raw || no;
   if (BATCH.busy[key]) return;
   var dup = BATCH.items.filter(function (it) { return it.coil.no === no || it.raw === key; })[0];
-  if (dup) return bToast('⚠️ ' + dup.coil.no + ' 는 이미 목록에 있어요.');
+  if (dup) { dupScan(dup.coil.no); return bToast('⚠️ ' + dup.coil.no + ' 는 이미 찍었어요.'); }
   var put = function (c) {
-    if (BATCH.items.some(function (it) { return it.coil.no === c.no; })) { bToast('⚠️ ' + c.no + ' 는 이미 목록에 있어요.'); return false; }
+    if (BATCH.items.some(function (it) { return it.coil.no === c.no; })) { dupScan(c.no); bToast('⚠️ ' + c.no + ' 는 이미 찍었어요.'); return false; }
     if (c.status === '소진') { toast('⛔ ' + c.no + ' 는 이미 다 쓴(소진) 타래입니다.', 3500); return false; }
     if (!c.tareSet) { toast('ℹ️ ' + c.no + ' 는 빈 보빈 무게가 없어요. 보빈 종류를 골라 이 화면에서 기록하세요.', 5000); openOne(c.no); return false; }
-    if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}
+    okScan();
     BATCH.items.push({ coil: c, raw: key, val: '', empty: false });
     autoJob('b', BATCH.items[0].coil.spec);
-    renderBatch(); toast('➕ ' + c.no + ' 추가 (' + BATCH.items.length + '개)', 1500);
+    var al = allowedSpecs(CURJOB.b), d0 = firstNum(c.spec);
+    renderBatch();
+    if (al && isFinite(d0) && !al[d0]) toast('⚠️ ' + c.no + ' 는 ' + c.spec + 'mm — 이 작업 조합(' + Object.keys(al).join(', ') + 'mm)에 없는 굵기예요. 맞는지 확인하세요.', 4500);
+    else toast('➕ ' + c.no + ' · ' + BATCH.items.length + '개째', 1500);
     return true;
   };
   var loc = localCoil(no);
@@ -1188,13 +1315,14 @@ $('bSave').onclick = function () {
   list.reduce(function (p, x) {
     return p.then(function () {
       var k = bCalc(x), a = { no: x.coil.no, type: '출고', mode: 'gross', value: k.gross, worker: ME.name, target: job, kw: kw, memo: k.empty ? '다 씀' : '', reqId: newReq() };
+      var pr = CURJOB.b && CURJOB.b.no === job ? planRecord(CURJOB.b) : null; if (pr) a.plan = pr;
       return submit('saveMove', a, x.coil.no + ' 저울 ' + a.value + 'kg (' + job + ')').then(function (r) {
         if (r) { saved++; tot += -r.delta; } else { kept++; tot += k.used; localRem(x.coil.no, k.left); }
         BATCH.items = BATCH.items.filter(function (y) { return y !== x; });
       }, function (e) { fail.push(x.coil.no); });
     });
   }, Promise.resolve()).then(function () {
-    renderBatch(); refreshStock(); loadDone();
+    renderBatch(); refreshStock(); loadDone(); if (saved || kept) buzz([90, 70, 90]);
     toast((saved || kept ? '✅ ' + (saved + kept) + '개 저장 · 쓴 양 합계 ' + r2(tot) + 'kg' : '') + (kept ? ' (📱 ' + kept + '개는 휴대폰에 저장, 신호가 돌아오면 자동으로 올림)' : '') + (fail.length ? ' ⛔ 저장 못 함: ' + fail.join(', ') + ' (목록에 남겨 둠)' : ''), 6000);
   });
 };
@@ -1295,7 +1423,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v51', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v52', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
