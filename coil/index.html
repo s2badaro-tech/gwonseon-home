@@ -923,7 +923,7 @@ function renderStk() {
       '<div class="muted">앱 숫자: 남은 선 ' + c.rem + 'kg + 보빈 ' + c.tare + 'kg = 저울 ' + bLast(c) + 'kg 이어야 함</div>' +
       '<input class="sVal" data-i="' + i + '" inputmode="decimal" placeholder="지금 저울 무게 (보빈째, kg)" value="' + esc(x.val) + '" style="font-size:20px;margin-top:6px">' +
       '<div class="sRes" style="margin-top:4px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : '') + '">' + sRes(k) + '</div></div>';
-  }).join('') || '<div class="muted">아직 찍은 타래가 없습니다. 위에서 QR을 찍으세요.</div>';
+  }).join('') || '<div class="muted">아직 사용 보빈이 없습니다. 위에서 QR을 찍으세요.</div>';
   $('stkSave').textContent = it.length ? '모두 저장 (' + it.length + '개)' : '모두 저장';
 }
 $('stkList').addEventListener('input', function (e) {
@@ -1180,7 +1180,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v44', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v45', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
