@@ -163,6 +163,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
   <!-- 입출고 -->
   <section id="tab-move" class="hide">
     <div id="lowBanner" class="warn hide"></div>
+    <a href="#" id="reqBanner" class="warn hide" style="display:block;text-decoration:none;font-weight:700"></a>
     <div class="card">
       <div class="seg" id="useMode" style="margin-bottom:10px"><button data-v="many" class="on">📦 코일 사용</button><button data-v="one" id="oneModeBtn" class="hide">🔎 타래 보기</button><button data-v="stk" id="stkModeBtn" class="hide">📋 재고조사</button></div>
       <div id="scanBox" class="hide">
@@ -366,6 +367,11 @@ tr.sub td{background:#fafbfd;font-size:14px}
 
   <!-- 관리 -->
   <section id="tab-admin" class="hide">
+    <div class="card" id="reqCard">
+      <h3>🙋 수정 요청</h3>
+      <div class="muted">팀원은 자기 기록을 직접 고치거나 지울 수 없고 [🙋 수정 요청]만 보냅니다. 여기서 보고 고치세요. 고친 내용(전 값·후 값·누가·언제)은 지워지지 않고 남습니다.</div>
+      <div class="list" id="reqList" style="margin-top:8px"><div class="muted">불러오는 중…</div></div>
+    </div>
     <div class="card">
       <h3>🏷️ QR 라벨 인쇄</h3>
       <div class="muted">새 코일은 등록하면 바로 라벨 버튼이 뜹니다. 여기는 라벨이 떨어지거나 더러워져서 <b>다시 뽑을 때</b> 씁니다. A4 한 장에 21개(3×7).</div>
@@ -742,6 +748,7 @@ function applyInit(r, fresh) {
     $('navAdd').classList.toggle('hide', !ME.admin);
     $('stkModeBtn').classList.toggle('hide', !ME.admin);
     $('editToggle').classList.toggle('hide', !ME.admin);
+    reqBanner(ME.admin ? r.editReqs || 0 : 0); $('reqBanner').classList.toggle('hide', !ME.admin || !r.editReqs);
     $('fileBox').classList.toggle('hide', !ME.admin);
     $('uWho').textContent = ME.name;
     updLabels();
@@ -801,6 +808,7 @@ function tab(name) {
   ['move', 'stock', 'hist', 'add', 'admin'].forEach(function (t) { $('tab-' + t).classList.toggle('hide', t !== name); });
   [].forEach.call($('nav').children, function (b) { b.classList.toggle('on', b.dataset.tab === name); });
   if (name === 'hist' && !$('hFrom').value) setRange(7);
+  if (name === 'admin') loadReqs();
   if (name === 'stock' && INIT && INIT.stock && STOCK_TAB !== 'AIW') { STOCK_TAB = 'AIW'; renderStock(INIT.stock); }
   window.scrollTo(0, 0);
 }
@@ -1502,7 +1510,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v55', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v56', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1824,22 +1832,89 @@ window.addEventListener('offline', showPending);
 setInterval(flushQueue, 30000);
 
 // ── 이력 html ──
+var ROWS_BY_ID = {};
 function histHtml(rows, small) {
-  var mine = function (o) { return ME && (ME.admin || o.by === ME.name); };
+  rows.forEach(function (o) { if (o && o.id) ROWS_BY_ID[o.id] = o; });
+  var mine = function (o) { return ME && (o.by === ME.name || o.worker === ME.name); };
   return rows.map(function (o) {
     var d = n(o.delta), col = o.type === '출고' ? 'red' : o.type === '입고' || o.type === '신규등록' ? 'grn' : 'org';
-    var canCancel = !o.cancelled && ['출고', '입고', '실사조정'].indexOf(o.type) >= 0 && mine(o);
+    var canCancel = !o.cancelled && ['출고', '입고', '실사조정'].indexOf(o.type) >= 0 && ME && ME.admin; // v56 (4-7): 취소·고치기는 관리자만
+    var canEdit = ME && ME.admin && !o.cancelled && o.type !== '취소', canAsk = ME && !ME.admin && !o.cancelled && mine(o);
     return '<div class="it' + (o.cancelled ? ' x' : '') + '"><div class="t"><span><span class="tag ' + col + '">' + esc(o.type) + '</span> ' + (small ? '' : '<b>' + esc(o.no) + '</b> ' + esc(o.spec) + 'mm ') +
       '<b>' + (d > 0 ? '+' : '') + esc(o.delta) + 'kg</b></span><span class="muted">' + esc(o.at) + '</span></div>' +
       '<div class="muted">' + esc(o.before) + ' → ' + esc(o.after) + 'kg · ' + esc(o.worker) + (o.target ? ' · ' + esc(o.target) : '') + (o.kw ? ' · ' + esc(o.kw) + 'kW' : '') + (o.mode === '저울 총무게' ? ' · 저울 ' + esc(o.gross) + 'kg' : '') +
       (o.memo ? ' · ' + esc(o.memo) : '') + (o.cancelled ? ' · (취소됨)' : '') + '</div>' + editsHtml(o) +
-      (canCancel ? '<div style="text-align:right"><button class="btn gray sm" data-cancel="' + esc(o.id) + '">↩️ 취소</button></div>' : '') + '</div>';
+      (canCancel || canEdit || canAsk ? '<div style="text-align:right">' + (canAsk ? '<button class="btn gray sm" data-ask="' + esc(o.id) + '">🙋 수정 요청</button>' : '') + (canEdit ? '<button class="btn gray sm" data-edit="' + esc(o.id) + '">✏️ 고치기</button> ' : '') + (canCancel ? '<button class="btn gray sm" data-cancel="' + esc(o.id) + '">↩️ 취소</button>' : '') + '</div><div class="editBox"></div>' : '') + '</div>';
   }).join('');
 }
 document.addEventListener('click', function (e) {
   var b = e.target.closest('[data-cancel]'); if (!b) return;
   if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = '정말 취소? 한 번 더 누르세요'; b.style.background = 'var(--red2)'; return; }
   call('cancelMove', ls(TK), b.dataset.cancel).then(function (r) { toast('취소했습니다. 잔량 ' + r.after + 'kg'); if (CUR) loadCoil(CUR.no); if (!$('tab-hist').classList.contains('hide')) $('hGo').click(); refreshStock(); }, function () {});
+});
+
+// v56 (4-7): 팀원 → 수정 요청, 관리자 → 고치기 (고친 기록은 '✏️ 수정됨'으로 남음)
+document.addEventListener('click', function (e) {
+  var a = e.target.closest('[data-ask]');
+  if (a) {
+    var o = ROWS_BY_ID[a.dataset.ask] || {};
+    var msg = prompt('무엇이 틀렸나요? 관리자가 보고 고쳐 줍니다.\n(예: 작업번호 J-10이 아니라 J-100, 쓴 양 3kg이 아니라 2kg)\n\n' + (o.no || '') + ' · ' + (o.target || '') + ' · ' + (o.delta || '') + 'kg');
+    if (!msg || !msg.trim()) return;
+    submit('askEdit', { id: a.dataset.ask, msg: msg.trim(), reqId: newReq() }, '수정 요청 ' + (o.no || '')).then(function () { toast('🙋 수정 요청을 보냈어요. 관리자가 확인합니다.', 3500); a.textContent = '✔ 요청함'; a.disabled = true; }, function () {});
+    return;
+  }
+  var b = e.target.closest('[data-edit]'); if (!b) return;
+  openEdit(b.dataset.edit, b.closest('.it').querySelector('.editBox'), b.dataset.req || '');
+});
+function openEdit(id, box, reqId) {
+  var o = ROWS_BY_ID[id]; if (!o || !box) return;
+  if (box.innerHTML) { box.innerHTML = ''; return; }
+  var f = function (k, lab, v, im) { return '<label>' + lab + '</label><input data-k="' + k + '" value="' + esc(v == null ? '' : v) + '"' + (im ? ' inputmode="decimal"' : '') + '>'; };
+  box.innerHTML = '<div class="card" style="margin:8px 0 0;border:2px solid var(--org)"><b>✏️ ' + esc(o.no) + ' 기록 고치기</b>' +
+    (o.type === '출고' ? f('used', '쓴 양 (kg)', r2(-n(o.delta)), 1) : '') + f('target', '작업번호', o.target) + f('kw', 'kW', o.kw) +
+    '<label>작업자</label><select data-k="worker">' + ((INIT && INIT.users) || []).concat(o.worker && (INIT.users || []).indexOf(o.worker) < 0 ? [o.worker] : []).map(function (u) { return '<option' + (u === o.worker ? ' selected' : '') + '>' + esc(u) + '</option>'; }).join('') + '</select>' +
+    f('memo', '메모', o.memo) + '<label>고친 이유 (꼭)</label><input data-k="why" placeholder="예: 홍길동 요청, 작업번호 잘못 씀">' +
+    '<div class="muted" style="margin-top:4px">고치기 전 값·고친 값·고친 사람·시각이 그대로 남습니다.</div>' +
+    '<div class="row" style="margin-top:8px"><button class="btn" data-esave>저장</button><button class="btn gray" data-eclose style="flex:0 0 30%">닫기</button></div></div>';
+  box.querySelector('[data-eclose]').onclick = function () { box.innerHTML = ''; };
+  box.querySelector('[data-esave]').onclick = function () {
+    var a = { id: id, reqId: reqId || undefined };
+    [].forEach.call(box.querySelectorAll('[data-k]'), function (x) { a[x.dataset.k] = x.value; });
+    if (!a.why.trim()) { box.querySelector('[data-k="why"]').focus(); return toast('고친 이유를 적어 주세요.'); }
+    admin('editMove', a).then(function (r) {
+      toast('✏️ 고쳤습니다: ' + r.ch.map(function (c) { return c.f; }).join(', '), 3500);
+      box.innerHTML = ''; refreshStock(); loadReqs();
+      if (!$('tab-hist').classList.contains('hide') && H_F) $('hGo').click();
+      if ($('bDone') && $('bDone').innerHTML) loadDone();
+    }, function () {});
+  };
+}
+function reqBanner(nn) {
+  if (!ME || !ME.admin) return;
+  $('reqBanner').textContent = nn ? '🙋 팀원 수정 요청 ' + nn + '건 — 눌러서 보기' : '';
+  $('reqBanner').classList.toggle('hide', !nn);
+}
+$('reqBanner').onclick = function (e) { e.preventDefault(); tab('admin'); loadReqs(); $('reqCard').scrollIntoView({ block: 'start' }); };
+function loadReqs() {
+  if (!ME || !ME.admin) return;
+  admin('editReqs').then(function (r) {
+    reqBanner(r.open.length);
+    var one = function (q, open) {
+      var o = q.move; if (o) ROWS_BY_ID[o.id] = o;
+      return '<div class="it"><div><b>' + esc(q.who) + '</b> <span class="muted">' + esc(String(q.at).slice(5, 16)) + '</span></div>' +
+        '<div style="font-size:16px;margin:4px 0">“' + esc(q.msg) + '”</div>' +
+        (o ? '<div class="muted">기록: ' + esc(o.no) + ' ' + esc(o.spec) + 'mm · ' + esc(o.type) + ' ' + esc(o.delta) + 'kg · ' + esc(o.target || '작업번호 없음') + (o.kw ? ' · ' + esc(o.kw) + 'kW' : '') + ' · ' + esc(o.worker) + ' · ' + esc(String(o.at).slice(5, 16)) + '</div>' + editsHtml(o) : '<div class="muted">기록을 찾지 못함</div>') +
+        (open ? '<div style="text-align:right;margin-top:6px">' + (o ? '<button class="btn sm" data-edit="' + esc(o.id) + '" data-req="' + q.id + '">✏️ 고치기</button> ' : '') + '<button class="btn gray sm" data-rclose="' + q.id + '">고칠 것 없음</button></div><div class="editBox"></div>'
+          : '<div class="muted">→ ' + esc(q.state) + ' (' + esc(q.doneBy) + ' ' + esc(String(q.doneAt).slice(5, 16)) + ')' + (q.note ? ' · ' + esc(q.note) : '') + '</div>') + '</div>';
+    };
+    $('reqList').innerHTML = (r.open.length ? r.open.map(function (q) { return one(q, true); }).join('') : '<div class="muted">새 요청이 없습니다 👍</div>') +
+      (r.done.length ? '<details class="more"><summary>처리한 요청 ' + r.done.length + '건</summary>' + r.done.map(function (q) { return one(q, false); }).join('') + '</details>' : '');
+  }, function () { $('reqList').innerHTML = '<div class="muted">요청을 못 불러왔어요. 신호를 확인하세요.</div>'; });
+}
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-rclose]'); if (!b) return;
+  var note = prompt('고치지 않는 이유 (요청한 사람이 볼 수 있게 남겨요)', '확인했는데 맞음'); if (note === null) return;
+  admin('closeReq', { id: b.dataset.rclose, note: note }).then(function () { toast('처리했습니다.'); loadReqs(); }, function () {});
 });
 
 // ── 재고현황 ──

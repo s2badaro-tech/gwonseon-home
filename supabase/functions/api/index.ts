@@ -443,7 +443,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v53';
+const CO_VERSION = 'v54';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -523,7 +523,7 @@ async function coInit(token: any) {
   const m = await me(token, 'co'), S = await coSet();
   return { me: { name: m.name, admin: m.admin, owner: m.owner, mustChange: m.mustChange }, version: CO_VERSION, users: m.P.filter((u) => !u.off).map((u) => u.name),
     worklogSite: 'https://s2badaro-tech.github.io/gwonseon-home/worklog/', sheetUrl: '', excel: m.admin,
-    appUrl: QR_APP_URL, kinds: S.kinds, specsBy: S.specsBy, mail: m.admin ? S.mail : '', locs: S.locs, specs: S.specs, prefix: S.prefix, bobbins: [], bobbinTxt: S.bobbinTxt, defTare: S.defTare, types: await coTypes(),
+    appUrl: QR_APP_URL, kinds: S.kinds, specsBy: S.specsBy, mail: m.admin ? S.mail : '', editReqs: m.admin ? await openReqs() : 0, locs: S.locs, specs: S.specs, prefix: S.prefix, bobbins: [], bobbinTxt: S.bobbinTxt, defTare: S.defTare, types: await coTypes(),
     targets: await targets(), stock: await stockCalc() };
 }
 // 작업기록 앱의 최근 작업 (오늘 + 지난 2일)
@@ -812,13 +812,71 @@ async function stkSeen(token: any, a: any) {
   if (error && !/duplicate|unique/i.test(error.message)) err('저장소 오류: ' + error.message);
   return { no, at, dup: !!error };
 }
+// v7 (4-7): 팀원은 '수정 요청'만, 관리자가 고침. 고칠 때마다 전 값·후 값·누가·언제를 그 기록(edits)과 coil_edits에 남김 (지우지 않음)
+async function openReqs() { const { count } = await db.from('edit_reqs').select('id', { count: 'exact', head: true }).eq('state', ''); return count || 0; }
+async function askEdit(token: any, a: any) {
+  const m = await me(token, 'co');
+  a = a || {};
+  const msg = txt(a.msg).slice(0, 500); if (!msg) err('무엇이 틀렸는지 적어 주세요.');
+  const o: any = await q(db.from('coil_moves').select('id,no,by,worker').eq('id', String(a.id || '')).maybeSingle());
+  if (!o) err('그 기록을 찾지 못했습니다.');
+  if (a.reqId) { const d: any[] = await q(db.from('edit_reqs').select('id').eq('req_id', String(a.reqId)).limit(1)); if (d.length) return { id: d[0].id, dup: true }; }
+  const r: any[] = await q(db.from('edit_reqs').insert({ at: nowStr(), who: m.name, move_id: o.id, no: o.no, msg, req_id: txt(a.reqId) }).select('id'));
+  return { id: r[0].id };
+}
+const EDIT_F: any = { target: '작업번호', kw: 'kW', worker: '작업자', memo: '메모', used: '쓴 양' };
+async function editMove(m: Me, a: any) {
+  a = a || {};
+  const o: any = await q(db.from('coil_moves').select('*').eq('id', String(a.id || '')).maybeSingle());
+  if (!o) err('그 기록을 찾지 못했습니다.');
+  const ch: any[] = [], up: any = {};
+  for (const k of ['target', 'kw', 'worker', 'memo']) {
+    if (a[k] === undefined) continue;
+    const v = txt(a[k]), b = txt(o[k] ?? '');
+    if (v !== b) { ch.push({ f: EDIT_F[k], b, a: v }); up[k] = v; }
+  }
+  let shift = 0, later: any[] = [];
+  if (a.used !== undefined && String(a.used).trim() !== '') {
+    if (o.type !== '출고') err('쓴 양은 쓰기(출고) 기록만 고칠 수 있습니다. 무게가 틀렸으면 저울에 올려 ‘무게 맞추기’를 하세요.');
+    const c: any = await q(db.from('coil_moves').select('id').eq('cancel_of', o.id).limit(1)); if (c && c.length) err('취소된 기록은 쓴 양을 고칠 수 없습니다.');
+    const u = r2(num(a.used)); if (!isFinite(u) || u < 0) err('쓴 양을 0 이상 숫자로 넣어 주세요.');
+    const oldU = r2(-Number(o.delta));
+    if (Math.abs(u - oldU) >= 0.005) {
+      shift = r2(oldU - u); // 덜 썼으면 남은 양이 늘어남
+      later = await q(db.from('coil_moves').select('id,type,before,after,delta').eq('no', o.no).gt('seq', o.seq).order('seq').limit(5000));
+      // 그 뒤에 저울로 무게를 맞춘 기록이 있으면 지금 남은 무게는 저울 값이 맞으므로 그대로 둠
+      if (!later.some((L) => L.type === '실사조정')) {
+        const row: any = await q(db.from('coils').select('*').eq('no', o.no).maybeSingle()); if (!row) err('타래를 찾지 못했습니다.');
+        const rem = r2(Number(row.rem) + shift); if (rem < 0) err('이렇게 고치면 남은 무게가 0보다 작아집니다.');
+        const S = await coSet();
+        await setRem(o.no, Number(row.rem), rem, rem <= S.emptyKg ? ST_EMPTY : ST_USE);
+      }
+      up.delta = r2(-u); up.after = r2(Number(o.before) - u);
+      ch.push({ f: EDIT_F.used, b: oldU + 'kg', a: u + 'kg' });
+    }
+  }
+  if (!ch.length) err('바뀐 것이 없습니다.');
+  const e = { at: nowStr(), who: m.name, why: txt(a.why).slice(0, 300), ch, req: a.reqId ? Number(a.reqId) : null };
+  up.edits = (Array.isArray(o.edits) ? o.edits : []).concat([e]);
+  await q(db.from('coil_moves').update(up).eq('id', o.id));
+  // 쓴 양이 바뀌면 그 뒤 같은 타래 기록의 '전→후' 숫자도 같이 옮김 (합계가 맞게)
+  if (shift) {
+    for (const L of later) {
+      if (L.type === '실사조정') { await q(db.from('coil_moves').update({ before: r2(Number(L.before) + shift), delta: r2(Number(L.delta) - shift) }).eq('id', L.id)); break; }
+      await q(db.from('coil_moves').update({ before: r2(Number(L.before) + shift), after: r2(Number(L.after) + shift) }).eq('id', L.id));
+    }
+  }
+  await q(db.from('coil_edits').insert(ch.map((c) => ({ at: e.at, who: m.name, no: o.no, field: '기록 ' + o.id + ' ' + c.f, before: c.b, after: c.a }))));
+  if (a.reqId) await q(db.from('edit_reqs').update({ state: '고침', done_by: m.name, done_at: e.at }).eq('id', Number(a.reqId)));
+  return { ok: true, ch };
+}
 async function cancelMove(token: any, id: any) {
   const m = await me(token, 'co');
   const o = (await history({ id }, 1))[0];
   if (!o) err('그 기록을 찾지 못했습니다.');
   if (o.cancelled) err('이미 취소된 기록입니다.');
   if (TYPES.indexOf(o.type) < 0) err(o.type + ' 기록은 취소할 수 없습니다. 타래 정보가 틀렸으면 ‘정보 수정’으로 고치세요.');
-  if (!m.admin && o.by !== m.name) err('내가 넣은 기록만 취소할 수 있습니다. (관리자는 모두 가능)');
+  if (!m.admin) err('기록 취소는 관리자만 할 수 있습니다. 틀린 곳이 있으면 [🙋 수정 요청]을 눌러 주세요.');
   const S = await coSet(), T = await coTypes();
   const row: any = await q(db.from('coils').select('*').eq('no', o.no).maybeSingle());
   if (!row) err('타래를 찾지 못했습니다.');
@@ -901,6 +959,20 @@ const CO_ADMIN: any = {
     const r: any[] = await q(db.from('sessions').delete().neq('token_hash', th).select('token_hash'));
     await q(db.from('coil_edits').insert({ at: nowStr(), who: m.name, no: '(로그인)', field: '모든 휴대폰 로그아웃', before: r.length + '대', after: '0대' }));
     return { count: r.length };
+  },
+  editMove: async (m: Me, a: any) => editMove(m, a),
+  editReqs: async () => {
+    const open: any[] = await q(db.from('edit_reqs').select('*').eq('state', '').order('id').limit(200));
+    const done: any[] = await q(db.from('edit_reqs').select('*').neq('state', '').order('id', { ascending: false }).limit(20));
+    const ids = open.concat(done).map((r) => r.move_id), mv: any = {};
+    if (ids.length) (await q(db.from('coil_moves').select('*').in('id', ids))).forEach((r: any) => { mv[r.id] = moveOut(r, false); });
+    const out = (r: any) => ({ id: r.id, at: r.at, who: r.who, msg: r.msg, state: r.state, doneBy: r.done_by, doneAt: r.done_at, note: r.done_note, move: mv[r.move_id] || null });
+    return { open: open.map(out), done: done.map(out) };
+  },
+  closeReq: async (m: Me, a: any) => {
+    const r: any = await q(db.from('edit_reqs').select('*').eq('id', Number(a.id)).maybeSingle()); if (!r) err('요청을 찾지 못했습니다.');
+    await q(db.from('edit_reqs').update({ state: '안 고침', done_by: m.name, done_at: nowStr(), done_note: txt(a.note).slice(0, 300) }).eq('id', r.id));
+    return { ok: true };
   },
   // v6 (4-6): 두 갈래 재고조사. '무게 잴 타래' = 이번 달 쓴 타래(전체 실사면 모두), '있는지만 확인' = 나머지 (QR만 찍으면 확인됨)
   stocktake: async (_m: Me, a: any) => {
@@ -1109,7 +1181,7 @@ async function dump() {
   const W = await wlExport();
   const coils = await allRows('coils', 'seq'), moves = await allRows('coil_moves', 'seq');
   const specs = await allRows('coil_specs', 'key'), types = await allRows('coil_types', 'sort'), cedits = await allRows('coil_edits', 'id');
-  const P = await people(), slog = await allRows('settings_log', 'id'), plans = await allRows('job_plans', 'job'), stks = await allRows('stk_checks', 'id');
+  const P = await people(), slog = await allRows('settings_log', 'id'), plans = await allRows('job_plans', 'job'), stks = await allRows('stk_checks', 'id'), ereqs = await allRows('edit_reqs', 'id');
   const N = (v: any) => (v === null || v === undefined ? '' : v);
   return [
     { file: W.motor.name, head: W.motor.head, rows: W.motor.rows },
@@ -1120,6 +1192,7 @@ async function dump() {
     { file: '코일재고_코일목록', head: ['번호', '규격(mm)', '선종', '제조사', '공타래(kg)', '현재잔량(kg)', '보관위치', '상태', '등록일', '등록자', '최종변경', '메모', '코일종류'], rows: coils.map((c) => [c.no, c.spec, c.kind, c.maker, N(c.tare), N(c.rem), c.loc, c.status, c.reg_at, c.reg_by, c.changed_at, c.memo, c.ctype]) },
     { file: '코일재고_입출고이력', head: ['이력ID', '일시', '번호', '구분', '규격(mm)', '선종', '작업자', '작업대상', '입력방식', '저울총무게(kg)', '변동량(kg)', '변동전(kg)', '변동후(kg)', '기록자', '메모', '요청ID', 'kW', '수정내역'], rows: moves.map((r) => [r.id, r.at, r.no, r.type, r.spec, r.kind, r.worker, r.target, r.mode, N(r.gross), N(r.delta), N(r.before), N(r.after), r.by, r.memo, r.req_id, r.kw, r.edits && r.edits.length ? JSON.stringify(r.edits) : '']) },
     { file: '코일재고_작업별조합', head: ['작업번호', '원래', '실제', '단면적%', '선종', '기록자', '일시'], rows: plans.map((x) => [x.job, x.orig, x.actual, N(x.ratio), x.kind, x.by, x.at]) },
+    { file: '코일재고_수정요청', head: ['일시', '요청자', '기록ID', '번호', '내용', '처리', '처리자', '처리일시', '메모'], rows: ereqs.map((x) => [x.at, x.who, x.move_id, x.no, x.msg, x.state, x.done_by, x.done_at, x.done_note]) },
     { file: '코일재고_재고조사확인', head: ['월', '번호', '일시', '확인자'], rows: stks.map((x) => [x.month, x.no, x.at, x.by]) },
     { file: '코일재고_규격기준', head: ['규격(mm)', '선종', '안전재고(kg)', '발주상태', '발주일', '발주메모', '코일종류'], rows: specs.map((s) => [s.spec, s.kind, N(s.safety), s.order_state, s.order_at, s.order_memo, s.ctype]) },
     { file: '코일재고_코일종류', head: ['코일종류', '빈 보빈(kg)', '부족 알림(kg)', '메모'], rows: types.map((t) => [t.name, N(t.tare), t.alert === null ? '알림 없음' : t.alert, t.memo]) },
@@ -1191,7 +1264,7 @@ const API: any = {
     addCoil: async (t: any, a: any) => { const d = await findReq(a && a.reqId); return d || onceReq(a && a.reqId, () => addCoil(t, a)); },
     editCoil, cancelMove, setOrder, setSafety, assignNumbers: async () => ({ count: 0, nos: [] }), adminCall: coAdmin,
     getInit: coInit, getJobs: async (t: any) => { await me(t, 'co'); return recentJobs(); }, getStock: async (t: any) => { await me(t, 'co'); return stockCalc(); },
-    getCoil, getHistory, getMonthly, labelData, clientLog, stkSeen,
+    getCoil, getHistory, getMonthly, labelData, clientLog, stkSeen, askEdit,
   },
   st: {
     login: async (n: any, p: any) => { const r = await login('st', n, p); return { token: r.token, name: r.name, mustChange: r.mustChange, sup: r.sup }; },
