@@ -184,7 +184,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
     <!-- v16: 여러 개 한 번에 — 작업번호·kW 한 번, QR 연달아 찍기, 줄마다 저울 무게, [모두 저장] -->
     <div id="batchBox" class="card hide">
       <h3 style="margin-top:0">📦 작업 하나에 쓴 코일</h3>
-      <div class="muted">① 작업을 고르세요 (끝날 때까지 그대로) ② 쓴 타래마다 QR을 찍거나 번호를 넣고, 지금 저울 무게를 넣으세요 ③ [저장]. 선경이 여러 개거나 같은 선경을 여러 타래 써도 계속 쌓으면 됩니다.</div>
+      <div class="muted">① 작업 고르기 (끝날 때까지 그대로) ② 쓴 타래 QR을 <b>모두 연달아</b> 찍기 (번호 넣기도 됨) ③ 타래 번호를 보고 저울 무게를 적기 ④ 아래 [모두 저장] 한 번.</div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><span class="muted">📋 작업기록의 작업 (오늘 + 최근 3일) — 눌러서 고르기</span><button class="btn gray sm" data-jre="1">🔄</button></div><div class="jobs" id="bJobs"></div><div id="bFit"></div>
       <div class="row">
         <div><label>작업번호 <span style="color:var(--red)">*</span></label><input id="bJob" list="tgtList" placeholder="목록에 없으면 직접"></div>
@@ -192,9 +192,11 @@ tr.sub td{background:#fafbfd;font-size:14px}
       </div>
       <button class="btn gray sm" id="bEnd" style="margin-top:6px">✅ 이 작업 끝 (다른 작업 고르기)</button>
       <div id="bList" class="list" style="margin-top:8px"></div>
-      <div class="preview" id="bSum">아직 찍은 코일이 없습니다.</div>
-      <div style="height:12px"></div>
-      <button class="btn" id="bSave" style="font-size:20px;padding:16px">저장</button>
+      <!-- v38: 저장 버튼은 화면 아래에 붙어 있음 (한 손으로 누르기) -->
+      <div id="bBar" style="position:sticky;bottom:0;z-index:5;background:#fff;margin:8px -2px 0;padding:6px 2px 10px;border-top:1px solid var(--line)">
+        <div class="preview" id="bSum" style="margin-top:0">아직 찍은 코일이 없습니다.</div>
+        <button class="btn" id="bSave" style="font-size:21px;padding:16px;margin-top:6px">모두 저장</button>
+      </div>
       <div style="height:8px"></div>
       <button class="btn gray sm" id="bClear">목록 비우기</button>
       <div id="bDone" style="margin-top:12px"></div>
@@ -790,7 +792,9 @@ function setUse(v) {
   $('batchBox').classList.add('hide'); $('stkBox').classList.add('hide');
   $('jobCard').classList.toggle('hide', v !== 'one'); // v31
   if (v === 'many') {
-    BATCH = B_STASH || { items: [], busy: {} }; B_STASH = null;
+    BATCH = B_STASH || { items: [], busy: {} };
+    if (!B_STASH) { try { var kept = JSON.parse(ls('coilinv_batch') || '[]'); if (kept.length) { BATCH.items = kept; toast('📋 저장 안 한 타래 ' + kept.length + '개를 다시 불러왔어요.', 3500); } } catch (e) {} } // v38: 앱이 꺼져도 찍어 둔 목록 유지
+    B_STASH = null;
     $('bJob').value = $('bJob').value || ls('coilinv_job') || ''; $('bKw').value = $('bKw').value || ls('coilinv_kw') || '';
     JOB_MANUAL.b = !!$('bJob').value.trim();
     $('coilBox').classList.add('hide'); CUR = null; $('batchBox').classList.remove('hide');
@@ -942,7 +946,7 @@ function addBatch(no, raw) {
     BATCH.items.push({ coil: c, raw: key, val: '', empty: false });
     autoJob('b', BATCH.items[0].coil.spec);
     renderBatch(); toast('➕ ' + c.no + ' 추가 (' + BATCH.items.length + '개)', 1500);
-    var ins = document.querySelectorAll('#bList .bVal'); if (ins.length && !LIVE) ins[ins.length - 1].focus();
+    // v38: 찍기와 무게 적기를 나눔 — 찍을 때마다 무게 칸으로 가지 않음 (카메라는 켜 둔 채 계속 찍기)
   }, function (e) {
     delete BATCH.busy[key];
     toast(e && (e.net || e.login) ? e.message.replace('[로그인]', '') : no + ' 번 타래를 찾지 못했습니다.', 3500);
@@ -955,31 +959,47 @@ function bCalc(it) {
   if (v < T) return { ok: false, bad: true, msg: '⚠️ 보빈(' + T + 'kg)보다 가벼움' };
   return { ok: true, used: r2(g - v), left: r2(v - T) };
 }
+// v38: 선경별로 묶은 목록. 줄마다 타래 번호 + 큰 무게 칸 (숫자 키패드)
+function bSpecs() { var by = {}, ks = []; (BATCH ? BATCH.items : []).forEach(function (x, i) { var k = String(firstNum(x.coil.spec)); if (!by[k]) { by[k] = []; ks.push(k); } by[k].push(i); }); ks.sort(function (a, b) { return a - b; }); return { by: by, ks: ks }; }
+function bResHtml(x) { var k = bCalc(x); return k.ok ? (x.empty ? '🏁 다 씀 · ' : '') + '쓴 양 <b>' + k.used + 'kg</b> · 남은 선 ' + k.left + 'kg' : esc(k.msg); }
+function bResCss(x) { var k = bCalc(x); return 'margin-top:3px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : k.ok ? '' : 'color:var(--sub)'); }
+function bKeep() { if (!BATCH) return; ls('coilinv_batch', BATCH.items.length ? JSON.stringify(BATCH.items.map(function (x) { return { coil: x.coil, raw: x.raw, val: x.val, empty: x.empty }; })) : null); }
 function renderBatch() {
-  var it = BATCH ? BATCH.items : [];
-  $('bList').innerHTML = it.map(function (x, i) {
-    var c = x.coil, k = bCalc(x);
-    return '<div class="it" data-i="' + i + '"><div class="t"><b style="font-size:17px">' + esc(c.no) + '</b><span>' + esc(c.spec) + 'mm ' + esc(c.kind) + '</span><span><button class="btn gray sm" data-bview="' + i + '">🔎</button> <button class="btn gray sm" data-bdel="' + i + '">✕</button></span></div>' +
-      '<div class="muted">지난번 저울 ' + bLast(c) + 'kg · 남은 선 ' + c.rem + 'kg · 보빈 ' + c.tare + 'kg</div>' +
-      '<div class="row" style="margin-top:6px;align-items:center"><input class="bVal" data-i="' + i + '" inputmode="decimal" placeholder="지금 저울 무게 (kg)" value="' + esc(x.val) + '" style="font-size:20px">' +
-      '<button class="btn gray sm" data-bempty="' + i + '" style="flex:none">🏁 다 씀</button></div>' +
-      '<div class="bRes" style="margin-top:4px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : '') + '">' + (k.ok ? (x.empty ? '🏁 다 씀 · ' : '') + '쓴 양 <b>' + k.used + 'kg</b> · 남은 선 ' + k.left + 'kg' : esc(k.msg)) + '</div></div>';
+  var it = BATCH ? BATCH.items : [], G = bSpecs();
+  $('bList').innerHTML = G.ks.map(function (k) {
+    return '<div style="margin:12px 0 2px;padding:6px 10px;background:var(--pri2);border-radius:8px;font-size:16px"><b>🧵 ' + esc(k) + 'mm</b> · ' + G.by[k].length + '타래 <span data-gsum="' + esc(k) + '" class="muted"></span></div>' +
+      G.by[k].map(function (i) {
+        var x = it[i], c = x.coil;
+        return '<div class="it" data-i="' + i + '" style="padding:8px 0"><div class="t" style="align-items:center"><b style="font-size:20px">' + esc(c.no) + '</b><span class="muted">' + esc(c.kind) + ' · 지난번 ' + bLast(c) + 'kg</span>' +
+          '<span><button class="btn gray sm" data-bview="' + i + '" title="자세히">🔎</button> <button class="btn gray sm" data-bdel="' + i + '" title="빼기">✕</button></span></div>' +
+          '<div class="row" style="margin-top:6px;align-items:center;gap:8px"><input class="bVal" data-i="' + i + '" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="저울 무게 kg" value="' + esc(x.val) + '" style="font-size:24px;height:56px;flex:1;min-width:0">' +
+          '<button class="btn gray" data-bempty="' + i + '" style="flex:none;width:auto;padding:0 12px;height:56px;font-size:15px">🏁 다 씀</button></div>' +
+          '<div class="bRes" style="' + bResCss(x) + '">' + bResHtml(x) + '</div></div>';
+      }).join('');
   }).join('');
-  bSum();
+  bSum(); bKeep();
 }
 function bSum() {
-  var it = BATCH ? BATCH.items : [], tot = 0, ok = 0;
+  var it = BATCH ? BATCH.items : [], tot = 0, ok = 0, G = bSpecs();
   it.forEach(function (x) { var k = bCalc(x); if (k.ok) { ok++; tot += k.used; } });
-  $('bSum').innerHTML = it.length ? '찍은 코일 <b>' + it.length + '개</b> · 무게 넣은 것 ' + ok + '개 · 쓴 양 합계 <b>' + r2(tot) + 'kg</b>' : '아직 찍은 코일이 없습니다. 위에서 QR을 찍으세요.';
-  $('bSave').textContent = it.length ? '저장 (' + it.length + '개)' : '저장';
+  G.ks.forEach(function (k) { var e = document.querySelector('[data-gsum="' + k + '"]'), t = 0; G.by[k].forEach(function (i) { var c = bCalc(it[i]); if (c.ok) t += c.used; }); if (e) e.textContent = t ? '· 쓴 양 ' + r2(t) + 'kg' : ''; });
+  $('bSum').innerHTML = it.length ? '찍은 타래 <b>' + it.length + '개</b> · 무게 적은 것 ' + ok + '개' + (ok < it.length ? ' <span style="color:var(--red)">(남은 ' + (it.length - ok) + '개)</span>' : ' ✔') + ' · 쓴 양 <b>' + r2(tot) + 'kg</b>' : '아직 찍은 타래가 없습니다. 위에서 QR을 연달아 찍으세요.';
+  $('bSave').textContent = it.length ? '모두 저장 (' + it.length + '개)' : '모두 저장';
 }
 $('bList').addEventListener('input', function (e) {
   var x = e.target.closest('.bVal'); if (!x) return;
   var it = BATCH.items[+x.dataset.i]; it.val = x.value; it.empty = false;
-  var k = bCalc(it), row = x.closest('.it').querySelector('.bRes');
-  row.style.cssText = 'margin-top:4px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : '');
-  row.innerHTML = k.ok ? '쓴 양 <b>' + k.used + 'kg</b> · 남은 선 ' + k.left + 'kg' : esc(k.msg);
-  bSum();
+  var row = x.closest('.it').querySelector('.bRes');
+  row.style.cssText = bResCss(it); row.innerHTML = bResHtml(it);
+  bSum(); bKeep();
+});
+// v38: 키패드의 [다음]을 누르면 다음 빈 칸으로
+$('bList').addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter' || !e.target.classList.contains('bVal')) return;
+  e.preventDefault();
+  var all = [].slice.call(document.querySelectorAll('#bList .bVal')), k = all.indexOf(e.target);
+  var nx = all.slice(k + 1).concat(all.slice(0, k)).filter(function (el) { return !el.value.trim(); })[0];
+  if (nx) nx.focus(); else { e.target.blur(); $('bBar').scrollIntoView({ block: 'end' }); }
 });
 $('bList').addEventListener('click', function (e) {
   var bv = e.target.closest('[data-bview]'); if (bv) { openOne(BATCH.items[+bv.dataset.bview].coil.no); return; }
@@ -992,6 +1012,8 @@ $('bSave').onclick = function () {
   var job = jobValue(), kw = $('bKw').value.trim();
   if (!job) return toast('작업번호를 넣어주세요.');
   if (!kw) return toast('kW를 넣어주세요.');
+  var none = BATCH.items.filter(function (x) { return !String(x.val).trim(); });
+  if (none.length) { var f = document.querySelector('#bList .bVal[data-i="' + BATCH.items.indexOf(none[0]) + '"]'); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } return toast('✍️ 무게를 안 적은 타래가 ' + none.length + '개 있어요: ' + none.map(function (x) { return x.coil.no; }).join(', '), 5000); }
   var bad = BATCH.items.filter(function (x) { return !bCalc(x).ok; });
   if (bad.length) return toast('⚠️ ' + bad.map(function (x) { return x.coil.no; }).join(', ') + ' 의 저울 무게를 확인하세요.', 4500);
   var w = [];
@@ -1105,7 +1127,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v37', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v38', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
