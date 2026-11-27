@@ -271,12 +271,12 @@ function ls(k, v) {
 }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 function toast(msg, ms) { var t = document.getElementById('toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, ms || 2500); }
-// v28 깃허브판: 화면은 깃허브에서 바로 뜨고, 자료만 구글(Apps Script)과 주고받음
-var API = 'https://script.google.com/macros/s/AKfycbyd0RPsssmkYegAsfN5EQFJYO3R0e44egM7moJNYQs_L1tfu1fod5QeRUK8j7rHe80/exec';
+// v32: 화면은 깃허브, 자료는 Supabase 서버(api)와 주고받음 (구글 시트에서 옮김)
+var API = 'https://difrlthubqaoeqyprhhj.supabase.co/functions/v1/api';
 function call(fn) {
   var args = Array.prototype.slice.call(arguments, 1);
-  return fetch(API, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ fn: fn, args: args }) })
+  return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ app: 'wl', fn: fn, args: args }) })
     .then(function (r) { return r.json(); })
     .then(function (j) { if (j && j.ok) return j.v; throw (j && j.e) || '서버 응답이 이상합니다'; })
     .catch(function (e) {
@@ -977,7 +977,7 @@ var ADMIN_SECTIONS = [
   { title: '🔒 수정 권한', owner: true, render: admPerm },
   { title: '📝 수정기록 (최근 80건)', owner: true, render: admLog },
   { title: '💾 백업 (매일 밤 자동)', owner: true, render: admBackup },
-  { title: '🔗 바로가기 (시트·사진 폴더)', owner: true, render: admLinks }
+  { title: '🔗 바로가기 (엑셀·사진 폴더·숨길 칸)', owner: true, render: admLinks }
 ];
 function roleName(u) { return u.owner ? '운영자' : u.admin ? '관리자' : '팀원'; }
 function admPerm(el) {
@@ -1007,7 +1007,7 @@ function admLog(el) {
 }
 function admBackup(el) {
   adm('backupInfo').then(function (b) {
-    el.innerHTML = '<div class="note">매일 밤 2~3시에 기록 시트(모터·코일·수정기록·설정, 사진 제외)를 날짜별 폴더에 CSV(엑셀로 열림)로 복사합니다. 최근 30일 + 매달 1일 백업은 남기고, 원본 시트는 절대 지우지 않습니다.</div>' +
+    el.innerHTML = '<div class="note">매일 밤 2~3시에 Supabase 기록(모터·전자브레이크·수정기록·사람·코일, 사진 제외)을 구글 드라이브 날짜별 폴더에 CSV(엑셀로 열림)로 복사합니다. 최근 30일 + 매달 1일 백업은 남기고, 원본 기록은 절대 지우지 않습니다.</div>' +
       '<div style="margin-top:8px"><b>마지막 백업</b><div class="note">' + esc(b.last || '아직 없음') + '</div></div>' +
       '<button class="btn sub" id="bkBtn" onclick="admBackupNow()">💾 지금 백업하기</button>' +
       '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(b.url) + '">📁 백업 폴더 열기 (' + b.count + '개)</a>' +
@@ -1133,14 +1133,44 @@ function admRefresh() {
 }
 function admLinks(el) {
   adm('links').then(function (l) {
-    el.innerHTML = '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(l.sheet) + '">📄 기록 시트 열기</a>' +
-      '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(l.photos) + '">🖼️ 사진 폴더 열기</a>' +
+    el.innerHTML = '<button class="btn sub" id="xlBtn" onclick="wlExcel()">📊 기록 엑셀로 내려받기</button>' +
+      (l.photos ? '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(l.photos) + '">🖼️ 사진 폴더 열기 (구글 드라이브)</a>' : '') +
       '<h3 style="margin:16px 0 4px;font-size:16px">📱 앱 주소 (팀원에게 보낼 주소)</h3>' +
       '<textarea readonly id="siteUrl" rows="2" onclick="this.select()">' + esc(l.site) + '</textarea>' +
       '<button class="btn sub" style="margin-top:6px" onclick="copyMsg(\'siteUrl\')">📋 주소 복사 (카톡에 붙여넣기)</button>' +
-      '<div class="note" style="margin-top:10px">숨길 칸·버튼 목록은 시트의 \'설정\' 탭에서 바꿀 수 있습니다. 앱 속도를 위해 10분 동안 기억해 두므로, 바로 보려면 아래 버튼을 누르세요.</div>' +
-      '<button class="btn sub" id="rfBtn" style="margin-top:6px" onclick="admRefresh()">⚡ 설정 탭 바로 반영</button>';
+      '<h3 style="margin:16px 0 4px;font-size:16px">🧩 숨길 칸 · 버튼 목록</h3>' +
+      '<div class="note">예전 시트 \'설정\' 탭에서 고치던 것입니다. 숨길 칸은 한 줄에 하나 (한쪽만: 모터:리드수, 코일:제조사). 버튼 목록은 한 줄에 <b>칸 제목 = 값, 값</b>.</div>' +
+      '<label>숨길 칸</label><textarea id="lsHidden" rows="4"></textarea>' +
+      '<label>버튼 목록</label><textarea id="lsLists" rows="8"></textarea>' +
+      '<button class="btn sub" id="lsSave" style="margin-top:6px" onclick="admLists()">💾 저장하고 바로 반영</button>';
+    adm('getLists').then(function (r) {
+      document.getElementById('lsHidden').value = (r.hidden || []).join('\n');
+      document.getElementById('lsLists').value = Object.keys(r.lists || {}).map(function (k) { return k + ' = ' + r.lists[k].join(', '); }).join('\n');
+    });
   }).catch(admErr(el));
+}
+function admLists() {
+  var b = document.getElementById('lsSave'); b.disabled = true;
+  adm('setLists', { hidden: document.getElementById('lsHidden').value, lists: document.getElementById('lsLists').value }).then(function () {
+    ls(LS.cfg, null); toast('✅ 저장했습니다. 화면에 바로 반영됩니다', 3000); start();
+  }).catch(function (e) { toast('⚠️ ' + e, 4000); }).then(function () { b.disabled = false; });
+}
+// v32: 기록 엑셀로 내려받기 (운영자) — 모터·전자브레이크·수정기록 세 장
+function wlExcel() {
+  var b = document.getElementById('xlBtn'); b.disabled = true; b.textContent = '⏳ 만드는 중…';
+  var lib = window.XLSX ? Promise.resolve(window.XLSX) : new Promise(function (ok, no) {
+    var sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    sc.onload = function () { ok(window.XLSX); }; sc.onerror = function () { no('엑셀 도구를 받지 못했습니다. 인터넷 연결을 확인해 주세요.'); };
+    document.head.appendChild(sc);
+  });
+  Promise.all([adm('exportAll'), lib]).then(function (a) {
+    var r = a[0], X = a[1], wb = X.utils.book_new();
+    [['motor', '모터'], ['coil', '전자브레이크'], ['edits', '수정기록']].forEach(function (k) {
+      var t = r[k[0]]; X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([t.head].concat(t.rows)), k[1]);
+    });
+    var d = new Date(); X.writeFile(wb, '작업기록_' + d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) + '.xlsx');
+    toast('📊 엑셀 파일을 받았습니다 (휴대폰 [다운로드] 폴더)', 4000);
+  }).catch(function (e) { toast('⚠️ ' + e, 4500); }).then(function () { b.disabled = false; b.textContent = '📊 기록 엑셀로 내려받기'; });
 }
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});
 </script>

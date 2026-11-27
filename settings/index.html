@@ -125,8 +125,8 @@ var tmT;function toast(m,err){var t=$('toast');t.textContent=m;t.className='toas
 // 깃허브판: 설정방 서버(doPost)와 자료만 주고받음. 운영자 확인은 서버에서 함
 function call(fn,args,ok){
   $('busy').className='busy on';
-  fetch('https://script.google.com/macros/s/AKfycbyxbx3u1GLO8q8ANDY3cVfcuDvkB7rdwe24DY3M8ribtqwOMx9-V6BA3I5BDmmyH5RT/exec',
-    {method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({fn:fn,args:args})})
+  fetch('https://difrlthubqaoeqyprhhj.supabase.co/functions/v1/api', // Supabase 서버 (구글 시트에서 옮김)
+    {method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({app:'st',fn:fn,args:args})})
     .then(function(r){return r.json()})
     .then(function(j){$('busy').className='busy';if(j&&j.ok)return ok&&ok(j.v);fail(String((j&&j.e)||'서버 응답이 이상합니다'))},
           function(){$('busy').className='busy';fail('인터넷 연결을 확인해 주세요.')});

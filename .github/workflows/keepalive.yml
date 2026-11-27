@@ -1,0 +1,23 @@
+# Supabase 무료 서버는 7일 동안 아무도 안 쓰면 잠듭니다. 3일마다 한 번 깨워 둡니다.
+# 주소는 깃허브 Secrets의 SUPABASE_API_URL 에 넣어 둡니다 (코드에는 안 씀).
+name: Supabase 깨우기
+on:
+  schedule:
+    - cron: '17 21 */3 * *'   # 3일마다, 한국 시각 아침 6시 17분쯤
+  workflow_dispatch: {}
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 서버 확인
+        env:
+          API: ${{ secrets.SUPABASE_API_URL }}
+        run: |
+          if [ -z "$API" ]; then echo "SUPABASE_API_URL 비밀값이 없습니다"; exit 1; fi
+          for i in 1 2 3; do
+            out=$(curl -s -m 30 -X POST -H 'Content-Type: text/plain;charset=utf-8' --data '{"app":"sys","fn":"ping","args":[]}' "$API") || true
+            echo "$out"
+            echo "$out" | grep -q '"ok":true' && exit 0
+            sleep 20
+          done
+          exit 1
