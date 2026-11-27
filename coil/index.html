@@ -287,6 +287,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
         <button class="btn" id="mSave">저장</button>
       </details>
       <details class="card"><summary>🕘 이 타래 최근 기록</summary><div class="list" id="cHist"></div></details>
+      <button class="btn gray hide" id="voidBtn" style="margin-top:10px;color:var(--red)">🗑️ 잘못 등록 취소 (운영자·관리자)</button>
     </div>
   </section>
 
@@ -1438,7 +1439,7 @@ function showCoil(r) {
   $('cTare').innerHTML = c.tareSet && !c.tare ? '보빈 없음' : c.tareSet ? '보빈 포함 <b>' + r2(c.rem + c.tare) + 'kg</b> (보빈 ' + c.tare + 'kg)' : '<span style="color:var(--org)">빈 보빈 무게 미정</span>';
   $('tareBox').classList.toggle('hide', !!c.tareSet); $('tbKg').value = ''; delete $('tbKg').dataset.name;
   [].forEach.call($('tbBob').querySelectorAll('button'), function (x) { x.classList.remove('on'); });
-  $('cTags').innerHTML = '<span class="tag ' + (c.status === '소진' ? 'red' : 'grn') + '">' + esc(c.status) + '</span>' + (c.type && c.type !== '일반 환선' ? '<span class="tag org">' + esc(c.type) + '</span>' : '') +
+  $('cTags').innerHTML = '<span class="tag ' + (c.status === '소진' || c.status === '등록취소' ? 'red' : 'grn') + '">' + esc(c.status) + '</span>' + (c.type && c.type !== '일반 환선' ? '<span class="tag org">' + esc(c.type) + '</span>' : '') +
     (c.loc ? '<span class="tag">📍' + esc(c.loc) + '</span>' : '') + (c.maker ? '<span class="tag">' + esc(c.maker) + '</span>' : '') +
     (c.memo ? '<div class="muted" style="margin-top:4px">' + esc(c.memo) + '</div>' : '');
   $('eSpec').value = c.spec; $('eKind').value = c.kind; $('eTare').value = c.tareSet ? c.tare : ''; $('eMaker').value = c.maker; $('eType').value = c.type || '일반 환선'; $('eLoc').value = c.loc; $('eMemo').value = c.memo; segSet('eStatus', c.status);
@@ -1447,6 +1448,13 @@ function showCoil(r) {
   var older = c.status === '소진' ? [] : sameGroup(c).filter(function (x) { return x.no !== c.no && x.status !== '소진' && x.reg && c.reg && x.reg < c.reg; });
   if (older.length) $('cTags').insertAdjacentHTML('beforeend', '<div style="margin-top:6px;color:var(--org);font-weight:700">💡 같은 규격 ' + older.map(function (x) { return esc(x.no); }).slice(0, 3).join(', ') + ' 이(가) 먼저 들어왔어요. 그것부터 쓰세요.</div>');
   $('cHist').innerHTML = histHtml(r.history, true) || '<div class="muted">아직 기록이 없습니다.</div>';
+  // v57: 잘못 등록 취소 — 관리자, 한 번도 안 쓴 타래에만 버튼. 취소된 타래는 쓰기 칸을 숨기고 빨간 안내
+  var VOID = c.status === '등록취소';
+  var used = (r.history || []).some(function (o) { return ['출고', '입고', '실사조정'].indexOf(o.type) >= 0 && !o.cancelled; });
+  $('voidBtn').classList.toggle('hide', !(ME && ME.admin) || VOID || used);
+  $('editToggle').classList.toggle('hide', !(ME && ME.admin) || VOID);
+  $('useCard').classList.toggle('hide', VOID);
+  if (VOID) { $('tareBox').classList.add('hide'); $('cTags').insertAdjacentHTML('beforeend', '<div class="warn" style="margin-top:6px">🗑️ 잘못 등록해서 취소한 타래입니다. 재고·사용량에 안 잡히고 쓸 수 없어요. 라벨을 떼어 주세요.</div>'); }
   $('mVal').value = ''; $('mMemo').value = ''; $('uVal').value = ''; $('uMemo').value = '';
   updPrev(); uPrev(); autoJob('u', c.spec);
 }
@@ -1457,6 +1465,13 @@ function showLocal() {
   updPrev(); uPrev();
 }
 $('editToggle').onclick = function () { $('editBox').classList.toggle('hide'); };
+$('voidBtn').onclick = function () {
+  if (!CUR) return;
+  var why = prompt(CUR.no + ' 등록을 취소합니다.\n재고·월별 사용량·입고 어디에도 안 잡히고, 기록(누가·언제·왜)은 남습니다.\n\n왜 취소하나요? (예: 두 번 등록함, 규격 잘못 넣어 새로 등록함)');
+  if (why === null) return; if (!why.trim()) return toast('취소하는 이유를 적어 주세요.');
+  if (!confirm(CUR.no + ' (' + CUR.spec + 'mm ' + CUR.rem + 'kg) 등록을 취소할까요?')) return;
+  admin('voidCoil', { no: CUR.no, why: why.trim() }).then(function () { toast('🗑️ ' + CUR.no + ' 등록을 취소했습니다. 라벨을 떼어 주세요.', 4000); refreshStock(); loadCoil(CUR.no); }, function () {});
+};
 seg('eStatus');
 $('eSave').onclick = function () {
   var st = $('eStatus').querySelector('.on');
@@ -1510,7 +1525,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v56', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v57', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];

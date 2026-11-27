@@ -433,7 +433,7 @@ async function wlAdmin(token: any, action: string, args: any) {
 }
 
 // ═════════════════ 코일 관리 앱 (co) ═════════════════
-const ST_USE = '사용중', ST_EMPTY = '소진', TYPE_DEF = '일반 환선';
+const ST_USE = '사용중', ST_EMPTY = '소진', ST_VOID = '등록취소', TYPE_DEF = '일반 환선';
 const TYPES = ['출고', '입고', '실사조정'];
 // v3 (3단계): 인롤 종류는 coil_types 표의 spec(규격)·unit(1대당 무게)로 정함. 관리 화면에서 이름·규격·1대당 무게를 고칠 수 있음.
 const TYPE_ALIAS: any = { 'in-roll 환선': '인롤 4.5 환선', 'in-roll 나각선': '인롤 3.5×7 평각선', 'in-roll 4.0 환선': '인롤 4.5 환선', 'in-roll 3.0×7.3 나각선': '인롤 3.5×7 평각선' };
@@ -443,7 +443,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v54';
+const CO_VERSION = 'v55';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -484,6 +484,7 @@ async function readCoils(T?: any[]) {
   for (let from = 0; ; from += 1000) {
     const r: any[] = await q(db.from('coils').select('*').order('seq').range(from, from + 999));
     r.forEach((c) => {
+      if (c.status === ST_VOID) return; // v8: 잘못 등록해서 취소한 타래는 어디에도 안 셈
       const t = typeOf(T!, c.ctype), t0 = c.tare === null || c.tare === undefined ? NaN : Number(c.tare);
       const noTare = t.tare != null && (!isFinite(t0) || (t0 <= 0 && t.tare > 0)), tare = noTare ? t.tare : isFinite(t0) ? t0 : 0;
       out.push({ no: String(c.no).toUpperCase(), spec: specTxt(c.spec), kind: c.kind, maker: c.maker, type: t.name, tare, tareSet: true, tareDef: noTare,
@@ -670,6 +671,7 @@ async function saveMove(token: any, a: any) {
   const S = await coSet(), T = await coTypes(), no = normNo(a.no, S);
   const row: any = await q(db.from('coils').select('*').eq('no', no).maybeSingle());
   if (!row) err(no + ' 번 타래가 없습니다.');
+  if (row.status === ST_VOID) err(no + ' 번은 잘못 등록해서 취소한 타래입니다. 쓸 수 없어요. 라벨을 떼어 주세요.');
   const c = await readCoilRow(row, T);
   const before = r2(c.rem), gross = a.mode === 'gross';
   let after: number, tareMsg = '';
@@ -870,6 +872,27 @@ async function editMove(m: Me, a: any) {
   if (a.reqId) await q(db.from('edit_reqs').update({ state: '고침', done_by: m.name, done_at: e.at }).eq('id', Number(a.reqId)));
   return { ok: true, ch };
 }
+// v8: 잘못 등록 취소 (관리자, 한 번도 안 쓴 타래만). 등록 기록을 '취소'로 지워진 셈 처리 → 재고·월별 입고·사용량 어디에도 안 잡힘.
+// 코일 줄과 기록은 지우지 않고 상태 '등록취소'로 남김 (누가·언제·왜)
+async function voidCoil(m: Me, a: any) {
+  const S = await coSet(), no = normNo(a.no, S), why = txt(a.why).slice(0, 300);
+  if (!why) err('왜 취소하는지 적어 주세요. (예: 두 번 등록함)');
+  const row: any = await q(db.from('coils').select('*').eq('no', no).maybeSingle());
+  if (!row) err(no + ' 번 타래가 없습니다.');
+  if (row.status === ST_VOID) err('이미 등록 취소한 타래입니다.');
+  const mv: any[] = await q(db.from('coil_moves').select('id,type,cancel_of').eq('no', no).order('seq').limit(5000));
+  const cancelled: any = {}; mv.forEach((x) => { if (x.cancel_of) cancelled[x.cancel_of] = 1; });
+  const used = mv.filter((x) => TYPES.indexOf(x.type) >= 0 && !cancelled[x.id]);
+  if (used.length) err(no + ' 번은 이미 쓰거나 무게를 맞춘 기록이 ' + used.length + '건 있어서 등록 취소를 할 수 없습니다. (쓴 기록은 남아야 해요)');
+  const reg = mv.find((x) => x.type === '신규등록' && !cancelled[x.id]);
+  const T = await coTypes(), c = await readCoilRow(row, T), before = r2(c.rem), now = nowStr();
+  const upd: any[] = await q(db.from('coils').update({ rem: 0, status: ST_VOID, changed_at: now }).eq('no', no).eq('rem', row.rem).select('no'));
+  if (!upd.length) err('방금 다른 사람이 이 타래를 바꿨습니다. 다시 열고 해 주세요.');
+  await logRow({ no, type: '취소', spec: c.spec, kind: c.kind, worker: m.name, target: '', mode: '', gross: '', delta: r2(-before), before, after: 0, by: m.name,
+    memo: '[등록 취소] ' + why, cancelOf: reg ? reg.id : '' });
+  await q(db.from('coil_edits').insert({ at: now, who: m.name, no, field: '등록 취소', before: c.status + ' ' + before + 'kg', after: ST_VOID + ' (' + why + ')' }));
+  return { ok: true, no };
+}
 async function cancelMove(token: any, id: any) {
   const m = await me(token, 'co');
   const o = (await history({ id }, 1))[0];
@@ -961,6 +984,7 @@ const CO_ADMIN: any = {
     return { count: r.length };
   },
   editMove: async (m: Me, a: any) => editMove(m, a),
+  voidCoil: async (m: Me, a: any) => voidCoil(m, a),
   editReqs: async () => {
     const open: any[] = await q(db.from('edit_reqs').select('*').eq('state', '').order('id').limit(200));
     const done: any[] = await q(db.from('edit_reqs').select('*').neq('state', '').order('id', { ascending: false }).limit(20));
