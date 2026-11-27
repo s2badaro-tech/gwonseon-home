@@ -193,13 +193,14 @@ tr.sub td{background:#fafbfd;font-size:14px}
     <!-- v18: 한 달 재고 조사 (관리자) — QR 찍고 저울 무게만 → 실사조정으로 저장, 이번 달 몇 개 확인했는지 -->
     <div id="stkBox" class="card hide">
       <h3 style="margin-top:0">📋 한 달 재고 조사</h3>
-      <div class="muted">한 달에 한 번, 모든 타래를 저울에 올려 앱 숫자와 맞춥니다. QR을 연달아 찍거나 아래 ‘아직 안 잰 타래’를 누르세요. 줄마다 저울 무게(보빈째)만 넣고 [모두 저장].</div>
+      <div class="muted">QR을 찍으세요. <b>⚖️ 무게 잴 타래</b>(이번 달 쓴 것)는 바로 저울 무게 칸이 열리고, <b>👀 있는지만 확인</b>할 타래는 찍기만 하면 확인됩니다. 중간에 멈춰도 다음에 이어서 할 수 있어요.</div>
+      <div class="seg" id="stkFull" style="margin-top:8px"><button data-v="0">이번 달 조사</button><button data-v="1">전체 실사 (분기·반기)</button></div>
       <div class="preview" id="stkProg" style="margin-top:8px">불러오는 중…</div>
-      <div id="stkList" class="list" style="margin-top:8px"></div>
-      <div style="height:10px"></div>
-      <button class="btn" id="stkSave" style="font-size:20px;padding:16px">모두 저장</button>
-      <details class="card" style="margin:10px 0 0" id="stkTodoBox"><summary>⏳ 아직 안 잰 타래</summary><div class="list" id="stkTodo"></div></details>
+      <div id="stkNow" style="margin-top:8px"></div>
+      <div id="stkShelves" style="margin-top:8px"></div>
       <details class="card" style="margin:10px 0 0"><summary>✅ 이번 달 잰 타래</summary><div class="list" id="stkDone"></div></details>
+      <button class="btn gray" id="stkResultBtn" style="margin-top:10px">📄 결과 보기 (무게 차이 · 안 찾은 타래)</button>
+      <div id="stkResult"></div>
     </div>
     <!-- v16: 여러 개 한 번에 — 작업번호·kW 한 번, QR 연달아 찍기, 줄마다 저울 무게, [모두 저장] -->
     <div id="batchBox" class="card hide">
@@ -1039,7 +1040,7 @@ var BATCH = null, B_WARN = 0;
 function jobValue() { return $('bJob').value.trim(); }
 function bLast(c) { return r2(c.rem + c.tare); }
 var USE_MODE = 'one';
-function modeBusy() { return (BATCH && BATCH.items.length) ? '찍어 둔 ' + BATCH.items.length + '개 목록' : (STK && STK.items.length) ? '재고 조사에 찍어 둔 ' + STK.items.length + '개' : ''; }
+function modeBusy() { return (BATCH && BATCH.items.length) ? '찍어 둔 ' + BATCH.items.length + '개 목록' : (STK && STK.cur && STK.cur.val) ? '재고 조사에서 무게를 넣다 만 ' + STK.cur.x.no : ''; }
 var B_STASH = null; // v37: 타래 보기로 잠깐 갈 때 찍어 둔 목록을 보관
 seg('useMode', setUse);
 function setUse(v) {
@@ -1061,10 +1062,10 @@ function setUse(v) {
     $('scanHint').textContent = 'QR을 연달아 찍으세요. 안 되면 번호를 넣고 [추가].'; $('coilGo').textContent = '추가';
     renderBatch(); renderJobs('b', BATCH.items[0] ? BATCH.items[0].coil.spec : ''); loadDone();
   } else if (v === 'stk') {
-    STK = { items: [], busy: {}, info: null };
+    STK = { info: null, cur: null };
     $('coilBox').classList.add('hide'); CUR = null; $('stkBox').classList.remove('hide');
     $('scanHint').textContent = '재고 조사: QR을 연달아 찍으세요. 안 되면 번호를 넣고 [추가].'; $('coilGo').textContent = '추가';
-    renderStk(); loadStk();
+    segSet('stkFull', stkFull() ? '1' : '0'); $('stkNow').innerHTML = ''; $('stkShelves').innerHTML = ''; $('stkResult').innerHTML = ''; loadStk();
   } else {
     $('coilGo').textContent = '찾기';
     $('scanHint').textContent = 'QR이 안 되면 라벨 아래 번호를 넣으세요.';
@@ -1132,92 +1133,141 @@ $('bEnd').onclick = function () {
 };
 // ── v18: 한 달 재고 조사 ──
 var STK = null;
+// v55 (4-6): 두 갈래 재고조사 — ⚖️ 무게 잴 타래(이번 달 쓴 것) / 👀 있는지만 확인(안 쓴 것). 찍을 때마다 바로 저장 → 다음 날 이어서
+function stkFull() { return ls('coilinv_stkfull') === '1'; }
+seg('stkFull', function (v) {
+  if (STK && STK.cur && STK.cur.val && !confirm('넣다 만 무게가 있어요. 그래도 바꿀까요?')) { segSet('stkFull', stkFull() ? '1' : '0'); return; }
+  ls('coilinv_stkfull', v === '1' ? '1' : null); segSet('stkFull', v);
+  if (v === '1') toast('전체 실사: 모든 타래를 저울에 올립니다 (분기·반기에 한 번)', 3500);
+  if (STK) { STK.info = null; STK.cur = null; $('stkNow').innerHTML = ''; $('stkProg').textContent = '불러오는 중…'; loadStk(); }
+});
 function loadStk() {
-  admin('stocktake').then(function (r) { if (!STK) return; STK.info = r; renderStkInfo(); }, function () {});
+  admin('stocktake', { full: stkFull() }).then(function (r) { if (!STK) return; STK.info = r; stkLocal(); renderStkInfo(); },
+    function () { if (STK && !STK.info) $('stkProg').innerHTML = '📵 조사 목록을 못 불러왔어요. 신호를 확인하고 [📋 재고조사]를 다시 누르세요.'; });
 }
-function stkLine(c, extra) { return '<b>' + esc(c.no) + '</b> ' + esc(c.spec) + 'mm ' + esc(c.kind || '') + ' · ' + c.rem + 'kg' + (c.loc ? ' · 📍' + esc(c.loc) : '') + (extra || ''); }
-function renderStkInfo() {
+// 휴대폰에만 보관된(아직 안 올라간) 조사도 '끝남'으로 보이게
+function stkLocal() {
   var r = STK.info; if (!r) return;
-  var tot = r.todo.length + r.checked.length;
-  $('stkProg').innerHTML = '<b>' + esc(r.month) + '</b> 재고 조사: <b>' + r.checked.length + ' / ' + tot + '</b> 타래 확인' + (r.todo.length ? ' · 남은 것 ' + r.todo.length + '개' : ' 🎉 다 했어요') +
-    (r.checked.length ? '<br>앱보다 많았던 양 +' + r.plus + 'kg · 적었던 양 ' + r.minus + 'kg' : '');
-  $('stkTodo').innerHTML = r.todo.map(function (c) { return '<div class="it"><a href="#" data-stk="' + esc(c.no) + '">' + stkLine(c, c.tareSet ? '' : ' <span class="tag red">빈 보빈 무게 없음</span>') + '</a></div>'; }).join('') || '<div class="muted">없습니다 👍</div>';
-  $('stkDone').innerHTML = r.checked.map(function (c) { return '<div class="it">' + stkLine(c) + ' <span class="tag ' + (Math.abs(c.diff) < 0.05 ? 'grn' : 'org') + '">' + (c.diff > 0 ? '+' : '') + c.diff + 'kg</span> <span class="muted">' + esc(c.at) + ' ' + esc(c.by || '') + '</span></div>'; }).join('') || '<div class="muted">아직 없습니다.</div>';
-}
-function addStk(no, raw) {
-  no = String(no || '').trim().toUpperCase(); if (!no) return toast('번호를 넣어주세요.');
-  var key = raw || no;
-  if (STK.busy[key]) return;
-  var dup = STK.items.filter(function (it) { return it.coil.no === no || it.raw === key; })[0];
-  if (dup) return bToast('⚠️ ' + dup.coil.no + ' 는 이미 목록에 있어요.');
-  STK.busy[key] = 1;
-  rawCall('getCoil', [ls(TK), no]).then(function (r) {
-    delete STK.busy[key]; var c = r.coil;
-    if (STK.items.some(function (it) { return it.coil.no === c.no; })) return bToast('⚠️ ' + c.no + ' 는 이미 목록에 있어요.');
-    if (!c.tareSet) return toast('⛔ ' + c.no + ' 는 빈 보빈 무게가 없어요. 타래를 열고 ✏️ 정보 수정에서 빈 보빈 무게를 넣어 주세요.', 5000);
-    var was = STK.info && STK.info.checked.filter(function (x) { return x.no === c.no; })[0];
-    if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}
-    STK.items.push({ coil: c, raw: key, val: '' });
-    renderStk(); toast('➕ ' + c.no + ' 추가' + (was ? ' (이번 달 이미 잰 타래)' : '') + ' (' + STK.items.length + '개)', 2000);
-    var ins = document.querySelectorAll('#stkList .sVal'); if (ins.length && !LIVE) ins[ins.length - 1].focus();
-  }, function (e) {
-    delete STK.busy[key];
-    toast(e && (e.net || e.login) ? e.message.replace('[로그인]', '') : no + ' 번 타래를 찾지 못했습니다.', 3500);
+  getQ().forEach(function (q) {
+    var x = stkFind(q.a.no); if (!x) return;
+    if (q.fn === 'stkSeen' && !x.done) x.done = 'c';
+    if (q.fn === 'saveMove' && q.a.type === '실사조정' && q.a.target === r.tag) { x.done = 'w'; x.diff = q.a.diff; x.at = '휴대폰 보관'; }
   });
 }
+function stkFind(no) {
+  if (!STK || !STK.info) return null;
+  no = String(no || '').trim().toUpperCase(); var L = STK.info.items;
+  var hit = L.filter(function (x) { return String(x.no).toUpperCase() === no; })[0]; if (hit) return hit;
+  var m = no.match(/(\d+)\s*$/); if (!m) return null;
+  var d = Number(m[1]), p = no.slice(0, m.index).replace(/[-\s]/g, '');
+  return L.filter(function (x) { var k = String(x.no).match(/(\d+)$/); return k && Number(k[1]) === d && (!p || String(x.no).toUpperCase().replace(/[-\s]/g, '').indexOf(p) === 0); })[0] || null;
+}
+function stkLine(c, extra) { return '<b>' + esc(c.no) + '</b> ' + esc(c.spec) + 'mm ' + (c.kind && c.kind !== 'AIW' ? esc(c.kind) + ' ' : '') + '· ' + c.rem + 'kg' + (extra || ''); }
+function stkCount(L, g) { var a = L.filter(function (x) { return x.g === g; }); return { n: a.length, d: a.filter(function (x) { return x.done; }).length }; }
+var STK_OPEN = {};
+function renderStkInfo() {
+  var r = STK.info; if (!r) return;
+  var W = stkCount(r.items, 'w'), C = stkCount(r.items, 'c');
+  $('stkProg').innerHTML = '<b>' + esc(r.month) + '</b> ' + (r.full ? '<b style="color:var(--org)">전체 실사</b>' : '재고 조사') +
+    '<div style="font-size:18px;margin-top:4px">⚖️ 무게 잴 것 <b>' + W.n + '개 중 ' + W.d + '개</b></div>' +
+    (r.full ? '' : '<div style="font-size:18px">👀 확인할 것 <b>' + C.n + '개 중 ' + C.d + '개</b></div>') +
+    (W.d === W.n && C.d === C.n && W.n + C.n ? '<div style="color:var(--grn);font-weight:900;margin-top:4px">🎉 다 했어요! 아래 [결과 보기]를 누르세요.</div>' : '');
+  var S = {}, sl = [];
+  r.items.forEach(function (x) { var k = x.loc || '(선반 없음)'; if (!S[k]) { S[k] = []; sl.push(k); } S[k].push(x); });
+  $('stkShelves').innerHTML = sl.map(function (k) {
+    var L = S[k], left = L.filter(function (x) { return !x.done; }), w = stkCount(L, 'w'), c = stkCount(L, 'c'), all = !left.length;
+    var open = STK_OPEN[k] != null ? STK_OPEN[k] : !all;
+    return '<details class="card stkShelf" data-shelf="' + esc(k) + '" style="margin:8px 0 0' + (all ? ';opacity:.75' : '') + '"' + (open ? ' open' : '') + '><summary>' + (all ? '✅ ' : '📍 ') + esc(k) + ': ' + L.length + '개 중 ' + (L.length - left.length) + '개 완료' +
+      '<div class="muted" style="font-weight:400;font-size:13px">⚖️ ' + w.d + '/' + w.n + (r.full ? '' : ' · 👀 ' + c.d + '/' + c.n) + '</div></summary>' +
+      (left.length ? '<div class="list">' + left.map(function (x) {
+        return x.g === 'w' ? '<div class="it"><a href="#" data-stkw="' + esc(x.no) + '">⚖️ ' + stkLine(x, x.tareSet ? '' : ' <span class="tag red">빈 보빈 무게 없음</span>') + '</a></div>'
+          : '<div class="it"><a href="#" data-stkc="' + esc(x.no) + '">👀 ' + stkLine(x) + '</a></div>';
+      }).join('') + '</div>' : '<div class="muted">이 선반은 끝났어요.</div>') + '</details>';
+  }).join('') || '<div class="muted">조사할 타래가 없습니다.</div>';
+  var D = r.items.filter(function (x) { return x.done === 'w'; });
+  $('stkDone').innerHTML = D.map(function (c) { var a = Math.abs(n(c.diff) || 0); return '<div class="it">' + stkLine(c, c.loc ? ' · 📍' + esc(c.loc) : '') + ' <span class="tag ' + (a < 0.05 ? 'grn' : a > 1 ? 'red' : 'org') + '">' + (c.diff > 0 ? '+' : '') + (c.diff == null ? '?' : c.diff) + 'kg</span> <span class="muted">' + esc(c.at || '') + ' ' + esc(c.by || '') + '</span></div>'; }).join('') || '<div class="muted">아직 잰 타래가 없습니다.</div>';
+  if ($('stkResult').innerHTML) stkResult();
+}
+$('stkShelves').addEventListener('click', function (e) {
+  var sm = e.target.closest('summary'); if (sm) { var d = sm.parentNode; STK_OPEN[d.dataset.shelf] = !d.open; return; } // 손으로 열고 닫은 것만 기억
+  var a = e.target.closest('[data-stkw]'); if (a) { e.preventDefault(); addStk(a.dataset.stkw); return; }
+  var c = e.target.closest('[data-stkc]'); if (c) { e.preventDefault(); if (confirm(c.dataset.stkc + ' — QR 없이 눈으로 보고 "있음"으로 할까요?')) addStk(c.dataset.stkc, null, true); }
+});
+function addStk(no, raw, hand) {
+  no = String(no || '').trim().toUpperCase(); if (!no) return toast('번호를 넣어주세요.');
+  if (!STK.info) return toast('조사 목록을 불러오는 중이에요. 잠시 뒤에 찍어 주세요.');
+  var x = stkFind(no);
+  if (!x) { buzz([220, 90, 220]); flash('flashR'); return toast('⛔ ' + no + ' 는 이번 조사 목록에 없어요 (다 쓴 타래이거나 번호가 틀림).', 4000); }
+  if (x.g === 'c') {
+    if (x.done) { dupScan(x.no); return bToast('👀 ' + x.no + ' 는 이미 확인했어요.'); }
+    x.done = 'c'; x.at = '방금'; x.by = ME.name; okScan();
+    submit('stkSeen', { no: x.no, reqId: newReq() }, x.no + ' 재고 확인').then(function () {}, function () { x.done = ''; renderStkInfo(); });
+    toast('✅ ' + x.no + ' 확인됨 (' + (x.loc || '선반 없음') + ')', 1800); renderStkInfo(); return;
+  }
+  // ⚖️ 무게 잴 타래 → 바로 무게 칸
+  if (STK.cur && STK.cur.val && STK.cur.x.no !== x.no) { dupScan(STK.cur.x.no); return toast('⚠️ ' + STK.cur.x.no + ' 무게를 먼저 [저장]하거나 [닫기]를 누르세요.', 3500); }
+  if (STK.cur && STK.cur.x.no === x.no) { dupScan(x.no); return; }
+  if (!x.tareSet) return toast('⛔ ' + x.no + ' 는 빈 보빈 무게가 없어요. 타래를 열고 ✏️ 정보 수정에서 빈 보빈 무게를 넣어 주세요.', 5000);
+  okScan();
+  if (x.done === 'w') toast('이번 달 이미 잰 타래예요. 다시 재면 한 번 더 맞춥니다.', 3000);
+  STK.cur = { x: x, val: '', warned: false }; renderNow();
+  setTimeout(function () { var i = $('stkVal'); if (i) { i.focus(); i.scrollIntoView({ block: 'center' }); } }, 50);
+}
 function sCalc(it) {
-  var v = n(it.val), c = it.coil;
+  var v = n(it.val), c = it.x;
   if (!isFinite(v) || v <= 0) return { ok: false, msg: '저울 무게를 넣으세요' };
   if (v < c.tare) return { ok: false, bad: true, msg: '⚠️ 보빈(' + c.tare + 'kg)보다 가벼움' };
   var left = r2(v - c.tare), d = r2(left - c.rem);
   return { ok: true, left: left, diff: d };
 }
 function sRes(k) {
-  if (!k.ok) return esc(k.msg);
+  if (!k.ok) return '<span' + (k.bad ? ' style="color:var(--red);font-weight:700"' : '') + '>' + esc(k.msg) + '</span>';
   var a = Math.abs(k.diff);
-  return '실제 남은 선 <b>' + k.left + 'kg</b> · ' + (a < 0.05 ? '<span style="color:var(--grn)">✔ 앱과 맞음</span>' : '앱보다 <b style="color:var(--org)">' + a + 'kg ' + (k.diff > 0 ? '많음' : '적음') + '</b>');
+  return (a > 1 ? '<div class="short" style="font-size:17px;font-weight:900">⚠️ 앱과 ' + r2(a) + 'kg 차이 — 다시 재보세요</div>' : '') +
+    '실제 남은 선 <b>' + k.left + 'kg</b> · ' + (a < 0.05 ? '<span style="color:var(--grn)">✔ 앱과 맞음</span>' : '앱보다 <b style="color:var(--org)">' + a + 'kg ' + (k.diff > 0 ? '많음' : '적음') + '</b>');
 }
-function renderStk() {
-  var it = STK ? STK.items : [];
-  $('stkList').innerHTML = it.map(function (x, i) {
-    var c = x.coil, k = sCalc(x);
-    return '<div class="it"><div class="t"><b style="font-size:17px">' + esc(c.no) + '</b><span>' + esc(c.spec) + 'mm ' + esc(c.kind) + (c.loc ? ' · 📍' + esc(c.loc) : '') + '</span><button class="btn gray sm" data-sdel="' + i + '">✕</button></div>' +
-      '<div class="muted">앱 숫자: 남은 선 ' + c.rem + 'kg + 보빈 ' + c.tare + 'kg = 저울 ' + bLast(c) + 'kg 이어야 함</div>' +
-      '<input class="sVal" data-i="' + i + '" inputmode="decimal" placeholder="지금 저울 무게 (보빈째, kg)" value="' + esc(x.val) + '" style="font-size:20px;margin-top:6px">' +
-      '<div class="sRes" style="margin-top:4px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : '') + '">' + sRes(k) + '</div></div>';
-  }).join('') || '<div class="muted">아직 사용 보빈이 없습니다. 위에서 QR을 찍으세요.</div>';
-  $('stkSave').textContent = it.length ? '모두 저장 (' + it.length + '개)' : '모두 저장';
+function renderNow() {
+  var cur = STK && STK.cur; if (!cur) { $('stkNow').innerHTML = ''; return; }
+  var c = cur.x, k = sCalc(cur);
+  $('stkNow').innerHTML = '<div class="it" style="border:3px solid var(--pri);border-radius:12px;padding:10px">' +
+    '<div class="t"><b style="font-size:22px">⚖️ ' + esc(c.no) + '</b><span>' + esc(c.spec) + 'mm ' + esc(c.kind || '') + (c.loc ? ' · 📍' + esc(c.loc) : '') + '</span></div>' +
+    '<div class="muted">앱 숫자: 남은 선 ' + c.rem + 'kg + 보빈 ' + c.tare + 'kg = 저울 ' + r2(c.rem + c.tare) + 'kg 이어야 함</div>' +
+    '<input id="stkVal" inputmode="decimal" placeholder="지금 저울 무게 (보빈째, kg)" value="' + esc(cur.val) + '" style="font-size:24px;margin-top:6px">' +
+    '<div id="stkCalc" style="margin-top:6px;font-size:15px">' + sRes(k) + '</div>' +
+    '<div class="row" style="margin-top:8px"><button class="btn" id="stkOk" style="font-size:20px;padding:15px">' + (cur.warned ? '다시 쟀어요, 저장' : '저장하고 다음') + '</button><button class="btn gray" id="stkClose" style="flex:0 0 30%">닫기</button></div></div>';
+  $('stkVal').oninput = function () { cur.val = this.value; cur.warned = false; $('stkOk').textContent = '저장하고 다음'; $('stkCalc').innerHTML = sRes(sCalc(cur)); };
+  $('stkVal').onkeydown = function (e) { if (e.key === 'Enter') $('stkOk').click(); };
+  $('stkClose').onclick = function () { STK.cur = null; renderNow(); };
+  $('stkOk').onclick = stkSave1;
 }
-$('stkList').addEventListener('input', function (e) {
-  var x = e.target.closest('.sVal'); if (!x) return;
-  var it = STK.items[+x.dataset.i]; it.val = x.value;
-  var k = sCalc(it), row = x.parentNode.querySelector('.sRes');
-  row.style.cssText = 'margin-top:4px;font-size:14px;' + (k.bad ? 'color:var(--red);font-weight:700' : '');
-  row.innerHTML = sRes(k);
-});
-$('stkList').addEventListener('click', function (e) { var d = e.target.closest('[data-sdel]'); if (d) { STK.items.splice(+d.dataset.sdel, 1); renderStk(); } });
-$('stkTodo').addEventListener('click', function (e) { var a = e.target.closest('[data-stk]'); if (a) { e.preventDefault(); addStk(a.dataset.stk); } });
-$('stkSave').onclick = function () {
-  if (!STK || !STK.items.length) return toast('먼저 QR을 찍어 타래를 추가하세요.');
-  if (!STK.info) return toast('조사 목록을 불러오는 중입니다. 잠시 뒤에 다시 눌러 주세요.');
-  var bad = STK.items.filter(function (x) { return !sCalc(x).ok; });
-  if (bad.length) return toast('⚠️ ' + bad.map(function (x) { return x.coil.no; }).join(', ') + ' 의 저울 무게를 확인하세요.', 4500);
-  var big = STK.items.filter(function (x) { return Math.abs(sCalc(x).diff) >= 3; }).map(function (x) { return '· ' + x.coil.no + ' ' + (sCalc(x).diff > 0 ? '+' : '') + sCalc(x).diff + 'kg'; });
-  if (!confirm(STK.items.length + '개 타래의 무게를 저울 무게로 맞출까요?' + (big.length ? '\n\n⚠️ 차이가 큰 타래 (저울·보빈 다시 확인)\n' + big.join('\n') : ''))) return;
-  var tag = STK.info.tag, list = STK.items.slice(), saved = 0, kept = 0, fail = [];
-  list.reduce(function (p, x) {
-    return p.then(function () {
-      var a = { no: x.coil.no, type: '실사조정', mode: 'gross', value: n(x.val), worker: ME.name, target: tag, memo: '재고조사', reqId: newReq() };
-      return submit('saveMove', a, x.coil.no + ' 재고조사 저울 ' + a.value + 'kg').then(function (r) {
-        if (r) saved++; else { kept++; localRem(x.coil.no, r2(n(x.val) - x.coil.tare)); }
-        STK.items = STK.items.filter(function (y) { return y !== x; });
-      }, function () { fail.push(x.coil.no); });
-    });
-  }, Promise.resolve()).then(function () {
-    renderStk(); refreshStock(); loadStk();
-    toast((saved ? '✅ ' + saved + '개 무게를 맞췄습니다' : '') + (kept ? ' 📱 ' + kept + '개는 휴대폰에 저장 (신호가 돌아오면 자동으로 올림)' : '') + (fail.length ? ' ⛔ 저장 못 함: ' + fail.join(', ') + ' (목록에 남겨 둠)' : ''), 6000);
-  });
-};
+function stkSave1() {
+  var cur = STK.cur, x = cur.x, k = sCalc(cur);
+  if (!k.ok) { $('stkVal').focus(); return toast(k.msg, 3000); }
+  if (Math.abs(k.diff) > 1 && !cur.warned) { cur.warned = true; buzz([200, 100, 200]); renderNow(); $('stkVal').focus(); return toast('⚠️ 차이가 1kg보다 커요. 저울에 다시 올려 보고, 맞으면 한 번 더 누르세요.', 4500); }
+  var a = { no: x.no, type: '실사조정', mode: 'gross', value: n(cur.val), worker: ME.name, target: STK.info.tag, memo: '재고조사', reqId: newReq(), diff: k.diff };
+  STK.cur = null; renderNow();
+  submit('saveMove', a, x.no + ' 재고조사 저울 ' + a.value + 'kg').then(function (r) {
+    if (!r) localRem(x.no, k.left);
+    x.done = 'w'; x.diff = k.diff; x.at = r ? '방금' : '휴대폰 보관'; x.by = ME.name; x.rem = k.left;
+    buzz([90, 70, 90]); renderStkInfo();
+    var nx = STK.info.items.filter(function (y) { return !y.done && y.g === 'w' && y.loc === x.loc; })[0] || STK.info.items.filter(function (y) { return !y.done && y.loc === x.loc; })[0];
+    $('stkNow').innerHTML = '<div class="ok">✅ ' + esc(x.no) + ' 저장 (' + (k.diff > 0 ? '+' : '') + k.diff + 'kg). 다음 타래를 찍으세요.' + (nx ? '<br>같은 선반 다음: <b>' + esc(nx.no) + '</b> ' + (nx.g === 'w' ? '⚖️' : '👀') : '') + '</div>';
+    if (!LIVE && $('coilNo')) $('coilNo').focus();
+  }, function () { STK.cur = cur; renderNow(); });
+}
+function stkResult() {
+  var r = STK && STK.info; if (!r) return;
+  var big = r.items.filter(function (x) { return x.done === 'w' && Math.abs(n(x.diff) || 0) > 1; });
+  var miss = r.items.filter(function (x) { return !x.done; });
+  var row = function (x, t) { return '<tr><td><b>' + esc(x.no) + '</b><div class="muted">' + esc(x.spec) + 'mm</div></td><td>' + esc(x.loc || '-') + '</td><td class="n">' + t + '</td></tr>'; };
+  $('stkResult').innerHTML = '<div class="card" style="margin:10px 0 0"><h3 style="margin:0 0 6px">📄 ' + esc(r.month) + ' 재고조사 결과</h3>' +
+    (miss.length && miss.length < r.items.length ? '<div class="muted">아직 조사 중이면 안 찍은 타래가 모두 ‘안 찾은 타래’로 잡혀요.</div>' : '') +
+    '<div style="font-size:18px;margin:8px 0 4px">⚖️ 무게 차이 난 보빈 <b>' + big.length + '개</b> <span class="muted" style="font-size:13px">(1kg 넘게)</span></div>' +
+    (big.length ? '<table><tr class="muted"><td>번호</td><td>선반</td><td class="n">차이</td></tr>' + big.map(function (x) { return row(x, '<b>' + (x.diff > 0 ? '+' : '') + x.diff + 'kg</b>'); }).join('') + '</table>' : '') +
+    '<div style="font-size:18px;margin:12px 0 4px">❓ 안 찾은 보빈 (행방불명) <b>' + miss.length + '개</b></div>' +
+    (miss.length ? '<table><tr class="muted"><td>번호</td><td>선반</td><td class="n">앱 무게</td></tr>' + miss.map(function (x) { return row(x, x.rem + 'kg'); }).join('') + '</table>' : '') + '</div>';
+}
+$('stkResultBtn').onclick = function () { if (!STK || !STK.info) return toast('조사 목록을 불러오는 중이에요.'); stkResult(); $('stkResult').scrollIntoView({ block: 'start' }); };
 function bToast(m) { if (Date.now() - B_WARN > 2500) { B_WARN = Date.now(); toast(m, 2500); } }
 // v40: 미리 받아 둔 재고 목록에서 타래를 바로 찾음 (찍을 때마다 서버를 기다리지 않음)
 function localCoil(no) {
@@ -1452,7 +1502,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v54', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v55', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1491,6 +1541,8 @@ function gotQR(t, live) {
     if (Date.now() - LAST_QR.warned > 4000) { LAST_QR.warned = Date.now(); toast('코일 라벨 QR이 아닙니다. 코일 라벨을 비춰 주세요. (읽은 글자: ' + String(t).slice(0, 40) + ')', 3000); }
     return false;
   }
+  // v55: 카메라가 같은 라벨을 계속 보고 있으면 한 번만 처리 (화면에서 치웠다가 2.5초 뒤 다시 찍으면 '이미 찍음')
+  if (live && (STK || BATCH)) { var now = Date.now(); if (LAST_QR.hit === t && now - LAST_QR.hitAt < 2500) { LAST_QR.hitAt = now; return false; } LAST_QR.hit = t; LAST_QR.hitAt = now; }
   if (STK) { addStk(no, t); return false; } // v18 재고 조사
   if (BATCH) { addBatch(no, t); return false; } // 여러 개 모드: 카메라는 켜 둔 채 계속 찍기
   if (navigator.vibrate) try { navigator.vibrate(80); } catch (e) {}

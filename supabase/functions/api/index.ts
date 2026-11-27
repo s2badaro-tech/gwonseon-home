@@ -443,7 +443,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v52';
+const CO_VERSION = 'v53';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -799,6 +799,19 @@ async function getMonthly(token: any) {
   }).sort((a, b) => (num(a.spec) - num(b.spec)) || (a.kind < b.kind ? -1 : 1));
   return { months, rows, total: tot };
 }
+// v6 (4-6): 재고조사 '있는지만 확인' — QR만 찍으면 이번 달 확인됨 (관리자, 휴대폰 보관 후 늦게 올려도 됨)
+async function stkSeen(token: any, a: any) {
+  const m = await me(token, 'co');
+  if (!m.admin) err('재고조사는 관리자만 할 수 있습니다.');
+  a = a || {};
+  const S = await coSet(), no = normNo(a.no, S);
+  const c: any = await q(db.from('coils').select('no').eq('no', no).maybeSingle());
+  if (!c) err(no + ' 번 타래를 찾지 못했습니다.');
+  const at = usedAt(a.ts) || nowStr(), month = (at.slice(0, 7));
+  const { error } = await db.from('stk_checks').insert({ month, no, at, by: m.name, req_id: txt(a.reqId) });
+  if (error && !/duplicate|unique/i.test(error.message)) err('저장소 오류: ' + error.message);
+  return { no, at, dup: !!error };
+}
 async function cancelMove(token: any, id: any) {
   const m = await me(token, 'co');
   const o = (await history({ id }, 1))[0];
@@ -889,23 +902,29 @@ const CO_ADMIN: any = {
     await q(db.from('coil_edits').insert({ at: nowStr(), who: m.name, no: '(로그인)', field: '모든 휴대폰 로그아웃', before: r.length + '대', after: '0대' }));
     return { count: r.length };
   },
-  stocktake: async () => {
-    const month = today().slice(0, 7), tag = '재고조사 ' + month, done: any = {};
+  // v6 (4-6): 두 갈래 재고조사. '무게 잴 타래' = 이번 달 쓴 타래(전체 실사면 모두), '있는지만 확인' = 나머지 (QR만 찍으면 확인됨)
+  stocktake: async (_m: Me, a: any) => {
+    const month = today().slice(0, 7), tag = '재고조사 ' + month, done: any = {}, used: any = {}, full = !!(a && a.full);
     (await history({ type: '실사조정', from: month + '-01' }, 5000)).forEach((o) => {
       if (o.cancelled || o.target !== tag) return;
-      if (!done[o.no]) done[o.no] = { no: o.no, at: o.at, diff: 0, by: o.by };
+      if (!done[o.no]) done[o.no] = { at: o.at, diff: 0, by: o.by };
       done[o.no].diff = r2(done[o.no].diff + num(o.delta));
     });
-    const todo: any[] = [], checked: any[] = [];
+    (await history({ type: '출고', from: month + '-01' }, 5000)).forEach((o) => { if (!o.cancelled) used[o.no] = 1; });
+    const seen: any = {};
+    (await q(db.from('stk_checks').select('no,at,by').eq('month', month).limit(5000))).forEach((r: any) => { seen[r.no] = r; });
+    const items: any[] = [];
     (await readCoils()).forEach((c) => {
       if (!c.no) return;
-      const x: any = { no: c.no, spec: c.spec, kind: c.kind, loc: c.loc, rem: r2(c.rem), tare: c.tare, tareSet: c.tareSet };
-      if (done[c.no]) { x.at = done[c.no].at; x.diff = done[c.no].diff; x.by = done[c.no].by; checked.push(x); } else if (c.status !== ST_EMPTY) todo.push(x);
+      const w = done[c.no], sn = seen[c.no];
+      if (c.status === ST_EMPTY && !w && !sn) return;
+      const g = full || used[c.no] ? 'w' : 'c';
+      const x: any = { no: c.no, spec: c.spec, kind: c.kind, type: c.type, loc: c.loc || '', rem: r2(c.rem), tare: c.tare, tareSet: c.tareSet, g };
+      if (w) { x.done = 'w'; x.at = w.at; x.diff = w.diff; x.by = w.by; } else if (sn && g === 'c') { x.done = 'c'; x.at = sn.at; x.by = sn.by; }
+      items.push(x);
     });
-    todo.sort((a, b) => (String(a.loc) < String(b.loc) ? -1 : String(a.loc) > String(b.loc) ? 1 : 0) || (a.no < b.no ? -1 : 1));
-    checked.sort((a, b) => (a.at < b.at ? 1 : -1));
-    let plus = 0, minus = 0; checked.forEach((x) => { if (x.diff > 0) plus = r2(plus + x.diff); else minus = r2(minus + x.diff); });
-    return { month, tag, todo, checked, plus, minus };
+    items.sort((p, o) => (String(p.loc) < String(o.loc) ? -1 : String(p.loc) > String(o.loc) ? 1 : 0) || (p.no < o.no ? -1 : 1));
+    return { month, tag, full, items };
   },
   // v3: 코일 종류(일반 환선·인롤…) — 알림 무게, 인롤은 이름·규격·1대당 무게도 고침 (이름을 바꾸면 그 종류 타래도 같이 바뀜)
   setTypes: async (m: Me, a: any) => {
@@ -1090,7 +1109,7 @@ async function dump() {
   const W = await wlExport();
   const coils = await allRows('coils', 'seq'), moves = await allRows('coil_moves', 'seq');
   const specs = await allRows('coil_specs', 'key'), types = await allRows('coil_types', 'sort'), cedits = await allRows('coil_edits', 'id');
-  const P = await people(), slog = await allRows('settings_log', 'id');
+  const P = await people(), slog = await allRows('settings_log', 'id'), plans = await allRows('job_plans', 'job'), stks = await allRows('stk_checks', 'id');
   const N = (v: any) => (v === null || v === undefined ? '' : v);
   return [
     { file: W.motor.name, head: W.motor.head, rows: W.motor.rows },
@@ -1099,7 +1118,9 @@ async function dump() {
     { file: '사용자', head: ['이름', '작업기록 관리자', '운영자', '코일 관리자', '상태', '임시', '등록일', '마지막접속'], rows: P.map((u) => [u.name, u.wl_admin ? '관리자' : '팀원', u.owner ? 'Y' : '', u.coil_admin ? 'Y' : '', u.off ? '사용안함' : '', u.temp ? 'Y' : '', u.reg_at, u.last_seen]) },
     { file: '설정방기록', head: ['일시', '누가', '무엇', '대상', '전', '후'], rows: slog.map((x) => [x.at, x.who, x.what, x.target, x.before, x.after]) },
     { file: '코일재고_코일목록', head: ['번호', '규격(mm)', '선종', '제조사', '공타래(kg)', '현재잔량(kg)', '보관위치', '상태', '등록일', '등록자', '최종변경', '메모', '코일종류'], rows: coils.map((c) => [c.no, c.spec, c.kind, c.maker, N(c.tare), N(c.rem), c.loc, c.status, c.reg_at, c.reg_by, c.changed_at, c.memo, c.ctype]) },
-    { file: '코일재고_입출고이력', head: ['이력ID', '일시', '번호', '구분', '규격(mm)', '선종', '작업자', '작업대상', '입력방식', '저울총무게(kg)', '변동량(kg)', '변동전(kg)', '변동후(kg)', '기록자', '메모', '요청ID', 'kW'], rows: moves.map((r) => [r.id, r.at, r.no, r.type, r.spec, r.kind, r.worker, r.target, r.mode, N(r.gross), N(r.delta), N(r.before), N(r.after), r.by, r.memo, r.req_id, r.kw]) },
+    { file: '코일재고_입출고이력', head: ['이력ID', '일시', '번호', '구분', '규격(mm)', '선종', '작업자', '작업대상', '입력방식', '저울총무게(kg)', '변동량(kg)', '변동전(kg)', '변동후(kg)', '기록자', '메모', '요청ID', 'kW', '수정내역'], rows: moves.map((r) => [r.id, r.at, r.no, r.type, r.spec, r.kind, r.worker, r.target, r.mode, N(r.gross), N(r.delta), N(r.before), N(r.after), r.by, r.memo, r.req_id, r.kw, r.edits && r.edits.length ? JSON.stringify(r.edits) : '']) },
+    { file: '코일재고_작업별조합', head: ['작업번호', '원래', '실제', '단면적%', '선종', '기록자', '일시'], rows: plans.map((x) => [x.job, x.orig, x.actual, N(x.ratio), x.kind, x.by, x.at]) },
+    { file: '코일재고_재고조사확인', head: ['월', '번호', '일시', '확인자'], rows: stks.map((x) => [x.month, x.no, x.at, x.by]) },
     { file: '코일재고_규격기준', head: ['규격(mm)', '선종', '안전재고(kg)', '발주상태', '발주일', '발주메모', '코일종류'], rows: specs.map((s) => [s.spec, s.kind, N(s.safety), s.order_state, s.order_at, s.order_memo, s.ctype]) },
     { file: '코일재고_코일종류', head: ['코일종류', '빈 보빈(kg)', '부족 알림(kg)', '메모'], rows: types.map((t) => [t.name, N(t.tare), t.alert === null ? '알림 없음' : t.alert, t.memo]) },
     { file: '코일재고_수정기록', head: ['일시', '수정자', '번호', '칸', '전', '후'], rows: cedits.map((x) => [x.at, x.who, x.no, x.field, x.before, x.after]) },
@@ -1170,7 +1191,7 @@ const API: any = {
     addCoil: async (t: any, a: any) => { const d = await findReq(a && a.reqId); return d || onceReq(a && a.reqId, () => addCoil(t, a)); },
     editCoil, cancelMove, setOrder, setSafety, assignNumbers: async () => ({ count: 0, nos: [] }), adminCall: coAdmin,
     getInit: coInit, getJobs: async (t: any) => { await me(t, 'co'); return recentJobs(); }, getStock: async (t: any) => { await me(t, 'co'); return stockCalc(); },
-    getCoil, getHistory, getMonthly, labelData, clientLog,
+    getCoil, getHistory, getMonthly, labelData, clientLog, stkSeen,
   },
   st: {
     login: async (n: any, p: any) => { const r = await login('st', n, p); return { token: r.token, name: r.name, mustChange: r.mustChange, sup: r.sup }; },
