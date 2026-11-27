@@ -443,7 +443,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v50';
+const CO_VERSION = 'v51';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -705,6 +705,7 @@ async function addCoil(token: any, a: any) {
   const rem = a.mode === 'gross' ? r2(v - tare) : r2(v);
   if (rem < 0) err('저울 무게가 빈 보빈 무게보다 작습니다. 보빈째 저울에 올렸는지 확인해 주세요.');
   const dup = await findReq(a.reqId); if (dup) return dup;
+  if (!txt(a.loc)) err('보관위치(선반)를 골라 주세요.');
   let no = a.no ? normNo(a.no, S) : await nextNo(S);
   const kind = (txt(a.kind) || (t.spec ? '인롤' : 'AIW')).toUpperCase();
   for (let i = 0; ; i++) {
@@ -832,7 +833,7 @@ async function labelData(token: any, nos: any) {
   const want = String(nos || '').split(/[,\s]+/).map((x) => normNo(x, S)).filter(String);
   if (!want.length) err('라벨을 뽑을 타래 번호를 넣어 주세요.');
   const C = await readCoils();
-  return { appUrl: QR_APP_URL, rows: C.filter((c) => c.no && want.indexOf(c.no) >= 0).map((c) => ({ no: c.no, spec: c.spec, kind: c.kind, maker: c.maker, w: Math.round(c.rem * 10) / 10 })) };
+  return { appUrl: QR_APP_URL, rows: want.map((no) => C.find((c) => c.no === no)).filter(Boolean).map((c: any) => ({ no: c.no, spec: c.spec, kind: c.kind, type: c.type, loc: c.loc, maker: c.maker, w: Math.round(c.rem * 10) / 10 })) };
 }
 async function clientLog(token: any, msg: any) {
   let m: Me; try { m = await me(token, 'co'); } catch (_e) { return false; }
@@ -949,6 +950,15 @@ const CO_ADMIN: any = {
     s.kinds = names; s.specsBy = specsBy; await putSetting('coil.settings', s);
     if (logs.length) await q(db.from('coil_edits').insert(logs));
     return { kinds: names, specsBy };
+  },
+  // v4 (4-1): 보관위치(선반) 버튼 목록
+  setLocs: async (m: Me, a: any) => {
+    const list = String(a.text || '').split(/[,，\n]/).map((x) => x.trim()).filter(String);
+    if (!list.length) err('선반을 하나 이상 넣어 주세요.');
+    const s = await getSetting('coil.settings', {}), old = (s.locs || []).join(', ');
+    s.locs = list; await putSetting('coil.settings', s);
+    await q(db.from('coil_edits').insert({ at: nowStr(), who: m.name, no: '(설정)', field: '보관위치 목록', before: txt(old), after: txt(list.join(', ')) }));
+    return { locs: list };
   },
   // v3: 부족 알림 메일 받는 사람 (쉼표로 여러 명) — 설정방에서도 같은 칸
   setMail: async (m: Me, a: any) => coilMailSet(m.name, a.mail),
