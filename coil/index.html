@@ -1296,6 +1296,7 @@ function addBatch(no, raw) {
   if (dup) { dupScan(dup.coil.no); return bToast('⚠️ ' + dup.coil.no + ' 는 이미 찍었어요.'); }
   var put = function (c) {
     if (BATCH.items.some(function (it) { return it.coil.no === c.no; })) { dupScan(c.no); bToast('⚠️ ' + c.no + ' 는 이미 찍었어요.'); return false; }
+    if (c.status === '등록취소') { dupScan(c.no); toast('⛔ ' + c.no + ' 는 잘못 등록해서 취소한 타래라 쓸 수 없어요. 라벨을 떼어 주세요.', 4000); return false; }
     if (c.status === '소진') { toast('⛔ ' + c.no + ' 는 이미 다 쓴(소진) 타래입니다.', 3500); return false; }
     if (!c.tareSet) { toast('ℹ️ ' + c.no + ' 는 빈 보빈 무게가 없어요. 보빈 종류를 골라 이 화면에서 기록하세요.', 5000); openOne(c.no); return false; }
     okScan();
