@@ -435,11 +435,17 @@ async function wlAdmin(token: any, action: string, args: any) {
 // ═════════════════ 코일 관리 앱 (co) ═════════════════
 const ST_USE = '사용중', ST_EMPTY = '소진', TYPE_DEF = '일반 환선';
 const TYPES = ['출고', '입고', '실사조정'];
-const INROLL = [{ name: 'in-roll 4.0 환선', spec: '4' }, { name: 'in-roll 3.0×7.3 나각선', spec: '3.0×7.3' }];
-const TYPE_ALIAS: any = { 'in-roll 환선': 'in-roll 4.0 환선', 'in-roll 나각선': 'in-roll 3.0×7.3 나각선' };
-const CO_VERSION = 'v48';
+// v3 (3단계): 인롤 종류는 coil_types 표의 spec(규격)·unit(1대당 무게)로 정함. 관리 화면에서 이름·규격·1대당 무게를 고칠 수 있음.
+const TYPE_ALIAS: any = { 'in-roll 환선': '인롤 4.5 환선', 'in-roll 나각선': '인롤 3.5×7 평각선', 'in-roll 4.0 환선': '인롤 4.5 환선', 'in-roll 3.0×7.3 나각선': '인롤 3.5×7 평각선' };
+// 코일 선종(종류) 기본값: AIW가 주력. 규격 목록은 선종마다 따로 (2026-11-05 재고표 기준, 관리 화면에서 고침)
+const KIND_DEF = ['AIW', '인버터', '인롤'];
+const SPECS_DEF: any = {
+  AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
+  '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
+};
+const CO_VERSION = 'v50';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
-const COIL_DEF = { safety: 50, mail: '', kinds: [], locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
+const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
   const s = Object.assign({}, COIL_DEF, await getSetting('coil.settings', {}));
   return Object.assign(s, { bobbins: [] as any[] });
@@ -462,11 +468,10 @@ async function coTypes() {
   const out: any[] = [];
   rows.forEach((r) => {
     const name = TYPE_ALIAS[r.name] || r.name; if (out.some((x) => x.name === name)) return;
-    out.push({ name, tare: r.tare === null || r.tare === undefined ? null : Number(r.tare), alert: r.alert !== null && Number(r.alert) > 0 ? Number(r.alert) : null });
+    out.push({ name, tare: r.tare === null || r.tare === undefined ? null : Number(r.tare), alert: r.alert !== null && Number(r.alert) > 0 ? Number(r.alert) : null,
+      spec: name === TYPE_DEF ? '' : specTxt(r.spec || ''), unit: Number(r.unit) > 0 ? Number(r.unit) : null });
   });
-  if (!out.some((x) => x.name === TYPE_DEF)) out.unshift({ name: TYPE_DEF, tare: S.defTare, alert: S.safety });
-  INROLL.forEach((n) => { if (!out.some((x) => x.name === n.name)) out.push({ name: n.name, tare: null, alert: S.safety }); });
-  out.forEach((x) => { const ir = INROLL.find((n) => n.name === x.name); x.spec = ir ? ir.spec : ''; });
+  if (!out.some((x) => x.name === TYPE_DEF)) out.unshift({ name: TYPE_DEF, tare: S.defTare, alert: S.safety, spec: '', unit: null });
   return out;
 }
 function typeOf(T: any[], name: any) {
@@ -506,7 +511,8 @@ async function stockCalc() {
   return Object.keys(g).map((k) => {
     const x = g[k], p = P[k] || {};
     x.total = r2(x.total);
-    x.safety = typeOf(T, x.type).alert;
+    const tt = typeOf(T, x.type); x.safety = tt.alert; x.unit = tt.unit || null;
+    if (x.unit) x.units = Math.floor(x.total / x.unit + 1e-9);
     x.order = p.order || ''; x.orderAt = p.orderAt || ''; x.orderMemo = p.orderMemo || '';
     x.low = x.safety != null && x.total < x.safety;
     x.coils.sort((a: any, b: any) => (a.no < b.no ? -1 : 1));
@@ -517,7 +523,7 @@ async function coInit(token: any) {
   const m = await me(token, 'co'), S = await coSet();
   return { me: { name: m.name, admin: m.admin, owner: m.owner, mustChange: m.mustChange }, version: CO_VERSION, users: m.P.filter((u) => !u.off).map((u) => u.name),
     worklogSite: 'https://s2badaro-tech.github.io/gwonseon-home/worklog/', sheetUrl: '', excel: m.admin,
-    appUrl: QR_APP_URL, kinds: S.kinds, locs: S.locs, specs: S.specs, prefix: S.prefix, bobbins: [], bobbinTxt: S.bobbinTxt, defTare: S.defTare, types: await coTypes(),
+    appUrl: QR_APP_URL, kinds: S.kinds, specsBy: S.specsBy, mail: m.admin ? S.mail : '', locs: S.locs, specs: S.specs, prefix: S.prefix, bobbins: [], bobbinTxt: S.bobbinTxt, defTare: S.defTare, types: await coTypes(),
     targets: await targets(), stock: await stockCalc() };
 }
 // 작업기록 앱의 최근 작업 (오늘 + 지난 2일)
@@ -675,12 +681,13 @@ async function saveMove(token: any, a: any) {
 async function checkLow(spec: string, kind: string, type: string) {
   const all = await stockCalc(), x = all.find((s) => specKey(s.spec, s.kind, s.type) === specKey(spec, kind, type));
   if (!x || !x.low) return '';
-  const msg = spec + 'mm ' + (kind || '') + (x.type && x.type !== TYPE_DEF ? ' ' + x.type : '') + ' 재고 ' + x.total + 'kg — 알림 기준 ' + x.safety + 'kg 아래입니다.' + (x.order ? ' (발주완료 ' + x.orderAt + ')' : '');
+  const dae = (kg: number) => x.unit ? Math.floor(kg / x.unit + 1e-9) + '대분 · ' : '';
+  const msg = spec + 'mm ' + (kind || '') + (x.type && x.type !== TYPE_DEF ? ' ' + x.type : '') + ' 재고 ' + dae(x.total) + x.total + 'kg — 알림 기준 ' + dae(x.safety) + x.safety + 'kg 아래입니다.' + (x.order ? ' (발주완료 ' + x.orderAt + ')' : '');
   if (x.order) return msg;
   const S = await coSet(), k = specKey(spec, kind, type), sent = await getSetting('coil.mailed', {});
   if (S.mail && !(sent[k] && Date.now() - sent[k] < 6 * 3600000)) {
     sent[k] = Date.now(); await putSetting('coil.mailed', sent);
-    bg(google('mail', { to: S.mail, subject: '[코일 재고 부족] ' + spec + 'mm ' + (kind || '') + (x.type && x.type !== TYPE_DEF ? ' ' + x.type : ''),
+    bg(google('mail', { to: String(S.mail).split(/[,;\s]+/).filter(String).join(','), subject: '[코일 재고 부족] ' + spec + 'mm ' + (kind || '') + (x.type && x.type !== TYPE_DEF ? ' ' + x.type : ''),
       body: msg + '\n\n보유 타래 ' + x.count + '개\n' + x.coils.filter((t: any) => t.status !== ST_EMPTY).map((t: any) => ' ' + t.no + ' : ' + t.rem + 'kg ' + t.loc).join('\n') +
         '\n\n발주했으면 앱 재고 현황에서 ‘발주완료’를 눌러 주세요.\n' + QR_APP_URL }));
   }
@@ -699,7 +706,7 @@ async function addCoil(token: any, a: any) {
   if (rem < 0) err('저울 무게가 빈 보빈 무게보다 작습니다. 보빈째 저울에 올렸는지 확인해 주세요.');
   const dup = await findReq(a.reqId); if (dup) return dup;
   let no = a.no ? normNo(a.no, S) : await nextNo(S);
-  const kind = txt(a.kind).toUpperCase();
+  const kind = (txt(a.kind) || (t.spec ? '인롤' : 'AIW')).toUpperCase();
   for (let i = 0; ; i++) {
     const { error } = await db.from('coils').insert({ no, spec, kind, maker: txt(a.maker), tare, ctype, rem, loc: txt(a.loc), status: rem <= S.emptyKg ? ST_EMPTY : ST_USE, reg_at: nowStr(), reg_by: m.name, changed_at: nowStr(), memo: txt(a.memo) });
     if (!error) break;
@@ -878,23 +885,71 @@ const CO_ADMIN: any = {
     let plus = 0, minus = 0; checked.forEach((x) => { if (x.diff > 0) plus = r2(plus + x.diff); else minus = r2(minus + x.diff); });
     return { month, tag, todo, checked, plus, minus };
   },
+  // v3: 코일 종류(일반 환선·인롤…) — 알림 무게, 인롤은 이름·규격·1대당 무게도 고침 (이름을 바꾸면 그 종류 타래도 같이 바뀜)
   setTypes: async (m: Me, a: any) => {
     const cur: any[] = await q(db.from('coil_types').select('*'));
     const now = nowStr(), logs: any[] = [];
     for (const r of (a.rows || [])) {
-      const name = String(r.name || '').trim(); if (!name) continue;
-      const old = cur.find((x) => x.name === name);
+      const oldName = String(r.old || r.name || '').trim(); let name = String(r.name || '').trim(); if (!name) name = oldName; if (!name) continue;
+      const old = cur.find((x) => x.name === oldName) || cur.find((x) => (TYPE_ALIAS[x.name] || x.name) === oldName);
       if (r.tare === undefined && old) r.tare = old.tare === null ? '' : old.tare;
       const blank = String(r.tare ?? '').trim() === '', t = blank ? null : num(r.tare), al = num(r.alert);
       if (!blank && (!isFinite(t as number) || (t as number) < 0 || (t as number) > 30)) err(name + ': 빈 보빈 무게를 0~30kg 숫자로 넣거나 비워 두세요 (비우면 등록 때 직접 씀).');
       const alv = isFinite(al) && al > 0 ? al : null, alTxt = alv === null ? '알림 없음' : String(alv);
-      if (!old) { await q(db.from('coil_types').insert({ name, tare: t, alert: alv, sort: cur.length + 1 })); logs.push({ at: now, who: m.name, no: '(코일종류)', field: name, before: '(새로)', after: (t ?? '') + 'kg / ' + alTxt }); continue; }
-      if (String(old.tare ?? '') === String(t ?? '') && String(old.alert ?? '') === String(alv ?? '')) continue;
-      await q(db.from('coil_types').update({ tare: t, alert: alv }).eq('name', name));
-      logs.push({ at: now, who: m.name, no: '(코일종류)', field: name, before: (old.tare ?? '') + 'kg / ' + (old.alert === null ? '알림 없음' : old.alert), after: (t ?? '') + 'kg / ' + alTxt });
+      const isDef = name === TYPE_DEF || oldName === TYPE_DEF;
+      const spec = isDef ? '' : (r.spec === undefined ? (old ? old.spec || '' : '') : specTxt(r.spec));
+      const un = num(r.unit), unit = isDef ? null : (r.unit === undefined ? (old ? old.unit : null) : (isFinite(un) && un > 0 ? un : null));
+      if (isDef && name !== TYPE_DEF) err('일반 환선은 이름을 바꿀 수 없습니다.');
+      if (name !== oldName && cur.some((x) => x.name === name)) err(name + ' 은(는) 이미 있는 종류 이름입니다.');
+      const desc = (o: any) => (o.tare ?? '') + 'kg / ' + (o.alert === null || o.alert === undefined ? '알림 없음' : o.alert) + (o.spec ? ' / 규격 ' + o.spec : '') + (o.unit ? ' / 1대 ' + o.unit + 'kg' : '');
+      const nv = { tare: t, alert: alv, spec, unit };
+      if (!old) { await q(db.from('coil_types').insert(Object.assign({ name, sort: cur.length + 1 }, nv))); logs.push({ at: now, who: m.name, no: '(코일종류)', field: name, before: '(새로)', after: desc(nv) }); continue; }
+      const same = old.name === name && String(old.tare ?? '') === String(t ?? '') && String(old.alert ?? '') === String(alv ?? '') && String(old.spec ?? '') === String(spec) && String(old.unit ?? '') === String(unit ?? '');
+      if (same) continue;
+      await q(db.from('coil_types').update(Object.assign({ name }, nv)).eq('name', old.name));
+      if (old.name !== name) {
+        const cs: any[] = await q(db.from('coils').select('no,spec').eq('ctype', old.name));
+        await q(db.from('coils').update({ ctype: name, changed_at: now }).eq('ctype', old.name));
+        const sp: any[] = await q(db.from('coil_specs').select('*').eq('ctype', old.name));
+        for (const x of sp) { await q(db.from('coil_specs').delete().eq('key', x.key)); await q(db.from('coil_specs').upsert(Object.assign({}, x, { ctype: name, key: specKey(x.spec, x.kind, name) }))); }
+        cs.forEach((c) => logs.push({ at: now, who: m.name, no: c.no, field: '코일종류', before: old.name, after: name }));
+      }
+      logs.push({ at: now, who: m.name, no: '(코일종류)', field: name, before: (old.name !== name ? old.name + ' / ' : '') + desc(old), after: desc(nv) });
     }
     if (logs.length) await q(db.from('coil_edits').insert(logs));
     return coTypes();
+  },
+  // v3: 선종(AIW·인버터·인롤…) 이름과 선종별 규격 목록. 이름을 바꾸면 그 선종 타래도 같이 바뀜 (지난 이력은 그대로)
+  setKinds: async (m: Me, a: any) => {
+    const s = await getSetting('coil.settings', {}), S = await coSet(), now = nowStr(), logs: any[] = [];
+    const rows = (a.rows || []).map((r: any) => ({ old: String(r.old || '').trim(), name: String(r.name || '').trim().toUpperCase(), specs: String(r.specs || '').split(/[,，\s]+/).map((x: string) => specTxt(x)).filter(String) })).filter((r: any) => r.name);
+    if (!rows.length) err('선종을 하나 이상 넣어 주세요.');
+    const names = rows.map((r: any) => r.name); if (new Set(names).size !== names.length) err('같은 선종 이름이 두 번 있습니다.');
+    const specsBy: any = {};
+    for (const r of rows) {
+      specsBy[r.name] = r.specs.map((x: string) => (/^\d+$/.test(x) ? x + '.0' : x));
+      if (r.old && r.old !== r.name) {
+        const cs: any[] = await q(db.from('coils').select('no').eq('kind', r.old));
+        if (cs.length) await q(db.from('coils').update({ kind: r.name, changed_at: now }).eq('kind', r.old));
+        const sp: any[] = await q(db.from('coil_specs').select('*').eq('kind', r.old));
+        for (const x of sp) { await q(db.from('coil_specs').delete().eq('key', x.key)); await q(db.from('coil_specs').upsert(Object.assign({}, x, { kind: r.name, key: specKey(x.spec, r.name, x.ctype) }))); }
+        logs.push({ at: now, who: m.name, no: '(선종)', field: '이름', before: r.old, after: r.name + ' (타래 ' + cs.length + '개)' });
+      }
+    }
+    const beforeTxt = (S.kinds || []).map((k: string) => k + ':' + ((S.specsBy || {})[k] || []).length).join(', '), afterTxt = names.map((k: string) => k + ':' + specsBy[k].length).join(', ');
+    if (beforeTxt !== afterTxt) logs.push({ at: now, who: m.name, no: '(선종)', field: '선종·규격 목록', before: beforeTxt, after: afterTxt });
+    s.kinds = names; s.specsBy = specsBy; await putSetting('coil.settings', s);
+    if (logs.length) await q(db.from('coil_edits').insert(logs));
+    return { kinds: names, specsBy };
+  },
+  // v3: 부족 알림 메일 받는 사람 (쉼표로 여러 명)
+  setMail: async (m: Me, a: any) => {
+    const list = String(a.mail || '').split(/[,;\s]+/).map((x) => x.trim()).filter(String);
+    list.forEach((x) => { if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)) err(x + ' 은(는) 메일 주소 모양이 아닙니다.'); });
+    const s = await getSetting('coil.settings', {}), old = s.mail || '';
+    s.mail = list.join(', '); await putSetting('coil.settings', s);
+    await q(db.from('coil_edits').insert({ at: nowStr(), who: m.name, no: '(설정)', field: '부족 알림 메일', before: txt(old), after: txt(s.mail) }));
+    return { mail: s.mail };
   },
   setBobbins: async (m: Me, a: any) => {
     const list = String(a.text || '').split(/[,，\n]/).map((x) => { const mm = x.trim().match(/^(.*?)[\s:=]*(\d+(?:\.\d+)?)\s*(?:kg)?$/i); return mm && Number(mm[2]) > 0 ? { name: mm[1].trim() || mm[2] + 'kg', kg: Number(mm[2]) } : null; }).filter(Boolean) as any[];
