@@ -571,11 +571,11 @@ function renderBobbins() { bobChips('aBob', 'aTare', function () { aPrev(); }); 
 // ── 로그인 ──
 // v46: 등급 표시 — 운영자(작업기록 서버가 정함, 모든 권한) > 관리자 > 팀원
 var OWNER = false;
-function roleLabel() { return OWNER ? '운영자' : ME && ME.admin ? '관리자' : '팀원'; }
+function roleLabel() { return OWNER || (ME && ME.owner) ? '운영자' : ME && ME.admin ? '관리자' : '팀원'; }
 function showWho() {
   if (!ME) return; var me = ME;
-  $('who').textContent = me.name + (OWNER || me.admin ? ' (' + roleLabel() + ')' : '');
-  if (window.GW && GW.fetchRole) GW.fetchRole().then(function (r) { if (ME !== me) return; var o = r === '운영자'; if (o !== OWNER) { OWNER = o; $('who').textContent = me.name + (OWNER || me.admin ? ' (' + roleLabel() + ')' : ''); } });
+  $('who').textContent = me.name + (OWNER || me.owner || me.admin ? ' (' + roleLabel() + ')' : '');
+  if (window.GW && GW.fetchRole) GW.fetchRole().then(function (r) { if (ME !== me) return; var o = r === '운영자'; if (o !== OWNER) { OWNER = o; $('who').textContent = me.name + (OWNER || me.owner || me.admin ? ' (' + roleLabel() + ')' : ''); } });
 }
 function showLogin() { ls('coilinv_snap', null); STARTED = false; $('meBtn').classList.add('hide'); ['nav', 'tab-move', 'tab-stock', 'tab-hist', 'tab-add', 'tab-admin'].forEach(function (i) { $(i).classList.add('hide'); }); $('login').classList.remove('hide'); $('who').textContent = ''; }
 var loginPinTmp = '';
@@ -1188,7 +1188,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v46', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v47', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1680,7 +1680,7 @@ $('logoutAll').onclick = function () {
 // v23: 코일 관리자 고르기
 $('caLoad').onclick = function () {
   admin('users').then(function (l) {
-    $('caList').innerHTML = l.map(function (u) { var me = u.name === ME.name; return '<label class="it" style="display:flex;gap:10px;align-items:center;margin:0;min-height:44px"><input type="checkbox" style="width:22px;height:22px" value="' + esc(u.name) + '"' + (u.admin ? ' checked' : '') + (me ? ' disabled' : '') + '><span><b>' + esc(u.name) + '</b>' + (me ? ' (나)' : '') + (u.wlAdmin ? ' <span class="tag">작업기록 관리자</span>' : '') + '</span></label>'; }).join('') || '<div class="muted">명단이 비어 있습니다.</div>';
+    $('caList').innerHTML = l.map(function (u) { var me = u.name === ME.name, lock = me || u.owner; return '<label class="it" style="display:flex;gap:10px;align-items:center;margin:0;min-height:44px"><input type="checkbox" style="width:22px;height:22px" value="' + esc(u.name) + '"' + (u.admin ? ' checked' : '') + (lock ? ' disabled' : '') + '><span><b>' + esc(u.name) + '</b>' + (me ? ' (나)' : '') + (u.owner ? ' <span class="tag">운영자 · 항상 관리자</span>' : '') + (u.wlAdmin ? ' <span class="tag">작업기록 관리자</span>' : '') + '</span></label>'; }).join('') || '<div class="muted">명단이 비어 있습니다.</div>';
     $('caSave').classList.toggle('hide', !l.length);
   }, function () {});
 };
