@@ -25,6 +25,16 @@
     isSup: function () { return ls(K.stSup) === 'Y'; }, // 운영자 (설정방에 들어오는 사람)
     stToken: function () { return ls(K.stTok) || ''; },
     stPost: function (fn, args) { return post(ST, fn, args); },
+    // v3: 등급 이름 (운영자 > 관리자 > 팀원). 운영자는 작업기록 서버가 정함. 작업기록 설정을 기억해 둔 게 없으면 한 번 받아 옴
+    role: function () {
+      var c = null; try { c = JSON.parse(ls(K.wlCfg) || 'null'); } catch (e) {}
+      if (!c || !c.me || String(c.me.name).replace(/\s/g, '') !== String(GW.name()).replace(/\s/g, '')) return '';
+      return c.me.owner ? '운영자' : c.me.admin ? '관리자' : '팀원';
+    },
+    fetchRole: function () {
+      var r = GW.role(), t = ls(K.wlTok); if (r || !t) return Promise.resolve(r);
+      return post(WL, 'getConfig', [t]).then(function (c) { if (c && c.me && !c.login) ls(K.wlCfg, JSON.stringify(c)); return GW.role(); }, function () { return ''; });
+    },
     loggedIn: function () { return !!(ls(K.wlTok) && ls(K.coTok) && ls(K.wlName) === ls(K.coName)); },
     // 두 서버에 함께 들어가기 → { name, mustChange }
     login: function (name, pin) {
