@@ -839,6 +839,14 @@ async function clientLog(token: any, msg: any) {
   await q(db.from('diag_log').insert({ at: kst().slice(0, 10) + ' ' + kst().slice(11, 19), who: m.name, msg: String(msg || '').slice(0, 500) }));
   return true;
 }
+async function coilMailSet(who: string, mail: any) {
+  const list = String(mail || '').split(/[,;\s]+/).map((x) => x.trim()).filter(String);
+  list.forEach((x) => { if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)) err(x + ' 은(는) 메일 주소 모양이 아닙니다.'); });
+  const s = await getSetting('coil.settings', {}), old = s.mail || '';
+  s.mail = list.join(', '); await putSetting('coil.settings', s);
+  await q(db.from('coil_edits').insert({ at: nowStr(), who, no: '(설정)', field: '부족 알림 메일', before: txt(old), after: txt(s.mail) }));
+  return { mail: s.mail };
+}
 const CO_ADMIN: any = {
   // 엑셀로 내려받기: 규격별 합계 + 타래별 목록 (화면에서 엑셀 파일로 만듦)
   stockExport: async (m: Me) => {
@@ -942,15 +950,8 @@ const CO_ADMIN: any = {
     if (logs.length) await q(db.from('coil_edits').insert(logs));
     return { kinds: names, specsBy };
   },
-  // v3: 부족 알림 메일 받는 사람 (쉼표로 여러 명)
-  setMail: async (m: Me, a: any) => {
-    const list = String(a.mail || '').split(/[,;\s]+/).map((x) => x.trim()).filter(String);
-    list.forEach((x) => { if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)) err(x + ' 은(는) 메일 주소 모양이 아닙니다.'); });
-    const s = await getSetting('coil.settings', {}), old = s.mail || '';
-    s.mail = list.join(', '); await putSetting('coil.settings', s);
-    await q(db.from('coil_edits').insert({ at: nowStr(), who: m.name, no: '(설정)', field: '부족 알림 메일', before: txt(old), after: txt(s.mail) }));
-    return { mail: s.mail };
-  },
+  // v3: 부족 알림 메일 받는 사람 (쉼표로 여러 명) — 설정방에서도 같은 칸
+  setMail: async (m: Me, a: any) => coilMailSet(m.name, a.mail),
   setBobbins: async (m: Me, a: any) => {
     const list = String(a.text || '').split(/[,，\n]/).map((x) => { const mm = x.trim().match(/^(.*?)[\s:=]*(\d+(?:\.\d+)?)\s*(?:kg)?$/i); return mm && Number(mm[2]) > 0 ? { name: mm[1].trim() || mm[2] + 'kg', kg: Number(mm[2]) } : null; }).filter(Boolean) as any[];
     const t = list.map((b) => b.name + ' ' + b.kg).join(', ');
@@ -981,9 +982,10 @@ function stView(P: Person[]) {
 }
 async function stGetAll(token: any) {
   const m = await me(token, 'st');
-  return { me: { name: m.name, mustChange: m.mustChange, token: m.token, sup: m.owner }, version: 'sb1', sites: SITES, tempPin: TEMP_PIN, users: m.owner ? stView(m.P) : [] };
+  return { me: { name: m.name, mustChange: m.mustChange, token: m.token, sup: m.owner }, version: 'sb1', sites: SITES, tempPin: TEMP_PIN, users: m.owner ? stView(m.P) : [], coilMail: m.owner ? String((await coSet()).mail || '') : '' };
 }
 const ST_ACT: any = {
+  setCoilMail: async (m: Me, a: any) => { const r = await coilMailSet(m.name, a.mail); return { coilMail: r.mail, msg: r.mail ? '코일 부족 알림 메일: ' + r.mail : '코일 부족 알림 메일을 껐습니다.' }; },
   addUser: async (m: Me, a: any) => {
     const name = String(a.name || '').trim().replace(/^[=+\-@']+/, '');
     if (!name) err('이름을 적어주세요.'); if (name.length > 20) err('이름이 너무 깁니다.');

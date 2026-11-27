@@ -104,6 +104,12 @@
       <p class="help" style="margin-top:-6px">버튼을 누르면 켜고 끕니다. <b style="color:var(--blue)">작업기록</b>·<b style="color:var(--org)">코일</b> = 그 방 관리자, <b style="color:#5b3fa8">운영자</b> = 이 설정방에 들어오는 사람 (작업기록 관리 전부)</p>
       <div id="list"></div>
     </div>
+
+    <div class="card">
+      <h2>📧 코일 부족 알림 메일</h2>
+      <p class="help" style="margin-top:-6px">코일 재고가 알림 기준보다 적어지면 이 주소로 메일이 갑니다. 발주 담당자 주소를 넣으세요. 여러 명이면 쉼표(,)로 이어서.</p>
+      <div class="row"><input id="coilMail" inputmode="email" placeholder="예: order@회사.com"><button id="mailBtn">저장</button></div>
+    </div>
     </div>
 
     <div class="card">
@@ -173,6 +179,7 @@ function load(){call('getAll',[token],function(r){
   $('adminOnly').className=isSup?'':'hide';$('userOnly').className='card'+(isSup?' hide':'');$('who').textContent='👤 '+r.me.name+' 님';$('tp').textContent=r.tempPin;$('ver').textContent='('+r.version+')';
   var L=function(u,t){return '<a href="'+u+'">'+t+'</a>'};
   $('links').innerHTML=L(r.sites.home,'🏠 대문')+L(r.sites.worklog,'📒 작업기록')+L(r.sites.coil,'🧵 코일 관리');
+  $('coilMail').value=r.coilMail||'';
   render();
   if(mustChange){$('pinTitle').textContent='임시 PIN이라 먼저 내 PIN을 정해 주세요';$('pCancel').style.display='none';$('pOld').value=pinTmp;show('pin')}else show('main');
 })}
@@ -203,6 +210,11 @@ $('addBtn').onclick=function(){
   var n=$('newName').value.trim();if(!n)return toast('이름을 적어주세요.',true);
   if(!confirm(n+' 님을 등록할까요?'))return;
   call('act',[token,'addUser',{name:n}],function(r){$('newName').value='';users=r.users;render();toast(r.msg)});
+};
+$('mailBtn').onclick=function(){
+  var v=$('coilMail').value.trim();
+  if(!confirm(v?'코일 부족 알림 메일을 '+v+' (으)로 보낼까요?':'메일 주소를 비우면 부족 알림 메일이 안 갑니다. 비울까요?'))return;
+  call('act',[token,'setCoilMail',{mail:v}],function(r){$('coilMail').value=r.coilMail||'';users=r.users;render();toast(r.msg)});
 };
 $('lName').value=GW.name();
 token=GW.stToken();
