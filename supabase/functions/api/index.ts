@@ -209,6 +209,30 @@ async function findSame(kind: string, key: string, value: any, token: any) {
   return rows.filter((r) => vget(r, key).replace(/\s+/g, '').toLowerCase() === want).slice(0, 20)
     .map((r) => ({ id: r.record_id, date: r.recorded_at, author: r.author, sum: sumKeys.map((k) => vget(r, k)).filter(String).join(' ') }));
 }
+// v2 (2단계 오프라인 저장): 휴대폰이 같은 저장을 두 번 보내도(신호가 끊겨 대답을 못 받은 경우) 한 번만 처리.
+// 요청ID를 먼저 선점하고, 끝나면 결과를 남겨 둠. 같은 ID가 또 오면 남겨 둔 결과를 그대로 돌려줌.
+async function onceReq(reqId: any, fn: () => Promise<any>): Promise<any> {
+  const id = String(reqId || '').slice(0, 80);
+  if (!id) return fn();
+  const { error } = await db.from('req_claims').insert({ req_id: id });
+  if (error) {
+    if (!/duplicate|unique/i.test(error.message)) err('저장소 오류: ' + error.message);
+    for (let i = 0; i < 10; i++) {
+      const r: any = await q(db.from('req_claims').select('result').eq('req_id', id).maybeSingle());
+      if (r && r.result) return Object.assign({}, r.result, { dup: true });
+      await new Promise((ok) => setTimeout(ok, 500));
+    }
+    err('응답 없음 (같은 기록을 저장하는 중입니다)');
+  }
+  try {
+    const out = await fn();
+    await db.from('req_claims').update({ result: out ?? { ok: true } }).eq('req_id', id);
+    return out;
+  } catch (e) {
+    await db.from('req_claims').delete().eq('req_id', id);
+    throw e;
+  }
+}
 async function saveRecord(rec: any, token: any) {
   const m = await me(token, 'wl');
   rec = rec || {};
@@ -240,7 +264,8 @@ async function saveRecord(rec: any, token: any) {
     return { ok: true, id: old.record_id };
   }
   const id = String(rec.id || 'R' + Date.now());
-  await q(db.from('work_records').insert({ record_id: id, kind, recorded_at: now, author: m.name, ledger_no: vals.ledgerNo || '', vals, photo }));
+  // v2: 신호가 없어 늦게 올라온 기록은 휴대폰에서 실제로 저장한 시각으로 남김
+  await q(db.from('work_records').insert({ record_id: id, kind, recorded_at: usedAt(rec.ts) || now, author: m.name, ledger_no: vals.ledgerNo || '', vals, photo }));
   return { ok: true, id };
 }
 async function recordHistory(token: any, id: any) {
@@ -1056,12 +1081,14 @@ async function verify() {
 const API: any = {
   wl: {
     login: (n: any, p: any) => login('wl', n, p), changePin: (t: any, o: any, n: any) => changePin('wl', t, o, n), logout, adminCall: wlAdmin,
-    recordHistory, getConfig, findSame, saveRecord, getGuide, recentRecords, listRecords, listRecordsPage,
+    recordHistory, getConfig, findSame, saveRecord: (rec: any, t: any) => onceReq(rec && rec.qid, () => saveRecord(rec, t)), getGuide, recentRecords, listRecords, listRecordsPage,
     // 구글 도우미가 사진 저장 전에 출입증을 확인할 때
   },
   co: {
     login: (n: any, p: any) => login('co', n, p), logout, changePin: (t: any, o: any, n: any) => changePin('co', t, o, n),
-    saveMove, addCoil, editCoil, cancelMove, setOrder, setSafety, assignNumbers: async () => ({ count: 0, nos: [] }), adminCall: coAdmin,
+    saveMove: async (t: any, a: any) => { const d = await findReq(a && a.reqId); return d || onceReq(a && a.reqId, () => saveMove(t, a)); },
+    addCoil: async (t: any, a: any) => { const d = await findReq(a && a.reqId); return d || onceReq(a && a.reqId, () => addCoil(t, a)); },
+    editCoil, cancelMove, setOrder, setSafety, assignNumbers: async () => ({ count: 0, nos: [] }), adminCall: coAdmin,
     getInit: coInit, getJobs: async (t: any) => { await me(t, 'co'); return recentJobs(); }, getStock: async (t: any) => { await me(t, 'co'); return stockCalc(); },
     getCoil, getHistory, getMonthly, labelData, clientLog,
   },
