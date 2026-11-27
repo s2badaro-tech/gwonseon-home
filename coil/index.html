@@ -294,7 +294,8 @@ tr.sub td{background:#fafbfd;font-size:14px}
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 style="margin:0">규격별 재고</h3><button class="btn gray sm" id="stockRe">🔄 새로고침</button></div>
       <div id="stockAt" class="muted" style="margin:4px 0 0;font-size:14px"></div>
-      <div class="muted" style="margin:6px 0">빨간색 = 알림 무게보다 적음 (위로 올라옴). 막대의 검은 선이 알림 무게입니다. 누르면 타래별 잔량이 보입니다.</div>
+      <div class="seg" id="stockKinds" style="margin-top:8px"></div>
+      <div class="muted" style="margin:6px 0">굵기 순서입니다. 빨간색 = 알림 무게보다 적음. 막대의 검은 선이 알림 무게입니다. 누르면 보빈이 쓸 순서(적게 남은 선반 → 적게 남은 보빈)로 펼쳐집니다.</div>
       <div id="stockTiles" class="tiles"></div>
       <div id="stockBody"></div>
       <div id="fileBox" class="hide" style="margin-top:12px">
@@ -799,6 +800,7 @@ function tab(name) {
   ['move', 'stock', 'hist', 'add', 'admin'].forEach(function (t) { $('tab-' + t).classList.toggle('hide', t !== name); });
   [].forEach.call($('nav').children, function (b) { b.classList.toggle('on', b.dataset.tab === name); });
   if (name === 'hist' && !$('hFrom').value) setRange(7);
+  if (name === 'stock' && INIT && INIT.stock && STOCK_TAB !== 'AIW') { STOCK_TAB = 'AIW'; renderStock(INIT.stock); }
   window.scrollTo(0, 0);
 }
 $('nav').onclick = function (e) { var b = e.target.closest('button'); if (b) tab(b.dataset.tab); };
@@ -1423,7 +1425,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v52', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v53', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1783,19 +1785,26 @@ function stockAtTxt() {
   if (!$('stockAt')) return;
   $('stockAt').innerHTML = INIT && INIT.at ? (STALE ? '📵 신호가 없어 마지막으로 받은 자료입니다 · <b>' + whenTxt(INIT.at) + ' 기준</b>' : whenTxt(INIT.at) + ' 기준') + (getQ().length ? ' · 📦 아직 안 올라간 ' + getQ().length + '건은 올라가면 합계에 들어감' : '') : '';
 }
+// v53 (4-4): 재고 탭 AIW / 인버터 / 인롤 (+ 기타 선종이 있으면 기타). 열면 AIW
+var STOCK_TAB = 'AIW';
+function stockTabOf(s) { return s.type && s.type !== '일반 환선' ? '인롤' : String(s.kind || '').toUpperCase() === 'AIW' ? 'AIW' : s.kind === '인버터' ? '인버터' : '기타'; }
 function renderStock(list) {
   INIT.stock = list; stockAtTxt();
-  var low = list.filter(function (s) { return s.low; });
+  var tabs = ['AIW', '인버터', '인롤']; if (list.some(function (s) { return stockTabOf(s) === '기타'; })) tabs.push('기타');
+  if (tabs.indexOf(STOCK_TAB) < 0) STOCK_TAB = 'AIW';
+  $('stockKinds').innerHTML = tabs.map(function (t) { var L = list.filter(function (s) { return stockTabOf(s) === t; }), low = L.filter(function (s) { return s.low; }).length; return '<button type="button" data-st="' + t + '"' + (t === STOCK_TAB ? ' class="on"' : '') + '>' + t + (low ? ' <span style="color:var(--red)">●' + low + '</span>' : '') + '</button>'; }).join('');
+  var all = list; list = all.filter(function (s) { return stockTabOf(s) === STOCK_TAB; }).slice().sort(function (a, b) { return (firstNum(a.spec) - firstNum(b.spec)) || String(a.spec).localeCompare(String(b.spec)) || String(a.kind).localeCompare(String(b.kind)); });
+  var low = all.filter(function (s) { return s.low; });
   var txt = low.length ? '⚠️ 재고 부족 ' + low.length + '개: ' + low.map(function (s) { return (s.type && s.type !== '일반 환선' ? s.type : s.spec + 'mm ' + s.kind) + (s.order ? '(발주완료)' : ''); }).join(', ') : '';
   $('stockWarn').textContent = txt; $('stockWarn').classList.toggle('hide', !low.length);
   var noOrder = low.filter(function (s) { return !s.order; });
   $('lowBanner').textContent = noOrder.length ? '⚠️ 발주 안 된 부족 규격 ' + noOrder.length + '개 — 재고현황에서 확인' : '';
   $('lowBanner').classList.toggle('hide', !noOrder.length);
-  var tot = 0, cnt = 0; list.forEach(function (x) { tot += x.total; cnt += x.count; });
+  var tot = 0, cnt = 0, lowT = list.filter(function (s) { return s.low; }); list.forEach(function (x) { tot += x.total; cnt += x.count; });
   $('stockTiles').innerHTML = '<div class="tile"><div class="v">' + r2(tot) + '<small style="font-size:14px">kg</small></div><div class="l">전체 재고</div></div>' +
     '<div class="tile"><div class="v">' + cnt + '</div><div class="l">사용중 타래</div></div>' +
-    '<div class="tile' + (low.length ? ' red' : '') + '"><div class="v">' + low.length + '</div><div class="l">부족 규격</div></div>';
-  if (!list.length) { $('stockBody').innerHTML = '<div class="muted">아직 등록된 타래가 없습니다. ➕ 코일 등록에서 등록하세요.</div>'; return; }
+    '<div class="tile' + (lowT.length ? ' red' : '') + '"><div class="v">' + lowT.length + '</div><div class="l">부족 규격</div></div>';
+  if (!list.length) { $('stockBody').innerHTML = '<div class="muted">' + (all.length ? STOCK_TAB + ' 재고가 없습니다.' : '아직 등록된 타래가 없습니다. ➕ 코일 등록에서 등록하세요.') + '</div>'; return; }
   $('stockBody').innerHTML = list.map(function (s) {
     var k = s.spec + '|' + s.kind + '|' + (s.type || '일반 환선'), sf = s.safety == null ? 0 : s.safety, full = Math.max(sf * 2, s.total, 1);
     var h = '<div class="sk' + (s.low ? ' low' : '') + '" data-open="' + esc(k) + '">' +
@@ -1804,9 +1813,9 @@ function renderStock(list) {
       '<div class="muted">타래 ' + s.count + '개 · ' + (s.safety == null ? '알림 없음' : '알림 ' + s.safety + 'kg' + (s.unit ? ' (' + Math.floor(s.safety / s.unit + 1e-9) + '대분)' : '')) + (s.low ? ' · <b style="color:var(--red)">' + r2(s.safety - s.total) + 'kg 부족</b>' : '') +
       (s.order ? ' · <span class="tag org">발주완료 ' + esc(s.orderAt.slice(5, 10)) + '</span>' : '') + ' ' + (OPEN[k] ? '▲' : '▼') + '</div>';
     if (OPEN[k]) {
-      var fu = firstUse(s.coils);
-      h += '<div class="sub">' + s.coils.map(function (c) {
-        return '<div style="display:flex;justify-content:space-between;gap:6px;padding:6px 0' + (c.status === '소진' ? ';opacity:.5' : '') + '"><a href="#" data-coil="' + esc(c.no) + '"><b>' + esc(c.no) + '</b></a>' + (c.no === fu ? '<span class="tag org">먼저 쓰기</span>' : '') + '<span><b>' + c.rem + 'kg</b></span><span class="muted">' + esc(c.loc || '') + ' ' + (c.status === '소진' ? '소진' : '') + '</span></div>';
+      var live = shelfOrder(s.coils.filter(function (c) { return c.status !== '소진'; })), fu = live[0] && live[0].no;
+      h += '<div class="sub">' + live.concat(s.coils.filter(function (c) { return c.status === '소진'; })).map(function (c) {
+        return '<div style="display:flex;justify-content:space-between;gap:6px;padding:6px 0' + (c.status === '소진' ? ';opacity:.5' : '') + '"><a href="#" data-coil="' + esc(c.no) + '"><b>' + esc(c.no) + '</b></a>' + (c.no === fu ? '<span class="tag" style="border:2px solid var(--pri);color:var(--pri)">먼저 쓰기</span>' : '') + '<span><b>' + c.rem + 'kg</b></span><span class="muted">📍' + esc(c.loc || '선반 없음') + ' ' + (c.status === '소진' ? '소진' : '') + '</span></div>';
       }).join('') +
         '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center"><button class="btn sm ' + (s.order ? 'gray' : '') + '" data-order="' + esc(k) + '" data-done="' + (s.order ? '0' : '1') + '">' + (s.order ? '발주완료 풀기' : '✅ 발주완료 표시') + '</button>' +
         (ME.admin ? '<span class="muted">알림 무게는 ⚙️관리 → 부족 알림 무게</span>' : '') +
@@ -1816,6 +1825,7 @@ function renderStock(list) {
   }).join('');
 }
 $('oldList').onclick = function (e) { var a = e.target.closest('[data-coil]'); if (a) { e.preventDefault(); openOne(a.dataset.coil); } };
+$('stockKinds').onclick = function (e) { var b = e.target.closest('[data-st]'); if (!b) return; STOCK_TAB = b.dataset.st; renderStock(INIT.stock); };
 $('stockBody').onclick = function (e) {
   var a = e.target.closest('[data-coil]');
   if (a) { e.preventDefault(); openOne(a.dataset.coil); return; }
