@@ -55,6 +55,7 @@ textarea{min-height:60px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .chips button{border:1px solid var(--line);background:#fff;border-radius:16px;padding:6px 11px;font-size:14px}
 .chips button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.chips.big button{min-height:48px;font-size:17px;font-weight:700;padding:10px 16px}
 /* v43: 선경에 맞는 코일 — 한 줄에 3개, 9개까지, 나머지는 펼쳐 보기. 누르면 파란색 */
 .fitg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:4px}
 .fitg button{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:12px;padding:7px 2px;font-size:15px;min-height:54px;line-height:1.3;text-align:center;white-space:nowrap;overflow:hidden}
@@ -229,7 +230,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
         </div>
         <div style="margin-top:8px;text-align:right"><button class="btn gray sm hide" id="editToggle">✏️ 정보 수정</button></div>
         <div id="editBox" class="hide">
-          <div class="row"><div><label>규격(mm)</label><input id="eSpec" inputmode="decimal"></div><div><label>선종</label><input id="eKind"></div></div>
+          <div class="row"><div><label>규격(mm)</label><input id="eSpec" inputmode="decimal"></div><div><label>선종</label><input id="eKind" list="kindList"><datalist id="kindList"></datalist></div></div>
           <div class="row"><div><label>빈 보빈(kg)</label><input id="eTare" inputmode="decimal"></div><div><label>제조사</label><input id="eMaker"></div></div>
           <label>코일 종류</label><select id="eType"></select>
           <label>보관위치</label><input id="eLoc" list="locList">
@@ -331,10 +332,11 @@ tr.sub td{background:#fafbfd;font-size:14px}
       <h3>코일 등록</h3>
       <div class="muted">규격·선종·코일 무게만 넣으면 됩니다.</div>
       <div class="seg hide" id="aType"></div>
+      <label>선종</label><div class="chips big" id="aKindChips"></div>
+      <input id="aKind" class="hide" placeholder="기타 선종 이름을 쓰세요" style="margin-top:6px">
       <label>규격 (선경 mm)</label><input id="aSpec" inputmode="decimal" placeholder="예: 0.9"><div class="chips" id="aSpecChips"></div>
-      <div class="chips" id="aInroll"></div>
+      <div class="chips big" id="aInroll"></div>
       <div class="muted" id="aTypeNow" style="margin-top:4px"></div>
-      <label>선종</label><input id="aKind" placeholder="예: PEW"><div class="chips" id="aKindChips"></div>
       <label>코일 무게 (kg) <span style="color:var(--red)">*</span> <span class="muted">라벨에 적힌 순수 코일 무게 (보빈 빼고)</span></label><input id="aVal" inputmode="decimal" placeholder="예: 20" style="font-size:20px">
       <label>빈 보빈 무게 (kg)</label>
       <div class="chips bob hide" id="aBob"></div>
@@ -361,11 +363,23 @@ tr.sub td{background:#fafbfd;font-size:14px}
       <button class="btn" id="lbGo">라벨 화면 열기</button>
     </div>
     <div class="card">
-      <h3>🔔 부족 알림 무게</h3>
-      <div class="muted">같은 규격·선종의 남은 무게 합계가 이 무게보다 적으면 재고현황에서 빨간색으로 위에 올라오고 메일이 갑니다.</div>
+      <h3>🔔 부족 알림 기준</h3>
+      <div class="muted">같은 규격·선종의 남은 무게 합계가 이 무게보다 적으면 재고현황에서 빨간색으로 위에 올라오고 메일이 갑니다. 인롤은 1대당 무게로 ‘몇 대분’을 셉니다.</div>
       <div id="typeRows" style="margin-top:6px"></div>
       <div style="height:8px"></div>
-      <button class="btn" id="typeSave">알림 무게 저장</button>
+      <button class="btn" id="typeSave">알림 기준 저장</button>
+      <label>부족 알림 메일 받는 사람 (쉼표로 여러 명)</label><input id="mailTo" inputmode="email" placeholder="예: order@회사.com">
+      <div style="height:8px"></div>
+      <button class="btn gray" id="mailSave">메일 받는 사람 저장</button>
+    </div>
+    <div class="card">
+      <h3>🧵 선종과 규격 버튼</h3>
+      <div class="muted">코일 등록 화면에 나오는 선종과 규격 버튼입니다. 이름을 바꾸면 그 선종 타래도 같이 바뀝니다.</div>
+      <div id="kindRows" style="margin-top:6px"></div>
+      <div style="height:8px"></div>
+      <button class="btn gray sm" id="kindAdd">＋ 선종 하나 더</button>
+      <div style="height:8px"></div>
+      <button class="btn" id="kindSave">선종·규격 저장</button>
     </div>
     <div class="card hide">
       <h3>🧵 보빈 종류와 무게</h3>
@@ -516,6 +530,55 @@ function bobChips(id, inputId, after) {
     after && after();
   };
 }
+// ── 선종 (v50, 3단계): AIW가 기본. 선종마다 규격 버튼이 다름. 인롤은 인롤 규격 버튼만. 기타는 이름을 직접 씀 ──
+var A_KIND = 'AIW';
+function kindList() { return (INIT && INIT.kinds && INIT.kinds.length) ? INIT.kinds : ['AIW', '인버터', '인롤']; }
+function daeTxt(alert, unit) { return unit > 0 ? (alert > 0 ? '알림 ' + alert + 'kg = ' + Math.floor(alert / unit + 1e-9) + '대분 (1대 ' + unit + 'kg)' : '1대 ' + unit + 'kg') : ''; }
+function renderKinds() {
+  var l = kindList(); if (A_KIND !== '기타' && l.indexOf(A_KIND) < 0) A_KIND = l.indexOf('AIW') >= 0 ? 'AIW' : l[0];
+  if ($('kindList')) $('kindList').innerHTML = l.map(function (k) { return '<option value="' + esc(k) + '">'; }).join('');
+  $('aKindChips').innerHTML = l.concat(['기타']).map(function (k) { return '<button type="button" data-k="' + esc(k) + '"' + (k === A_KIND ? ' class="on"' : '') + '>' + esc(k) + '</button>'; }).join('');
+  pickKind(A_KIND, true);
+  renderKindAdmin();
+}
+function pickKind(k, quiet) {
+  A_KIND = k;
+  [].forEach.call($('aKindChips').children, function (x) { x.classList.toggle('on', x.dataset.k === k); });
+  $('aKind').classList.toggle('hide', k !== '기타');
+  if (k !== '기타') $('aKind').value = k; else if (!quiet) { $('aKind').value = ''; $('aKind').focus(); }
+  var inroll = k === '인롤', specs = ((INIT && INIT.specsBy) || {})[k] || [];
+  $('aInroll').classList.toggle('hide', !inroll);
+  $('aSpecChips').classList.toggle('hide', inroll);
+  if (!inroll) chips('aSpecChips', specs, 'aSpec');
+  if (!inroll && A_TYPE !== '일반 환선' && A_TYPE) { A_TYPE = '일반 환선'; $('aSpec').value = ''; [].forEach.call($('aInroll').children, function (x) { x.classList.remove('on'); }); }
+  if (inroll && A_TYPE === '일반 환선') $('aSpec').value = '';
+  if (A_TYPE) setATare();
+}
+$('aKindChips').onclick = function (e) { var b = e.target.closest('[data-k]'); if (b) pickKind(b.dataset.k); };
+// 관리: 선종 이름과 선종별 규격 목록
+function renderKindAdmin() {
+  if (!$('kindRows')) return;
+  var by = (INIT && INIT.specsBy) || {};
+  $('kindRows').innerHTML = kindList().map(function (k) { return kindRow(k, (by[k] || []).join(', ')); }).join('');
+  $('mailTo').value = (INIT && INIT.mail) || '';
+}
+function kindRow(k, specs) {
+  return '<div class="it" data-kind="' + esc(k) + '" style="padding:8px 0;border-bottom:1px solid var(--line)"><label style="margin-top:0">선종 이름</label><input class="kName" value="' + esc(k) + '">' +
+    (k === '인롤' ? '<div class="muted" style="margin-top:4px">인롤 규격은 위 ‘부족 알림 기준’에서 정합니다.</div>' :
+      '<label>규격 버튼 (쉼표로)</label><textarea class="kSpecs" rows="2" style="width:100%;font-size:16px">' + esc(specs) + '</textarea>') + '</div>';
+}
+$('kindAdd').onclick = function () { $('kindRows').insertAdjacentHTML('beforeend', kindRow('', '')); };
+$('kindSave').onclick = function () {
+  var rows = [].map.call($('kindRows').querySelectorAll('[data-kind]'), function (d) {
+    return { old: d.dataset.kind, name: d.querySelector('.kName').value.trim(), specs: d.querySelector('.kSpecs') ? d.querySelector('.kSpecs').value : '' };
+  }).filter(function (r) { return r.name; });
+  var ren = rows.filter(function (r) { return r.old && r.old.toUpperCase() !== r.name.toUpperCase(); });
+  if (ren.length && !confirm('선종 이름을 바꾸면 그 선종 타래도 모두 새 이름으로 바뀝니다.\n' + ren.map(function (r) { return r.old + ' → ' + r.name; }).join('\n') + '\n\n바꿀까요?')) return;
+  admin('setKinds', { rows: rows }).then(function (r) { INIT.kinds = r.kinds; INIT.specsBy = r.specsBy; renderKinds(); toast('선종·규격을 저장했습니다'); refreshStock(); }, function () {});
+};
+$('mailSave').onclick = function () {
+  admin('setMail', { mail: $('mailTo').value }).then(function (r) { INIT.mail = r.mail; $('mailTo').value = r.mail; toast(r.mail ? '부족 알림 메일: ' + r.mail : '부족 알림 메일을 껐습니다'); }, function () {});
+};
 // ── 코일 종류 ──
 var A_TYPE = '';
 function typeList() { return (INIT && INIT.types) || [{ name: '일반 환선', tare: 1, alert: 50 }]; }
@@ -527,7 +590,12 @@ function renderTypes() {
   setATare();
   $('eType').innerHTML = l.map(function (t) { return '<option>' + esc(t.name) + '</option>'; }).join('');
   $('typeRows').innerHTML = l.map(function (t, i) {
-    return '<div class="it" data-type="' + esc(t.name) + '" style="padding:8px 0;border-bottom:1px solid var(--line)"><b>' + esc(t.name) + '</b>' +
+    var ir = t.name !== '일반 환선';
+    return '<div class="it" data-type="' + esc(t.name) + '" style="padding:8px 0;border-bottom:1px solid var(--line)">' + (ir ?
+      '<label style="margin-top:0">이름</label><input class="tName" value="' + esc(t.name) + '">' +
+      '<div style="display:flex;gap:10px"><div style="flex:1"><label>규격</label><input class="tSpec" value="' + esc(t.spec || '') + '"></div>' +
+      '<div style="flex:1"><label>1대당 무게 (kg)</label><input class="tUnit" inputmode="decimal" value="' + (t.unit == null ? '' : t.unit) + '"></div></div>' +
+      '<div class="muted tDae" style="margin-top:4px">' + daeTxt(t.alert, t.unit) + '</div>' : '<b>' + esc(t.name) + '</b> <span class="muted">(AIW·인버터 등 보빈에 감긴 코일)</span>') +
       '<div style="display:flex;gap:10px;align-items:center;margin-top:6px"><input class="tAlert" style="width:110px" inputmode="decimal" value="' + (t.alert == null ? '' : t.alert) + '"' + (t.alert == null ? ' disabled placeholder="알림 없음"' : '') + '><span>kg 아래면 알림</span>' +
       '<label style="display:flex;gap:6px;align-items:center;margin:0;white-space:nowrap"><input type="checkbox" class="tNone" style="width:auto"' + (t.alert == null ? ' checked' : '') + '> 알림 없음</label></div></div>';
   }).join('');
@@ -535,7 +603,7 @@ function renderTypes() {
 // in-roll 버튼: 규격과 종류를 같이 채움. 다른 규격을 고르거나 직접 쓰면 일반 환선
 $('aInroll').onclick = function (e) {
   var b = e.target.closest('[data-ir]'); if (!b) return;
-  var t = typeOf(b.dataset.ir); A_TYPE = t.name; $('aSpec').value = t.spec;
+  var t = typeOf(b.dataset.ir); A_TYPE = t.name; $('aSpec').value = t.spec; if (A_KIND !== '인롤') pickKind('인롤', true);
   [].forEach.call($('aInroll').children, function (x) { x.classList.toggle('on', x === b); });
   setATare(); aPrev(); $('aTare').focus();
 };
@@ -551,8 +619,14 @@ function setATare() {
   $('aTare').value = t == null ? '' : t;
   $('aTare').placeholder = t == null ? '빈 보빈 무게를 직접 쓰세요 (꼭)' : '';
   $('aTareHint').innerHTML = t == null ? '<b style="color:var(--red)">' + esc(A_TYPE) + '은 빈 보빈 무게를 직접 써야 합니다.</b>' : '기본 ' + t + 'kg. 보빈이 다른 타래만 숫자를 고쳐 쓰세요.';
-  $('aTypeNow').innerHTML = '종류: <b>' + esc(A_TYPE) + '</b>' + (A_TYPE === '일반 환선' ? '' : ' (다른 규격을 누르거나 직접 쓰면 일반 환선)');
+  var ty = typeOf(A_TYPE);
+  $('aTypeNow').innerHTML = A_TYPE === '일반 환선' ? (A_KIND === '인롤' ? '<b style="color:var(--org)">위에서 인롤 규격을 눌러 주세요.</b>' : '') : '종류: <b>' + esc(A_TYPE) + '</b>' + (ty.unit ? ' · 1대 ' + ty.unit + 'kg' : '');
 }
+$('typeRows').oninput = function (e) {
+  var d = e.target.closest('[data-type]'); if (!d || !d.querySelector('.tDae')) return;
+  var al = d.querySelector('.tNone').checked ? null : n(d.querySelector('.tAlert').value);
+  d.querySelector('.tDae').textContent = daeTxt(isFinite(al) ? al : null, n(d.querySelector('.tUnit').value));
+};
 $('typeRows').onchange = function (e) {
   var c = e.target.closest('.tNone'); if (!c) return;
   var inp = c.closest('[data-type]').querySelector('.tAlert');
@@ -560,12 +634,16 @@ $('typeRows').onchange = function (e) {
 };
 $('typeSave').onclick = function () {
   var rows = [].map.call($('typeRows').querySelectorAll('[data-type]'), function (d) {
-    return { name: d.dataset.type, alert: d.querySelector('.tNone').checked ? '' : d.querySelector('.tAlert').value };
+    var o = { old: d.dataset.type, name: d.dataset.type, alert: d.querySelector('.tNone').checked ? '' : d.querySelector('.tAlert').value };
+    if (d.querySelector('.tName')) { o.name = d.querySelector('.tName').value.trim(); o.spec = d.querySelector('.tSpec').value.trim(); o.unit = d.querySelector('.tUnit').value.trim(); }
+    return o;
   });
   for (var i = 0; i < rows.length; i++) {
+    if (!rows[i].name) return toast('종류 이름을 비울 수 없습니다.');
+    if (rows[i].unit !== undefined && rows[i].unit !== '' && !(n(rows[i].unit) > 0)) return toast(rows[i].name + ': 1대당 무게를 숫자로 넣어 주세요.');
     if (rows[i].alert !== '' && !(n(rows[i].alert) > 0)) return toast(rows[i].name + ': 알림 무게를 숫자로 넣거나 ‘알림 없음’을 켜 주세요.');
   }
-  admin('setTypes', { rows: rows }).then(function (l) { INIT.types = l; renderTypes(); toast('알림 무게를 저장했습니다'); refreshStock(); }, function () {});
+  admin('setTypes', { rows: rows }).then(function (l) { INIT.types = l; A_TYPE = '일반 환선'; renderTypes(); toast('알림 기준을 저장했습니다'); refreshStock(); }, function () {});
 };
 function renderBobbins() { bobChips('aBob', 'aTare', function () { aPrev(); }); bobChips('tbBob', 'tbKg', function () { uPrev(); updPrev(); }); bobChips('tmBob', 'tmKg'); $('bobTxt').value = INIT.bobbinTxt || ''; }
 
@@ -643,7 +721,7 @@ function applyInit(r, fresh) {
     $('tgtList').innerHTML = r.targets.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('');
     $('locList').innerHTML = r.locs.map(function (x) { return '<option value="' + esc(x) + '">'; }).join('');
     renderBobbins(); renderTypes();
-    chips('aSpecChips', r.specs, 'aSpec'); chips('aKindChips', r.kinds, 'aKind'); chips('aLocChips', r.locs, 'aLoc');
+    renderKinds(); chips('aLocChips', r.locs, 'aLoc');
     $('links').innerHTML = r.excel ? '<button class="btn gray" style="margin-bottom:8px" id="linkExcel">📊 엑셀로 내려받기 (재고 관리대장)</button>' : '';
     if ($('linkExcel')) $('linkExcel').onclick = excelDown;
     renderStock(r.stock);
@@ -1196,7 +1274,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v49', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v50', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1436,7 +1514,7 @@ function addWarn(a) {
   var w = [], v = n(a.value), t = String(a.tare).trim() === '' ? NaN : n(a.tare);
   if (isFinite(t) && outOf(t, RANGE.tare)) w.push('· 빈 보빈 ' + t + 'kg (보통 ' + RANGE.tare.join(' ~ ') + 'kg)');
   if (outOf(v, a.mode === 'gross' ? RANGE.gross : RANGE.stock)) w.push('· 무게 ' + v + 'kg (보통 ' + (a.mode === 'gross' ? RANGE.gross : RANGE.stock).join(' ~ ') + 'kg)');
-  var sp = n(a.spec); if (!isFinite(sp) || sp < 0.05 || sp > 6) w.push('· 규격 ' + a.spec + 'mm (보통 0.05 ~ 6mm)');
+  var sp = n(a.spec); if (!typeOf(a.ctype).spec && (!isFinite(sp) || sp < 0.05 || sp > 6)) w.push('· 규격 ' + a.spec + 'mm (보통 0.05 ~ 6mm)');
   return w;
 }
 // ── 전송 대기함 (신호가 없으면 휴대폰에 보관 → 신호가 돌아오면 자동으로 보냄, 요청ID로 두 번 저장 안 됨) ──
@@ -1558,7 +1636,7 @@ function stockAtTxt() {
 function renderStock(list) {
   INIT.stock = list; stockAtTxt();
   var low = list.filter(function (s) { return s.low; });
-  var txt = low.length ? '⚠️ 재고 부족 ' + low.length + '개: ' + low.map(function (s) { return s.spec + 'mm ' + s.kind + (s.type && s.type !== '일반 환선' ? ' ' + s.type : '') + (s.order ? '(발주완료)' : ''); }).join(', ') : '';
+  var txt = low.length ? '⚠️ 재고 부족 ' + low.length + '개: ' + low.map(function (s) { return (s.type && s.type !== '일반 환선' ? s.type : s.spec + 'mm ' + s.kind) + (s.order ? '(발주완료)' : ''); }).join(', ') : '';
   $('stockWarn').textContent = txt; $('stockWarn').classList.toggle('hide', !low.length);
   var noOrder = low.filter(function (s) { return !s.order; });
   $('lowBanner').textContent = noOrder.length ? '⚠️ 발주 안 된 부족 규격 ' + noOrder.length + '개 — 재고현황에서 확인' : '';
@@ -1571,9 +1649,9 @@ function renderStock(list) {
   $('stockBody').innerHTML = list.map(function (s) {
     var k = s.spec + '|' + s.kind + '|' + (s.type || '일반 환선'), sf = s.safety == null ? 0 : s.safety, full = Math.max(sf * 2, s.total, 1);
     var h = '<div class="sk' + (s.low ? ' low' : '') + '" data-open="' + esc(k) + '">' +
-      '<div class="top"><span class="nm">' + esc(s.spec) + 'mm <small style="font-weight:600;color:var(--sub)">' + esc(s.kind) + (s.type && s.type !== '일반 환선' ? ' · ' + esc(s.type) : '') + '</small></span><span class="kg">' + s.total + '<small style="font-size:14px">kg</small></span></div>' +
+      '<div class="top"><span class="nm">' + esc(s.spec) + 'mm <small style="font-weight:600;color:var(--sub)">' + (s.type && s.type !== '일반 환선' ? esc(s.type) : esc(s.kind)) + '</small></span><span class="kg">' + (s.unit ? s.units + '<small style="font-size:14px">대분 · </small>' : '') + s.total + '<small style="font-size:14px">kg</small></span></div>' +
       '<div class="bar"><i style="width:' + Math.min(100, s.total / full * 100).toFixed(1) + '%"></i>' + (s.safety == null ? '' : '<b style="left:' + Math.min(100, sf / full * 100).toFixed(1) + '%"></b>') + '</div>' +
-      '<div class="muted">타래 ' + s.count + '개 · ' + (s.safety == null ? '알림 없음' : '알림 ' + s.safety + 'kg') + (s.low ? ' · <b style="color:var(--red)">' + r2(s.safety - s.total) + 'kg 부족</b>' : '') +
+      '<div class="muted">타래 ' + s.count + '개 · ' + (s.safety == null ? '알림 없음' : '알림 ' + s.safety + 'kg' + (s.unit ? ' (' + Math.floor(s.safety / s.unit + 1e-9) + '대분)' : '')) + (s.low ? ' · <b style="color:var(--red)">' + r2(s.safety - s.total) + 'kg 부족</b>' : '') +
       (s.order ? ' · <span class="tag org">발주완료 ' + esc(s.orderAt.slice(5, 10)) + '</span>' : '') + ' ' + (OPEN[k] ? '▲' : '▼') + '</div>';
     if (OPEN[k]) {
       var fu = firstUse(s.coils);

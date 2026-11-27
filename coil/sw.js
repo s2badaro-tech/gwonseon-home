@@ -1,6 +1,6 @@
 // 코일 관리 (깃허브판) - 화면 파일을 휴대폰에 저장해 두고 바로 띄움.
 // 화면을 먼저 보여주고, 뒤에서 새 버전을 받아 다음 번에 씀.
-var CACHE = 'coil-v26';
+var CACHE = 'coil-v27';
 var FILES = ['./', './index.html', '../auth.js', './labels.html'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(FILES.map(function (f) { return new Request(f, { cache: 'reload' }); })); }));
