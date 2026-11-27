@@ -953,7 +953,7 @@ function addBatch(no, raw) {
   });
 }
 function bCalc(it) {
-  var v = n(it.val), g = bLast(it.coil), T = it.coil.tare;
+  var v = n(String(it.val).replace(",", ".")), g = bLast(it.coil), T = it.coil.tare;
   if (!isFinite(v) || v <= 0) return { ok: false, msg: '저울 무게를 넣으세요' };
   if (v > g) return { ok: false, bad: true, msg: '⚠️ 지난번(' + g + 'kg)보다 무거움' };
   if (v < T) return { ok: false, bad: true, msg: '⚠️ 보빈(' + T + 'kg)보다 가벼움' };
@@ -973,7 +973,7 @@ function renderBatch() {
         return '<div class="it" data-i="' + i + '" style="padding:8px 0"><div class="t" style="align-items:center"><b style="font-size:20px">' + esc(c.no) + '</b><span class="muted">' + esc(c.kind) + ' · 지난번 ' + bLast(c) + 'kg</span>' +
           '<span><button class="btn gray sm" data-bview="' + i + '" title="자세히">🔎</button> <button class="btn gray sm" data-bdel="' + i + '" title="빼기">✕</button></span></div>' +
           '<div class="row" style="margin-top:6px;align-items:center;gap:8px"><input class="bVal" data-i="' + i + '" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" placeholder="저울 무게 kg" value="' + esc(x.val) + '" style="font-size:24px;height:56px;flex:1;min-width:0">' +
-          '<button class="btn gray" data-bempty="' + i + '" style="flex:none;width:auto;padding:0 12px;height:56px;font-size:15px">🏁 다 씀</button></div>' +
+          '<button class="btn gray" data-bempty="' + i + '" style="flex:none;width:auto;padding:0 10px;height:56px;font-size:14px;line-height:1.2' + (x.empty ? ';background:var(--org,#f59e0b);color:#fff' : '') + '">' + (x.empty ? '↩ 되돌리기' : '🏁 선 다 씀<br><span style="font-size:11px">(빈 보빈)</span>') + '</button></div>' +
           '<div class="bRes" style="' + bResCss(x) + '">' + bResHtml(x) + '</div></div>';
       }).join('');
   }).join('');
@@ -1004,7 +1004,14 @@ $('bList').addEventListener('keydown', function (e) {
 $('bList').addEventListener('click', function (e) {
   var bv = e.target.closest('[data-bview]'); if (bv) { openOne(BATCH.items[+bv.dataset.bview].coil.no); return; }
   var d = e.target.closest('[data-bdel]'); if (d) { BATCH.items.splice(+d.dataset.bdel, 1); renderBatch(); return; }
-  var m = e.target.closest('[data-bempty]'); if (m) { var it = BATCH.items[+m.dataset.bempty]; if (!(it.coil.tare > 0)) return toast('보빈이 없는 타래는 관리자에게 무게 맞추기를 부탁하세요.', 4000); it.val = String(it.coil.tare); it.empty = true; renderBatch(); }
+  var m = e.target.closest('[data-bempty]'); if (m) {
+    var it = BATCH.items[+m.dataset.bempty];
+    if (it.empty) { it.val = it.prev || ''; it.empty = false; delete it.prev; renderBatch(); return; } // v39: 잘못 눌렀으면 되돌리기
+    if (!(it.coil.tare > 0)) return toast('보빈이 없는 타래는 관리자에게 무게 맞추기를 부탁하세요.', 4000);
+    // v39: '다 씀'은 이 타래 선을 전부 썼다는 뜻 → 저울 무게가 빈 보빈 무게(예: 1kg)로 바뀜. 적어 둔 무게가 있으면 먼저 물어봄
+    if (String(it.val).trim() && !confirm(it.coil.no + ' 선을 전부 다 썼나요?\n\n그러면 저울 무게가 빈 보빈 무게 ' + it.coil.tare + 'kg로 바뀌고, 적어 둔 ' + it.val + 'kg는 지워집니다.\n(무게를 다 적었다는 뜻이면 [취소]를 누르세요)')) return;
+    it.prev = it.val; it.val = String(it.coil.tare); it.empty = true; renderBatch(); toast('🏁 ' + it.coil.no + ' 선 다 씀 (빈 보빈 ' + it.coil.tare + 'kg). 잘못 눌렀으면 [되돌리기]', 3500);
+  }
 });
 $('bClear').onclick = function () { if (BATCH && BATCH.items.length && confirm('찍어 둔 목록을 비울까요? (저장 안 한 것은 사라집니다)')) { BATCH.items = []; renderBatch(); } };
 $('bSave').onclick = function () {
@@ -1025,7 +1032,7 @@ $('bSave').onclick = function () {
   var list = BATCH.items.slice(), saved = 0, kept = 0, tot = 0, fail = [];
   list.reduce(function (p, x) {
     return p.then(function () {
-      var k = bCalc(x), a = { no: x.coil.no, type: '출고', mode: 'gross', value: n(x.val), worker: ME.name, target: job, kw: kw, memo: x.empty ? '다 씀' : '', reqId: newReq() };
+      var k = bCalc(x), a = { no: x.coil.no, type: '출고', mode: 'gross', value: n(String(x.val).replace(",", ".")), worker: ME.name, target: job, kw: kw, memo: x.empty ? '다 씀' : '', reqId: newReq() };
       return submit('saveMove', a, x.coil.no + ' 저울 ' + a.value + 'kg (' + job + ')').then(function (r) {
         if (r) { saved++; tot += -r.delta; } else kept++;
         BATCH.items = BATCH.items.filter(function (y) { return y !== x; });
@@ -1127,7 +1134,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v38', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v39', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
