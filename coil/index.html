@@ -1076,6 +1076,41 @@ function openOne(no) { tab('move'); if (USE_MODE !== 'one') setUse('one'); $('co
 // v37: 이 작업에 쓴 코일 (저장된 기록, 누가 저장했든) + 선경별 합계
 var DONE_Q = 0;
 function planLine(p) { return p && p.orig ? '<div style="margin-top:6px;font-size:15px">🧮 원래 <b>' + esc(p.orig) + '</b> → 실제 <b>' + esc(p.actual || p.orig) + '</b>' + (p.ratio ? ' · 단면적 <b>' + p.ratio + '%</b>' : '') + '</div>' : ''; }
+// v54 (4-5): 작업 하나에 쓴 코일을 선경별(타래 수, 쓴 양) + 합계 표로. 코일 사용 화면과 이력 화면이 같이 씀
+function jobTable(L) {
+  var by = {}, ks = [], tot = 0, nos = {};
+  L.forEach(function (x) { if (x.type !== '출고' || x.cancelled) return; var u = -n(x.delta) || 0, k = x.spec + 'mm' + (x.kind && x.kind !== 'AIW' ? ' ' + x.kind : ''); if (!by[k]) { by[k] = { kg: 0, c: {} }; ks.push(k); } by[k].kg += u; by[k].c[x.no] = 1; nos[x.no] = 1; tot += u; });
+  if (!ks.length) return '<div class="muted">취소되지 않은 사용 기록이 없어요.</div>';
+  ks.sort(function (a, b) { return firstNum(a) - firstNum(b); });
+  return '<table><tr class="muted"><td>선경</td><td class="n">타래</td><td class="n">쓴 양</td></tr>' +
+    ks.map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="n">' + Object.keys(by[k].c).length + '타래</td><td class="n"><b>' + r2(by[k].kg) + 'kg</b></td></tr>'; }).join('') +
+    (ks.length > 1 ? '<tr><td><b>합계</b></td><td class="n"><b>' + Object.keys(nos).length + '타래</b></td><td class="n"><b>' + r2(tot) + 'kg</b></td></tr>' : '') + '</table>';
+}
+// 작업번호별 묶음 (작업번호가 있는 '쓰기' 기록만 묶고, 나머지는 아래에 따로)
+function histGroups(rows, plans) {
+  var G = {}, gl = [], rest = [];
+  rows.forEach(function (x) {
+    var t = String(x.target || '').trim();
+    if (x.type !== '출고' || !t) { rest.push(x); return; }
+    if (!G[t]) { G[t] = { t: t, L: [], kw: '', d1: '', d2: '' }; gl.push(t); }
+    var g = G[t]; g.L.push(x); if (!g.kw && x.kw) g.kw = String(x.kw);
+    var d = String(x.at || '').slice(0, 10); if (d) { if (!g.d1 || d < g.d1) g.d1 = d; if (!g.d2 || d > g.d2) g.d2 = d; }
+  });
+  var md = function (d) { return d ? Number(d.slice(5, 7)) + '/' + Number(d.slice(8, 10)) : ''; };
+  return gl.map(function (t) { var g = G[t];
+    return '<div class="it jobG"><div style="font-size:18px;font-weight:900">📋 ' + esc(t) + '</div>' +
+      '<div class="muted" style="font-size:13px;margin-bottom:4px">' + (g.kw ? esc(g.kw) + 'kW · ' : '') + '작업 날짜 ' + md(g.d1) + (g.d2 && g.d2 !== g.d1 ? '~' + md(g.d2) : '') + '</div>' +
+      jobTable(g.L) + planLine((plans || {})[t]) +
+      '<details style="margin-top:6px"><summary>기록 ' + g.L.length + '줄 보기</summary>' + histHtml(g.L.slice().reverse(), false) + '</details></div>';
+  }).join('') + (rest.length ? (gl.length ? '<h3 style="margin:14px 0 6px">그 밖의 기록 (작업번호 없는 쓰기, 등록, 무게 맞추기, 취소)</h3>' : '') + histHtml(rest, false) : '');
+}
+// 수정된 기록: '✏️ 수정됨'을 누르면 수정 전 내용
+function editsHtml(o) {
+  var E = o.edits || []; if (!E.length) return '';
+  return '<details class="edits"><summary><span class="tag org">✏️ 수정됨 ' + (E.length > 1 ? E.length + '번' : '') + '</span> <span class="muted">눌러서 수정 전 보기</span></summary>' +
+    E.map(function (e) { return '<div class="muted" style="margin:4px 0">' + esc(String(e.at || '').slice(5, 16)) + ' · <b>' + esc(e.who || '') + '</b> 수정' + (e.why ? ' (' + esc(e.why) + ')' : '') +
+      (e.ch || []).map(function (c) { return '<div>· ' + esc(c.f) + ': <s>' + esc(c.b === '' || c.b == null ? '(비어 있음)' : c.b) + '</s> → <b>' + esc(c.a === '' || c.a == null ? '(비어 있음)' : c.a) + '</b></div>'; }).join('') + '</div>'; }).join('') + '</details>';
+}
 function loadDone() {
   var job = jobValue(), box = $('bDone'); if (!box) return;
   if (!job) { box.innerHTML = ''; return; }
@@ -1085,16 +1120,8 @@ function loadDone() {
     if (q !== DONE_Q) return;
     var L = (r.rows || []).filter(function (x) { return x.target === job && x.type === '출고' && !x.cancelled; }).reverse();
     if (!L.length) { box.innerHTML = '<div class="muted">📋 “' + esc(job) + '”에 저장된 코일 기록이 아직 없어요.</div>'; return; }
-    var by = {}, ks = [], tot = 0, nos = {};
-    L.forEach(function (x) { var u = -n(x.delta) || 0, k = x.spec + 'mm'; if (!by[k]) { by[k] = { kg: 0, c: {} }; ks.push(k); } by[k].kg += u; by[k].c[x.no] = 1; nos[x.no] = 1; tot += u; });
-    ks.sort(function (a, b) { return firstNum(a) - firstNum(b); });
-    box.innerHTML = '<h3 style="margin:0 0 6px">📋 이 작업에 쓴 코일 (저장됨)</h3>' +
-      '<table><tr class="muted"><td>선경</td><td class="n">타래</td><td class="n">쓴 양</td></tr>' +
-      ks.map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="n">' + Object.keys(by[k].c).length + '타래</td><td class="n"><b>' + r2(by[k].kg) + 'kg</b></td></tr>'; }).join('') +
-      '<tr><td><b>합계</b></td><td class="n"><b>' + Object.keys(nos).length + '타래</b></td><td class="n"><b>' + r2(tot) + 'kg</b></td></tr></table>' +
-      planLine((r.plans || {})[job]) +
-      '<details style="margin-top:6px"><summary>기록 ' + L.length + '줄 보기</summary><table>' +
-      L.map(function (x) { return '<tr><td><b>' + esc(x.no) + '</b> <span class="muted">' + esc(x.spec) + 'mm ' + esc(x.kind) + '</span><div class="muted">' + esc(x.worker) + ' · ' + esc(String(x.at).slice(5, 16)) + '</div></td><td class="n"><b>' + r2(-n(x.delta)) + 'kg</b></td></tr>'; }).join('') + '</table></details>';
+    box.innerHTML = '<h3 style="margin:0 0 6px">📋 이 작업에 쓴 코일 (저장됨)</h3>' + jobTable(L) + planLine((r.plans || {})[job]) +
+      '<details style="margin-top:6px"><summary>기록 ' + L.length + '줄 보기</summary>' + histHtml(L, false) + '</details>';
   }, function () { if (q === DONE_Q) box.innerHTML = '<div class="muted">저장된 기록을 못 불러왔어요. 신호를 확인하세요.</div>'; });
 }
 $('bJob').addEventListener('change', function () { ls('coilinv_job', $('bJob').value.trim()); loadDone(); });
@@ -1425,7 +1452,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v53', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v54', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1753,7 +1780,7 @@ function histHtml(rows, small) {
     return '<div class="it' + (o.cancelled ? ' x' : '') + '"><div class="t"><span><span class="tag ' + col + '">' + esc(o.type) + '</span> ' + (small ? '' : '<b>' + esc(o.no) + '</b> ' + esc(o.spec) + 'mm ') +
       '<b>' + (d > 0 ? '+' : '') + esc(o.delta) + 'kg</b></span><span class="muted">' + esc(o.at) + '</span></div>' +
       '<div class="muted">' + esc(o.before) + ' → ' + esc(o.after) + 'kg · ' + esc(o.worker) + (o.target ? ' · ' + esc(o.target) : '') + (o.kw ? ' · ' + esc(o.kw) + 'kW' : '') + (o.mode === '저울 총무게' ? ' · 저울 ' + esc(o.gross) + 'kg' : '') +
-      (o.memo ? ' · ' + esc(o.memo) : '') + (o.cancelled ? ' · (취소됨)' : '') + '</div>' +
+      (o.memo ? ' · ' + esc(o.memo) : '') + (o.cancelled ? ' · (취소됨)' : '') + '</div>' + editsHtml(o) +
       (canCancel ? '<div style="text-align:right"><button class="btn gray sm" data-cancel="' + esc(o.id) + '">↩️ 취소</button></div>' : '') + '</div>';
   }).join('');
 }
@@ -1872,17 +1899,17 @@ function setRange(days) {
 }
 $('hRange').onclick = function (e) { var b = e.target.closest('button'); if (!b) return; [].forEach.call(this.children, function (c) { c.classList.toggle('on', c === b); }); setRange(Number(b.dataset.d)); $('hGo').click(); };
 // v48: 처음엔 최근 100건만, '이전 기록 더 보기'로 100건씩 더
-var H_ROWS = [], H_F = null, H_MORE = 0;
+var H_ROWS = [], H_F = null, H_MORE = 0, H_PLANS = {};
 $('hGo').onclick = function () {
   H_F = { from: $('hFrom').value, to: $('hTo').value, worker: $('hWorker').value, type: $('hType').value, target: $('hTarget').value.trim(), no: $('hNo').value.trim(), limit: 100 };
-  H_ROWS = []; histLoad();
+  H_ROWS = []; H_PLANS = {}; histLoad();
 };
 document.addEventListener('click', function (e) { if (e.target.closest('#hMore')) histLoad(); });
 function histLoad() {
   var f = Object.assign({}, H_F); if (H_ROWS.length && H_MORE) f.before = H_MORE;
   var first = !f.before, old = null;
   rawCall('getHistory', [ls(TK), f]).then(function (r) {
-    if (first) { try { ls('coilinv_hist', JSON.stringify({ at: Date.now(), f: H_F, r: { rows: (r.rows || []).slice(0, 100), more: r.more } })); } catch (e) {} }
+    if (first) { try { ls('coilinv_hist', JSON.stringify({ at: Date.now(), f: H_F, r: { rows: (r.rows || []).slice(0, 100), more: r.more, plans: r.plans } })); } catch (e) {} }
     return r;
   }, function (e) {
     // v49: 신호가 없으면 마지막으로 본 이력을 기준 시각과 함께 보여 줌
@@ -1890,9 +1917,9 @@ function histLoad() {
     if (e && e.net && first && old) return Object.assign({}, old.r, { more: 0 });
     toast(e.message.replace('[로그인]', ''), 4500); throw e;
   }).then(function (r) {
-    H_ROWS = H_ROWS.concat(r.rows || []); H_MORE = r.more || 0; r = { rows: H_ROWS };
+    H_ROWS = H_ROWS.concat(r.rows || []); H_MORE = r.more || 0; H_PLANS = Object.assign(H_PLANS, r.plans || {}); r = { rows: H_ROWS };
     var f = H_F;
-    $('hList').innerHTML = (old ? '<div class="warn" style="margin-bottom:8px">📵 신호가 없어 <b>' + whenTxt(old.at) + ' 기준</b>으로 마지막에 본 이력을 보여 줍니다' + (old.f && JSON.stringify(old.f) !== JSON.stringify(H_F) ? ' (그때 고른 조건)' : '') + '.</div>' : '') + (histHtml(r.rows, false) || '<div class="muted">찾은 기록이 없습니다.</div>') +
+    $('hList').innerHTML = (old ? '<div class="warn" style="margin-bottom:8px">📵 신호가 없어 <b>' + whenTxt(old.at) + ' 기준</b>으로 마지막에 본 이력을 보여 줍니다' + (old.f && JSON.stringify(old.f) !== JSON.stringify(H_F) ? ' (그때 고른 조건)' : '') + '.</div>' : '') + (r.rows.length ? histGroups(r.rows, H_PLANS) : '<div class="muted">찾은 기록이 없습니다.</div>') +
       (H_MORE ? '<button class="btn gray" id="hMore" style="margin-top:10px">⬇️ 이전 기록 더 보기 (지금 ' + H_ROWS.length + '건)</button>' : '');
     // v36: 작업자 → 작업(모터 kW) → 코일 사이즈별 쓴 양 (취소된 기록은 뺌)
     var W = {}, wl = [];

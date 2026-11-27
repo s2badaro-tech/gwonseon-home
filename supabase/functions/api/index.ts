@@ -558,7 +558,7 @@ async function targets() {
 function moveOut(r: any, cancelled: boolean) {
   return { id: r.id, at: r.at, no: r.no, type: r.type, spec: specTxt(r.spec), kind: r.kind, worker: r.worker, target: r.target, mode: r.mode,
     gross: r.gross === null ? '' : Number(r.gross), delta: r.delta === null ? '' : Number(r.delta), before: r.before === null ? '' : Number(r.before), after: r.after === null ? '' : Number(r.after),
-    by: r.by, memo: r.memo, kw: r.kw, cancelled, seq: r.seq };
+    by: r.by, memo: r.memo, kw: r.kw, cancelled, seq: r.seq, edits: Array.isArray(r.edits) ? r.edits : [] };
 }
 // f = {no, worker, target, from, to, type, id, before(seq: 이보다 옛날 것), limit}
 async function history(f: any, limit: number, S?: any) {
