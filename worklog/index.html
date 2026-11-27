@@ -163,7 +163,7 @@
     </div>
     <button class="btn" id="saveBtn" onclick="save()">저장하기</button>
     <button class="btn sub" onclick="if(confirmClear())resetForm()">입력 지우기</button>
-    <p class="note">적던 내용은 휴대폰에 자동으로 임시 저장됩니다. 전파가 끊겨도 저장 대기함에 남았다가 다시 보내집니다.</p>
+    <p class="note">저장을 누르면 휴대폰에 먼저 저장되고 바로 끝납니다. 서버에는 뒤에서 올라가고, 신호가 없으면 신호가 돌아올 때 자동으로 올라갑니다.</p>
   </section>
 
   <!-- 찾아보기 -->
@@ -178,6 +178,7 @@
     <div class="fbox" id="fbox"></div>
     <button class="btn sub" style="margin-top:0" onclick="loadList(true)">🔄 새로 불러오기</button>
     <div class="count" id="count"></div>
+    <div id="listAt" class="pending hide"></div>
     <div id="list"></div>
   </section>
 
@@ -199,6 +200,7 @@
       <button onclick="loadRecent(true)">🔄</button>
     </div>
     <div class="count" id="rCount"></div>
+    <div id="rAt" class="pending hide"></div>
     <div id="rList"></div>
   </section>
 
@@ -294,7 +296,7 @@ window.onload = function () {
 window.addEventListener('online', function () { showPending(); flushQueue(); });
 window.addEventListener('offline', function () { showPending(); });
 document.addEventListener('visibilitychange', function () { if (!document.hidden) flushQueue(); });
-setInterval(function () { if (getQueue().length) flushQueue(); }, 45000); // 신호가 돌아오면 자동으로 보냄 (45초마다 다시 시도)
+setInterval(function () { if (getQueue().length) flushQueue(); }, 30000); // 신호가 돌아오면 자동으로 올림 (30초마다 다시 시도)
 
 // ───── 로그인 ─────
 var ME = null, loginPinTmp = '';
@@ -576,9 +578,29 @@ function pickPhoto(inp) {
   rd.readAsDataURL(file);
 }
 
-// ───── 저장 (먼저 대기함에 넣고 → 보냄 → 성공하면 대기함에서 뺌) ─────
+// ───── v2 (2단계): 휴대폰 안 큰 보관함 (IndexedDB). 사진과 '마지막으로 본 자료'를 넣어 둠 ─────
+var KV = (function () {
+  var dbp = null;
+  function db() {
+    if (!dbp) dbp = new Promise(function (ok, no) {
+      try { var r = indexedDB.open('gw_worklog', 1); r.onupgradeneeded = function () { r.result.createObjectStore('kv'); }; r.onsuccess = function () { ok(r.result); }; r.onerror = function () { no(r.error); }; } catch (e) { no(e); }
+    });
+    return dbp;
+  }
+  function tx(mode, f) { return db().then(function (d) { return new Promise(function (ok, no) { var t = d.transaction('kv', mode), st = t.objectStore('kv'), out = f(st); t.oncomplete = function () { ok(out && out.result); }; t.onerror = function () { no(t.error); }; }); }); }
+  return {
+    get: function (k) { return tx('readonly', function (st) { return st.get(k); }).catch(function () { return undefined; }); },
+    set: function (k, v) { return tx('readwrite', function (st) { st.put(v, k); }); },
+    del: function (k) { return tx('readwrite', function (st) { st.delete(k); }).catch(function () {}); }
+  };
+})();
+function hhmm(t) { var d = new Date(t), h = d.getHours(), now = new Date(); return (d.toDateString() === now.toDateString() ? '' : (d.getMonth() + 1) + '/' + d.getDate() + ' ') + (h < 12 ? '오전 ' : '오후 ') + ((h % 12) || 12) + ':' + ('0' + d.getMinutes()).slice(-2); }
+function setAt(id, at) { var el = document.getElementById(id); if (!el) return; el.innerHTML = at ? '📵 신호가 없어 마지막으로 받은 자료입니다 · <b>' + hhmm(at) + ' 기준</b>' : ''; el.classList.toggle('hide', !at); }
+
+// ───── 저장 (v2: 휴대폰에 먼저 저장하고 바로 끝 → 서버에는 뒤에서 올림 → 올라가면 휴대폰에서 지움) ─────
 function getQueue() { try { return JSON.parse(ls(LS.queue) || '[]'); } catch (e) { return []; } }
 function setQueue(q) { ls(LS.queue, JSON.stringify(q)); showPending(); }
+function newQid() { return 'W' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 7).toUpperCase(); }
 function newId() { return (kind === 'motor' ? 'M' : 'C') + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase(); }
 
 function save() {
@@ -592,9 +614,9 @@ function save() {
     if (rw.length && !confirm('⚠️ 확인해 주세요 (그래도 저장은 됩니다)\n\n' + rw.join('\n') + '\n\n이대로 저장할까요?\n(취소를 누르면 고칠 수 있어요)')) return;
   }
   if (!main && !save._checked) { if (!confirm(kind === 'motor' ? 'kW가 비어 있습니다. 그래도 저장할까요?' : '코일 배치 타입이 비어 있습니다. 그래도 저장할까요?')) return; }
-  if (v.ledgerNo && !editId && !save._checked) {
+  if (v.ledgerNo && !editId && !save._checked && navigator.onLine !== false) {
     var btn0 = document.getElementById('saveBtn'); btn0.disabled = true; btn0.textContent = '확인 중…';
-    call('findSame', kind, 'ledgerNo', v.ledgerNo, tok()).then(function (same) {
+    Promise.race([call('findSame', kind, 'ledgerNo', v.ledgerNo, tok()), new Promise(function (ok, no) { setTimeout(function () { no('느림'); }, 3000); })]).then(function (same) {
       btn0.disabled = false; btn0.textContent = '저장하기';
       if (same && same.length) {
         var lines = same.slice(0, 5).map(function (r) { return '· ' + r.author + ' ' + r.date + (r.sum ? ' ' + r.sum : ''); }).join('\n');
@@ -605,32 +627,45 @@ function save() {
     return;
   }
   save._checked = false;
-  var rec = { id: editId || newId(), kind: kind, author: ME.name, values: v, photo: photo };
-  var q = getQueue(); q = q.filter(function (r) { return r.id !== rec.id; });
-  try { q.push(rec); setQueue(q); }
-  catch (e) { rec.photo = null; q[q.length - 1] = rec; setQueue(q); toast('사진이 커서 사진은 빼고 저장합니다'); }
-  var wasEdit = !!editId;
-  ls(LS.draft + kind, null); editId = null; photo = null; buildForm();
-  var btn = document.getElementById('saveBtn'); btn.disabled = true; btn.textContent = '저장 중…';
-  sendOne(rec).then(function () {
-    toast(wasEdit ? '✅ 수정했습니다' : '✅ 저장했습니다 (모두가 볼 수 있어요)');
-    cache[rec.kind] = null;
-  }).catch(function (e) {
-    if (String(e).indexOf('[권한]') >= 0) toast('⛔ ' + String(e).replace('[권한]', ''), 5000);
-    else toast('📦 신호가 약해 휴대폰에 보관했어요. 신호가 돌아오면 자동으로 보냅니다', 5000);
-  }).then(function () { btn.disabled = false; btn.textContent = editId ? '수정한 내용 저장' : '저장하기'; });
+  var rec = { id: editId || newId(), qid: newQid(), ts: Date.now(), kind: kind, author: ME.name, values: v, photo: null, photoKey: '' };
+  var wasEdit = !!editId, ph = photo;
+  function keep() {
+    var q = getQueue(); q = q.filter(function (r) { return r.id !== rec.id; });
+    q.push(rec); setQueue(q);
+    ls(LS.draft + kind, null); editId = null; photo = null; buildForm();
+    toast(wasEdit ? '✅ 수정 저장됨 (휴대폰에 저장, 뒤에서 올립니다)' : '✅ 저장됨 (휴대폰에 저장, 뒤에서 올립니다)', 3000);
+    sendOne(rec).then(function () {
+      toast(wasEdit ? '✅ 수정한 내용이 올라갔습니다' : '✅ 올라갔습니다 (모두가 볼 수 있어요)', 2500);
+      cache[rec.kind] = null;
+    }).catch(function (e) {
+      if (String(e).indexOf('[권한]') >= 0) toast('⛔ ' + String(e).replace('[권한]', ''), 5000);
+    });
+  }
+  // 사진은 큰 보관함(IndexedDB)에 따로 넣어 둠 (예전처럼 사진이 커서 빠지는 일 없게)
+  if (ph) {
+    rec.photoKey = 'ph_' + rec.qid;
+    KV.set(rec.photoKey, ph).then(keep, function () {
+      rec.photoKey = ''; rec.photo = ph;
+      try { keep(); } catch (e) { rec.photo = null; keep(); toast('사진이 커서 사진은 빼고 저장했습니다', 4000); }
+    });
+  } else keep();
 }
+var INFLIGHT = {};
 function sendOne(rec) {
-  var timer;
+  if (INFLIGHT[rec.qid || rec.id]) return Promise.reject('보내는 중');
+  INFLIGHT[rec.qid || rec.id] = 1;
+  var timer, key = rec.qid || rec.id;
   var wait = new Promise(function (ok, bad) { timer = setTimeout(function () { bad('응답 없음'); }, 40000); });
-  return Promise.race([call('saveRecord', rec, tok()), wait]).then(function (res) {
-    clearTimeout(timer);
-    setQueue(getQueue().filter(function (r) { return r.id !== rec.id; }));
+  var withPhoto = rec.photoKey ? KV.get(rec.photoKey).then(function (ph) { return Object.assign({}, rec, { photo: ph || null }); }) : Promise.resolve(rec);
+  return withPhoto.then(function (r2) { return Promise.race([call('saveRecord', r2, tok()), wait]); }).then(function (res) {
+    clearTimeout(timer); delete INFLIGHT[key];
+    setQueue(getQueue().filter(function (r) { return (r.qid || r.id) !== key; }));
+    if (rec.photoKey) KV.del(rec.photoKey);
     return res;
   }, function (e) {
-    clearTimeout(timer);
+    clearTimeout(timer); delete INFLIGHT[key];
     // 권한이 없어 저장이 안 되는 수정은 대기함에서 뺌 (계속 다시 보내지 않게)
-    if (String(e).indexOf('[권한]') >= 0) setQueue(getQueue().filter(function (r) { return r.id !== rec.id; }));
+    if (String(e).indexOf('[권한]') >= 0) { setQueue(getQueue().filter(function (r) { return (r.qid || r.id) !== key; })); if (rec.photoKey) KV.del(rec.photoKey); }
     throw e;
   });
 }
@@ -638,18 +673,18 @@ var flushing = false;
 function flushQueue() {
   if (flushing || !CFG) return; var q = getQueue(); if (!q.length) return;
   flushing = true;
-  q.reduce(function (p, rec) { return p.then(function () { return sendOne(rec); }); }, Promise.resolve())
-    .then(function () { toast('✅ 대기 중이던 기록을 모두 보냈습니다'); cache = { motor: null, coil: null }; RC.rows = null; })
+  q.reduce(function (p, rec) { return p.then(function () { return INFLIGHT[rec.qid || rec.id] ? null : sendOne(rec); }); }, Promise.resolve())
+    .then(function () { toast('✅ 휴대폰에 저장돼 있던 기록을 모두 올렸습니다'); cache = { motor: null, coil: null }; RC.rows = null; })
     .catch(function (e) { if (String(e).indexOf('[권한]') >= 0) toast('⛔ 대기 중이던 수정 1건은 권한이 없어 보내지 못했습니다', 5000); })
     .then(function () { flushing = false; });
 }
 function showPending() {
   var q = getQueue(), b = document.getElementById('pendingBox'), qb = document.getElementById('qBadge');
   var off = navigator.onLine === false;
-  qb.textContent = q.length ? '📦 전송 대기 ' + q.length + '건' : (off ? '📵 신호 없음' : '');
+  qb.textContent = q.length ? '📦 업로드 대기 ' + q.length + '건' : (off ? '📵 신호 없음' : '');
   qb.classList.toggle('hide', !q.length && !off);
   if (!q.length) { b.classList.add('hide'); return; }
-  b.innerHTML = '📦 전송 대기 <b>' + q.length + '건</b> · 휴대폰에 보관 중이에요. ' + (off ? '신호가 돌아오면' : '곧') + ' 자동으로 보냅니다. <button onclick="flushQueue()">지금 보내기</button>';
+  b.innerHTML = '📦 업로드 대기 <b>' + q.length + '건</b> · 휴대폰에 저장돼 있어요. ' + (off ? '신호가 돌아오면' : '곧') + ' 자동으로 올립니다. <button onclick="flushQueue()">지금 올리기</button>';
   b.classList.remove('hide');
 }
 // ───── 입력값 범위 확인 (벗어나면 경고만, 저장은 됨) ─────
@@ -790,6 +825,7 @@ function loadKind(k) {
       var more = p.rows.length && start + n < total;
       LOADING[k] = !!more;
       cache[k] = got.slice();
+      if (!more) { KV.set('list_' + k, { at: Date.now(), rows: got }); setAt('listAt', 0); }
       if (k === findKind || findKind === 'all') render();
       if (more) return page(start + n, 400);
     });
@@ -799,7 +835,10 @@ function loadKind(k) {
     if (LOADGEN[k] !== gen) return;
     if (k !== findKind && findKind !== 'all') return;
     if (cache[k] && cache[k].length) { toast('⚠️ 나머지 기록을 다 못 받았습니다: ' + e, 4000); render(); return; }
-    document.getElementById('list').innerHTML = '<div class="empty">불러오기 실패: ' + esc(e) + '</div>';
+    KV.get('list_' + k).then(function (o) {
+      if (o && o.rows && String(e).indexOf('로그인') < 0) { cache[k] = o.rows; setAt('listAt', o.at); render(); return; }
+      document.getElementById('list').innerHTML = '<div class="empty">불러오기 실패: ' + esc(e) + '</div>';
+    });
   });
 }
 function norm(s) { return String(s || '').toLowerCase().replace(/\s+/g, ''); }
@@ -919,8 +958,13 @@ function loadRecent(force) {
   var n = needDays();
   if (RC.rows && !force && RC.loadedDays >= n) { renderRecent(); return; }
   document.getElementById('rList').innerHTML = '<div class="empty">불러오는 중…</div>';
-  call('recentRecords', tok(), n).then(function (rows) { RC.rows = rows; RC.loadedDays = n; renderRecent(); })
-    .catch(function (e) { document.getElementById('rList').innerHTML = '<div class="empty">불러오기 실패: ' + esc(e) + '</div>'; });
+  call('recentRecords', tok(), n).then(function (rows) { RC.rows = rows; RC.loadedDays = n; setAt('rAt', 0); KV.set('recent', { at: Date.now(), days: n, rows: rows }); renderRecent(); })
+    .catch(function (e) {
+      KV.get('recent').then(function (o) {
+        if (o && o.rows && String(e).indexOf('로그인') < 0) { RC.rows = o.rows; RC.loadedDays = o.days; setAt('rAt', o.at); renderRecent(); return; }
+        document.getElementById('rList').innerHTML = '<div class="empty">불러오기 실패: ' + esc(e) + '</div>';
+      });
+    });
 }
 function setRecentKind(k) {
   RC.kind = k;

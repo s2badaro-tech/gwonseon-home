@@ -284,6 +284,7 @@ tr.sub td{background:#fafbfd;font-size:14px}
     <div id="stockWarn" class="warn hide"></div>
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><h3 style="margin:0">규격별 재고</h3><button class="btn gray sm" id="stockRe">🔄 새로고침</button></div>
+      <div id="stockAt" class="muted" style="margin:4px 0 0;font-size:14px"></div>
       <div class="muted" style="margin:6px 0">빨간색 = 알림 무게보다 적음 (위로 올라옴). 막대의 검은 선이 알림 무게입니다. 누르면 타래별 잔량이 보입니다.</div>
       <div id="stockTiles" class="tiles"></div>
       <div id="stockBody"></div>
@@ -673,12 +674,13 @@ function start() {
   var snap = null; try { snap = JSON.parse(ls('coilinv_snap') || 'null'); } catch (e) {}
   if (snap && snap.me && snap.me.name === ls('coilinv_name')) { try { applyInit(snap, false); } catch (e) { snap = null; } } else snap = null;
   (snap ? rawCall('getInit', [t], true) : call('getInit', t)).then(function (r) {
-    var jobs = INIT && INIT.jobs;
+    var jobs = INIT && INIT.jobs; r.at = Date.now(); STALE = false;
     applyInit(r, true);
     if (jobs) INIT.jobs = jobs;
     saveSnap(); loadJobs();
   }, function (e) {
     if (e && e.login) return;
+    if (e && e.net && snap) { STALE = true; stockAtTxt(); }
     if (e && e.net) toast(snap ? '📵 신호가 약해 지난번 자료를 보여 줍니다. 신호가 돌아오면 다시 열어 주세요' : '📵 신호가 없어 연결하지 못했습니다. 신호가 돌아오면 다시 열어 주세요', 5000);
     else if (snap) toast(e.message, 4500);
   });
@@ -955,13 +957,13 @@ $('stkSave').onclick = function () {
     return p.then(function () {
       var a = { no: x.coil.no, type: '실사조정', mode: 'gross', value: n(x.val), worker: ME.name, target: tag, memo: '재고조사', reqId: newReq() };
       return submit('saveMove', a, x.coil.no + ' 재고조사 저울 ' + a.value + 'kg').then(function (r) {
-        if (r) saved++; else kept++;
+        if (r) saved++; else { kept++; localRem(x.coil.no, r2(n(x.val) - x.coil.tare)); }
         STK.items = STK.items.filter(function (y) { return y !== x; });
       }, function () { fail.push(x.coil.no); });
     });
   }, Promise.resolve()).then(function () {
     renderStk(); refreshStock(); loadStk();
-    toast((saved ? '✅ ' + saved + '개 무게를 맞췄습니다' : '') + (kept ? ' 📦 ' + kept + '개는 신호가 약해 휴대폰에 보관' : '') + (fail.length ? ' ⛔ 저장 못 함: ' + fail.join(', ') + ' (목록에 남겨 둠)' : ''), 6000);
+    toast((saved ? '✅ ' + saved + '개 무게를 맞췄습니다' : '') + (kept ? ' 📱 ' + kept + '개는 휴대폰에 저장 (신호가 돌아오면 자동으로 올림)' : '') + (fail.length ? ' ⛔ 저장 못 함: ' + fail.join(', ') + ' (목록에 남겨 둠)' : ''), 6000);
   });
 };
 function bToast(m) { if (Date.now() - B_WARN > 2500) { B_WARN = Date.now(); toast(m, 2500); } }
@@ -1088,13 +1090,13 @@ $('bSave').onclick = function () {
     return p.then(function () {
       var k = bCalc(x), a = { no: x.coil.no, type: '출고', mode: 'gross', value: k.gross, worker: ME.name, target: job, kw: kw, memo: k.empty ? '다 씀' : '', reqId: newReq() };
       return submit('saveMove', a, x.coil.no + ' 저울 ' + a.value + 'kg (' + job + ')').then(function (r) {
-        if (r) { saved++; tot += -r.delta; } else kept++;
+        if (r) { saved++; tot += -r.delta; } else { kept++; tot += k.used; localRem(x.coil.no, k.left); }
         BATCH.items = BATCH.items.filter(function (y) { return y !== x; });
       }, function (e) { fail.push(x.coil.no); });
     });
   }, Promise.resolve()).then(function () {
     renderBatch(); refreshStock(); loadDone();
-    toast((saved ? '✅ ' + saved + '개 저장 · 쓴 양 합계 ' + r2(tot) + 'kg' : '') + (kept ? ' 📦 ' + kept + '개는 신호가 약해 휴대폰에 보관' : '') + (fail.length ? ' ⛔ 저장 못 함: ' + fail.join(', ') + ' (목록에 남겨 둠)' : ''), 6000);
+    toast((saved || kept ? '✅ ' + (saved + kept) + '개 저장 · 쓴 양 합계 ' + r2(tot) + 'kg' : '') + (kept ? ' (📱 ' + kept + '개는 휴대폰에 저장, 신호가 돌아오면 자동으로 올림)' : '') + (fail.length ? ' ⛔ 저장 못 함: ' + fail.join(', ') + ' (목록에 남겨 둠)' : ''), 6000);
   });
 };
 function loadCoil(no) {
@@ -1133,6 +1135,12 @@ function showCoil(r) {
   $('cHist').innerHTML = histHtml(r.history, true) || '<div class="muted">아직 기록이 없습니다.</div>';
   $('mVal').value = ''; $('mMemo').value = ''; $('uVal').value = ''; $('uMemo').value = '';
   updPrev(); uPrev(); autoJob('u', c.spec);
+}
+// v49: 휴대폰에만 저장된 뒤 타래 화면의 남은 무게를 바로 바꿔 보여 줌
+function showLocal() {
+  if (!CUR) return;
+  $('cRem').innerHTML = CUR.rem + 'kg <span class="muted" style="font-size:14px">(📱 휴대폰 기준, 올라가면 확정)</span>';
+  updPrev(); uPrev();
 }
 $('editToggle').onclick = function () { $('editBox').classList.toggle('hide'); };
 seg('eStatus');
@@ -1179,7 +1187,7 @@ $('mSave').onclick = function () {
   ls('coilinv_worker', a.worker);
   a.reqId = newReq();
   submit('saveMove', a, CUR.no + ' ' + TYPE + ' ' + a.value + 'kg').then(function (r) {
-    if (!r) { $('mVal').value = ''; return; }
+    if (!r) { var c0 = calcAfter(); if (c0) localRem(a.no, c0.after); $('mVal').value = ''; toast('📱 휴대폰에 저장했어요. 신호가 돌아오면 자동으로 올립니다', 4000); if (CUR) showLocal(); return; }
     toast(r.no + ' ' + TYPE + ' 저장: ' + r.before + ' → ' + r.after + 'kg', 3500);
     if (r.low) { $('lowBanner').textContent = '⚠️ ' + r.low; $('lowBanner').classList.remove('hide'); } else $('lowBanner').classList.add('hide');
     loadCoil(r.no); refreshStock();
@@ -1188,7 +1196,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v48', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v49', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
@@ -1406,7 +1414,7 @@ $('uSave').onclick = function () {
   ls('coilinv_job', a.target); ls('coilinv_kw', a.kw);
   a.reqId = newReq();
   submit('saveMove', a, CUR.no + ' 저울 ' + v + 'kg (' + a.target + ')').then(function (r) {
-    if (!r) { $('uVal').value = ''; return; }
+    if (!r) { localRem(a.no, r2(v - curTare())); $('uVal').value = ''; toast('📱 쓴 양 ' + used + 'kg 휴대폰에 저장. 남은 선 ' + r2(v - curTare()) + 'kg (신호가 돌아오면 자동으로 올림)', 4500); if (CUR) showLocal(); return; }
     toast(r.no + ' 쓴 양 ' + r2(-r.delta) + 'kg 기록. 남은 선 ' + r.after + 'kg' + (r.tareMsg ? ' (' + r.tareMsg + ')' : ''), 4000);
     if (r.low) { $('lowBanner').textContent = '⚠️ ' + r.low; $('lowBanner').classList.remove('hide'); } else $('lowBanner').classList.add('hide');
     loadCoil(r.no); refreshStock();
@@ -1435,44 +1443,76 @@ function addWarn(a) {
 function newReq() { return 'Q' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase(); }
 function getQ() { try { return JSON.parse(ls('coilinv_queue') || '[]'); } catch (e) { return []; } }
 function setQ(q) { ls('coilinv_queue', JSON.stringify(q)); showPending(); }
+// v49 (2단계 오프라인 우선): 누르면 휴대폰에 먼저 저장하고 바로 끝. 서버에는 뒤에서 조용히 올림.
+// 5초 안에 서버 대답이 오면 그 결과를 보여 주고, 아니면 "휴대폰에 저장됨"으로 넘어감 (뒤에서 계속 올림).
+var INFLIGHT = {}, WEAK_UNTIL = 0;
 function submit(fn, a, label) {
   if (!a.ts) a.ts = Date.now(); // v18: 실제로 쓴 시각 (늦게 보내도 이 시각으로 남음)
   var q = getQ(); q.push({ fn: fn, a: a, label: label, at: new Date().toLocaleString() }); setQ(q);
-  return rawCall(fn, [ls(TK), a]).then(function (r) {
-    setQ(getQ().filter(function (x) { return x.a.reqId !== a.reqId; })); return r;
-  }, function (e) {
-    if (e.net) { toast('📦 신호가 약해 휴대폰에 보관했어요. 신호가 돌아오면 자동으로 보냅니다', 5000); return null; }
-    setQ(getQ().filter(function (x) { return x.a.reqId !== a.reqId; }));
-    toast(e.message.replace('[로그인]', ''), 4500); throw e;
+  return new Promise(function (ok, no) {
+    var settled = false;
+    function local() { if (settled) return; settled = true; WEAK_UNTIL = Date.now() + 60000; ok(null); }
+    if (navigator.onLine === false || Date.now() < WEAK_UNTIL || !ls(TK)) return local();
+    INFLIGHT[a.reqId] = 1;
+    var t = setTimeout(local, 5000);
+    rawCall(fn, [ls(TK), a], true).then(function (r) {
+      delete INFLIGHT[a.reqId]; clearTimeout(t);
+      setQ(getQ().filter(function (x) { return x.a.reqId !== a.reqId; }));
+      if (settled) lateDone([{ fn: fn, r: r }]); else { settled = true; WEAK_UNTIL = 0; ok(r); }
+    }, function (e) {
+      delete INFLIGHT[a.reqId]; clearTimeout(t);
+      if (e.net || e.login) return local();
+      setQ(getQ().filter(function (x) { return x.a.reqId !== a.reqId; }));
+      if (settled) alertBox('⛔ 휴대폰에 보관했던 ' + label + ' 은(는) 저장하지 못했습니다: ' + e.message + '\n다시 넣어 주세요.');
+      else { settled = true; toast(e.message.replace('[로그인]', ''), 4500); no(e); }
+    });
   });
+}
+// 휴대폰에만 저장된 동안에도 화면의 남은 무게가 맞게 (서버에 올라가면 새 숫자로 바뀜)
+function localRem(no, rem) {
+  ((INIT && INIT.stock) || []).forEach(function (g) { (g.coils || []).forEach(function (c) { if (c.no === no) c.rem = r2(rem); }); });
+  if (CUR && CUR.no === no) CUR.rem = r2(rem);
+  saveSnap();
+}
+// 뒤늦게 올라간 기록: 재고를 새로 받고, 새로 등록된 타래 번호는 라벨 인쇄 버튼과 함께 알려 줌
+function lateDone(list) {
+  var nos = list.filter(function (x) { return x.fn === 'addCoil' && x.r && x.r.no; }).map(function (x) { return x.r.no; });
+  if (nos.length) {
+    $('qBox').dataset.keep = '1';
+    $('qBox').innerHTML = '✅ 휴대폰에 보관했던 코일 등록이 올라갔습니다: <b>' + nos.map(esc).join(', ') + '</b><br><button class="btn" data-label="' + esc(nos.join(',')) + '" style="margin-top:6px">🏷️ 라벨 인쇄</button> <button class="btn sm gray" id="qOk">닫기</button>';
+    $('qBox').classList.remove('hide'); $('qOk').onclick = function () { delete $('qBox').dataset.keep; showPending(); };
+  }
+  refreshStock(); if (CUR) loadCoil(CUR.no);
 }
 var flushing = false;
 function flushQueue() {
-  var q = getQ(); if (flushing || !q.length || !ls(TK) || navigator.onLine === false) return;
-  flushing = true; var sent = 0, dropped = [];
+  var q = getQ().filter(function (x) { return !INFLIGHT[x.a.reqId]; }); if (flushing || !q.length || !ls(TK) || navigator.onLine === false) return;
+  flushing = true; var sent = 0, dropped = [], done = [];
   q.reduce(function (p, it) {
     return p.then(function () {
-      return rawCall(it.fn, [ls(TK), it.a], true).then(function () { sent++; setQ(getQ().filter(function (x) { return x.a.reqId !== it.a.reqId; })); },
-        function (e) { if (e.net || e.login) throw e; dropped.push(it.label + ': ' + e.message); setQ(getQ().filter(function (x) { return x.a.reqId !== it.a.reqId; })); });
+      INFLIGHT[it.a.reqId] = 1;
+      return rawCall(it.fn, [ls(TK), it.a], true).then(function (r) { delete INFLIGHT[it.a.reqId]; sent++; done.push({ fn: it.fn, r: r }); WEAK_UNTIL = 0; setQ(getQ().filter(function (x) { return x.a.reqId !== it.a.reqId; })); },
+        function (e) { delete INFLIGHT[it.a.reqId]; if (e.net || e.login) throw e; dropped.push(it.label + ': ' + e.message); setQ(getQ().filter(function (x) { return x.a.reqId !== it.a.reqId; })); });
     });
   }, Promise.resolve()).then(function () {
-    if (sent) toast('✅ 대기 중이던 ' + sent + '건을 보냈습니다', 3500);
+    if (sent) toast('✅ 휴대폰에 보관했던 ' + sent + '건을 올렸습니다', 3500);
     if (dropped.length) alertBox('⛔ 대기 중이던 기록 중 저장하지 못한 것이 있습니다 (재고가 그 사이 바뀌었을 수 있어요). 다시 넣어 주세요:\n' + dropped.join('\n'));
-    if (sent) { refreshStock(); if (CUR) loadCoil(CUR.no); }
+    if (sent) lateDone(done);
   }, function () {}).then(function () { flushing = false; });
 }
 function alertBox(m) { $('qBox').textContent = m; $('qBox').style.whiteSpace = 'pre-line'; $('qBox').classList.remove('hide'); }
 function showPending() {
-  var q = getQ(), b = $('qBox');
+  var q = getQ(), b = $('qBox'); if (INIT) stockAtTxt();
   if (!q.length) { if (!b.dataset.keep) b.classList.add('hide'); return; }
   b.style.whiteSpace = '';
-  b.innerHTML = '📦 전송 대기 <b>' + q.length + '건</b> · 휴대폰에 보관 중이에요. ' + (navigator.onLine === false ? '신호가 돌아오면' : '곧') + ' 자동으로 보냅니다. <button class="btn sm gray" id="qSend">지금 보내기</button>';
+  b.innerHTML = '📦 업로드 대기 <b>' + q.length + '건</b> · 휴대폰에 저장돼 있어요. ' + (navigator.onLine === false ? '신호가 돌아오면' : '곧') + ' 자동으로 올립니다. <button class="btn sm gray" id="qSend">지금 올리기</button>';
   b.classList.remove('hide');
   $('qSend').onclick = flushQueue;
 }
-window.addEventListener('online', flushQueue);
+window.addEventListener('online', function () { WEAK_UNTIL = 0; flushQueue(); });
+document.addEventListener('visibilitychange', function () { if (!document.hidden) flushQueue(); });
 window.addEventListener('offline', showPending);
-setInterval(flushQueue, 60000);
+setInterval(flushQueue, 30000);
 
 // ── 이력 html ──
 function histHtml(rows, small) {
@@ -1507,8 +1547,16 @@ function renderOld(list) {
   $('oldBox').classList.toggle('hide', !old.length);
   $('oldList').innerHTML = old.map(function (o) { return '<div class="it"><div class="t"><a href="#" data-coil="' + esc(o.c.no) + '"><b>' + esc(o.c.no) + '</b></a><span>' + esc(o.c.spec) + 'mm ' + esc(o.c.kind) + ' · ' + o.c.rem + 'kg</span><span class="muted">' + esc(String(o.d).slice(0, 10)) + (o.c.loc ? ' · 📍' + esc(o.c.loc) : '') + '</span></div></div>'; }).join('');
 }
+// v49: 재고는 언제 받은 숫자인지 표시 (신호가 없으면 마지막으로 본 자료 + 기준 시각)
+var STALE = false;
+function hhmm(t) { var d = new Date(t), h = d.getHours(); return (h < 12 ? '오전 ' : '오후 ') + ((h % 12) || 12) + ':' + ('0' + d.getMinutes()).slice(-2); }
+function whenTxt(t) { var d = new Date(t), now = new Date(); return (d.toDateString() === now.toDateString() ? '' : (d.getMonth() + 1) + '/' + d.getDate() + ' ') + hhmm(t); }
+function stockAtTxt() {
+  if (!$('stockAt')) return;
+  $('stockAt').innerHTML = INIT && INIT.at ? (STALE ? '📵 신호가 없어 마지막으로 받은 자료입니다 · <b>' + whenTxt(INIT.at) + ' 기준</b>' : whenTxt(INIT.at) + ' 기준') + (getQ().length ? ' · 📦 아직 안 올라간 ' + getQ().length + '건은 올라가면 합계에 들어감' : '') : '';
+}
 function renderStock(list) {
-  INIT.stock = list;
+  INIT.stock = list; stockAtTxt();
   var low = list.filter(function (s) { return s.low; });
   var txt = low.length ? '⚠️ 재고 부족 ' + low.length + '개: ' + low.map(function (s) { return s.spec + 'mm ' + s.kind + (s.type && s.type !== '일반 환선' ? ' ' + s.type : '') + (s.order ? '(발주완료)' : ''); }).join(', ') : '';
   $('stockWarn').textContent = txt; $('stockWarn').classList.toggle('hide', !low.length);
@@ -1550,7 +1598,7 @@ $('stockBody').onclick = function (e) {
   if (e.target.closest('input')) return;
   var r = e.target.closest('[data-open]'); if (r) { OPEN[r.dataset.open] = !OPEN[r.dataset.open]; renderStock(INIT.stock); }
 };
-function refreshStock() { rawCall('getStock', [ls(TK)], true).then(renderStock, function () {}); }
+function refreshStock() { rawCall('getStock', [ls(TK)], true).then(function (l) { INIT.at = Date.now(); STALE = false; renderStock(l); saveSnap(); }, function (e) { if (e && e.net) { STALE = true; stockAtTxt(); } }); }
 // v48: 📊 엑셀로 내려받기 (관리자) — 규격별 합계 + 타래별 목록 두 장짜리 엑셀 파일
 function loadXlsx() {
   if (window.XLSX) return Promise.resolve(window.XLSX);
@@ -1594,10 +1642,19 @@ $('hGo').onclick = function () {
 document.addEventListener('click', function (e) { if (e.target.closest('#hMore')) histLoad(); });
 function histLoad() {
   var f = Object.assign({}, H_F); if (H_ROWS.length && H_MORE) f.before = H_MORE;
-  call('getHistory', ls(TK), f).then(function (r) {
+  var first = !f.before, old = null;
+  rawCall('getHistory', [ls(TK), f]).then(function (r) {
+    if (first) { try { ls('coilinv_hist', JSON.stringify({ at: Date.now(), f: H_F, r: { rows: (r.rows || []).slice(0, 100), more: r.more } })); } catch (e) {} }
+    return r;
+  }, function (e) {
+    // v49: 신호가 없으면 마지막으로 본 이력을 기준 시각과 함께 보여 줌
+    try { old = JSON.parse(ls('coilinv_hist') || 'null'); } catch (x) {}
+    if (e && e.net && first && old) return Object.assign({}, old.r, { more: 0 });
+    toast(e.message.replace('[로그인]', ''), 4500); throw e;
+  }).then(function (r) {
     H_ROWS = H_ROWS.concat(r.rows || []); H_MORE = r.more || 0; r = { rows: H_ROWS };
     var f = H_F;
-    $('hList').innerHTML = (histHtml(r.rows, false) || '<div class="muted">찾은 기록이 없습니다.</div>') +
+    $('hList').innerHTML = (old ? '<div class="warn" style="margin-bottom:8px">📵 신호가 없어 <b>' + whenTxt(old.at) + ' 기준</b>으로 마지막에 본 이력을 보여 줍니다' + (old.f && JSON.stringify(old.f) !== JSON.stringify(H_F) ? ' (그때 고른 조건)' : '') + '.</div>' : '') + (histHtml(r.rows, false) || '<div class="muted">찾은 기록이 없습니다.</div>') +
       (H_MORE ? '<button class="btn gray" id="hMore" style="margin-top:10px">⬇️ 이전 기록 더 보기 (지금 ' + H_ROWS.length + '건)</button>' : '');
     // v36: 작업자 → 작업(모터 kW) → 코일 사이즈별 쓴 양 (취소된 기록은 뺌)
     var W = {}, wl = [];
@@ -1641,7 +1698,7 @@ $('aSave').onclick = function () {
   a.reqId = newReq();
   a.bobbin = $('aTare').dataset.name || '';
   submit('addCoil', a, '코일 등록 ' + a.spec + 'mm ' + a.value + 'kg').then(function (r) {
-    if (!r) { ['aVal', 'aMemo'].forEach(function (i) { $(i).value = ''; }); return; }
+    if (!r) { ['aVal', 'aMemo'].forEach(function (i) { $(i).value = ''; }); $('aDone').classList.remove('hide'); $('aDone').innerHTML = '<div class="ok">📱 휴대폰에 저장했어요: ' + esc(a.spec) + 'mm ' + esc(a.value) + 'kg</div><div class="muted">신호가 돌아오면 자동으로 등록되고, 그때 타래 번호와 라벨 인쇄 버튼이 위에 나옵니다.</div>'; window.scrollTo(0, 0); return; }
     $('aDone').classList.remove('hide');
     $('aDone').innerHTML = '<div class="ok">등록했습니다: ' + esc(r.no) + ' (' + r.rem + 'kg)</div><div class="muted">아래 버튼으로 라벨을 뽑아 이 코일에 바로 붙이세요. 그다음 코일을 등록하면 섞이지 않습니다.</div>' +
       '<button class="btn" data-label="' + esc(r.no) + '" style="font-size:20px;padding:16px">🏷️ 이 코일 라벨 인쇄</button>';
