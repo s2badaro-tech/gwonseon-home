@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>사무실 상황판</title>
-<!-- 6단계 사무실 상황판 v2 (2026-11-28, ⚙ 관리 메뉴): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<!-- 6단계 사무실 상황판 v3 (2026-11-28, ⚙ 관리 메뉴, 받는 곳 칸 뺌): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
 <link rel="icon" href="../icon-192.png">
 <meta name="theme-color" content="#1f6fb2">
 <style>
@@ -296,7 +296,7 @@ function needOf(s) {
 }
 function openOrder() {
   var L = lows(), d = new Date(), ds = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
-  var h = '<h3>코일 발주서</h3><table style="margin-bottom:.8rem"><tr><td style="width:8rem">작성일</td><td>' + ds + '</td><td style="width:8rem">작성자</td><td contenteditable>' + esc(D.me.name) + '</td></tr><tr><td>받는 곳</td><td contenteditable colspan="3">' + esc(C().orderTo || '') + '</td></tr></table>';
+  var h = '<h3>코일 발주서</h3><table style="margin-bottom:.8rem"><tr><td style="width:8rem">작성일</td><td>' + ds + '</td><td style="width:8rem">작성자</td><td contenteditable>' + esc(D.me.name) + '</td></tr><tr><td>받는 곳</td><td contenteditable colspan="3"></td></tr></table>';
   h += L.length ? '<table><tr><th>순번</th><th>코일 종류</th><th>규격(mm)</th><th>지금 재고</th><th>알림 기준</th><th>발주 수량</th><th>단가</th><th>비고</th></tr>' + L.map(function (s, i) {
     var n = needOf(s), nm = isInroll(s) ? s.type : s.kind;
     return '<tr><td>' + (i + 1) + '</td><td>' + esc(nm) + '</td><td>' + esc(s.spec) + '</td><td class="n">' + nf(s.total) + ' kg' + (s.unit ? ' (' + (s.units || 0) + '대)' : '') + '</td><td class="n">' + nf(s.safety) + ' kg</td><td class="n" contenteditable>' + n.q + ' ' + n.u + '</td><td contenteditable></td><td contenteditable>' + (s.order ? '이미 발주함 ' + esc(String(s.orderAt || '').slice(5, 10)) : '') + '</td></tr>';
@@ -319,8 +319,8 @@ function openAdmin() {
   h += '<section><span class="fl">🔔 부족 알림 기준 (kg) <small style="font-weight:400;color:var(--sub)">코일 앱 관리 탭과 같은 값 · 어느 쪽에서 바꿔도 같이 바뀜 · 비우면 알림 없음</small></span><table>' + T.map(function (t, i) {
     return '<tr><td>' + esc(t.name === '일반 환선' ? '일반 환선 (AIW·인버터 모든 규격)' : t.name) + (t.unit ? ' <small style="color:var(--sub)">1대 ' + t.unit + 'kg</small>' : '') + '</td><td><input type="number" min="0" step="1" style="width:8rem" data-al="' + i + '" value="' + (t.alert == null ? '' : t.alert) + '" placeholder="알림 없음"> kg</td></tr>';
   }).join('') + '</table></section>';
-  h += '<section><span class="fl">🧾 발주서 기본값</span>받는 곳 <input type="text" id="aTo" maxlength="60" style="width:24rem" value="' + esc(c.orderTo || '') + '" placeholder="거래처 이름">' +
-    '<div style="margin-top:.5rem">수량 계산</div>' + opt('mode', [['month', '알림 기준 + 한 달 사용량'], ['base', '알림 기준까지만']], c.orderMode || 'month') +
+  h += '<section><span class="fl">🧾 발주서 기본값</span>' +
+    '<div>수량 계산</div>' + opt('mode', [['month', '알림 기준 + 한 달 사용량'], ['base', '알림 기준까지만']], c.orderMode || 'month') +
     '<div style="margin-top:.5rem">올림 단위</div>' + opt('round', [[1, '1kg'], [5, '5kg'], [10, '10kg']], c.orderRound || 5) + '</section>';
   h += '<section><span class="fl">⏳ 소진 예측 기준</span>' + opt('basis', [[3, '지난 3달 평균'], [6, '지난 6달 평균']], c.basis || 3) +
     '<div style="margin-top:.5rem">빨간색으로 보일 때: <input type="number" id="aRed" min="1" max="26" style="width:5rem" value="' + (c.redWeeks || 4) + '"> 주 안에 소진</div></section>';
@@ -328,7 +328,7 @@ function openAdmin() {
 }
 function saveAdmin() {
   var show = {}; [].forEach.call($('aShow').children, function (b) { show[b.getAttribute('data-v')] = b.classList.contains('on'); });
-  var cfg = { notice: $('aNotice').value.trim(), noticeUntil: $('aUntil').value, show: show, orderTo: $('aTo').value.trim(), orderMode: optVal('mode'), orderRound: Number(optVal('round')), basis: Number(optVal('basis')), redWeeks: Number($('aRed').value) };
+  var cfg = { notice: $('aNotice').value.trim(), noticeUntil: $('aUntil').value, show: show, orderMode: optVal('mode'), orderRound: Number(optVal('round')), basis: Number(optVal('basis')), redWeeks: Number($('aRed').value) };
   var rows = [], T = D.types || [];
   [].forEach.call(document.querySelectorAll('[data-al]'), function (el) { var i = Number(el.getAttribute('data-al')), v = el.value.trim(), o = T[i].alert == null ? '' : String(T[i].alert); if (v !== o) rows.push({ old: T[i].name, name: T[i].name, alert: v }); });
   call('boardSet', [tok(), cfg]).then(function () { return rows.length ? call('adminCall', [tok(), 'setTypes', { rows: rows }]) : null; })
