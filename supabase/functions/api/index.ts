@@ -448,7 +448,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v60';
+const CO_VERSION = 'v61';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -837,7 +837,27 @@ async function board(token: any) {
     diff: st.items.filter((x: any) => x.done === 'w' && Math.abs(num(x.diff)) > 1).map((x: any) => ({ no: x.no, spec: x.spec, loc: x.loc, diff: x.diff })),
     missing: st.items.filter((x: any) => !x.done).map((x: any) => ({ no: x.no, spec: x.spec, kind: x.kind, loc: x.loc, rem: x.rem, g: x.g })),
     weigh: w.length, check: c.length };
-  return { at: nowStr(), month, me: { name: m.name, admin: m.admin, owner: m.owner }, stock, monthly: mon, recent, stk };
+  // v61: 지난 6달 평균(소진 예측 기준을 6달로 고른 경우)
+  const m7 = monthsBack(7), past6 = m7.slice(1), u6: any = {};
+  (await q(db.rpc('coil_monthly', { p_from: m7[6] + '-01' })) as any[]).forEach((o) => { if (past6.indexOf(o.month) < 0) return; const k = specTxt(o.spec) + '|' + o.kind; u6[k] = (u6[k] || 0) + Number(o.used); });
+  mon.rows.forEach((r: any) => { r.avg6 = r2((u6[r.spec + '|' + r.kind] || 0) / 6); r.cover6 = r.avg6 > 0 ? Math.round(r.stock / r.avg6 * 10) / 10 : null; });
+  const cfg = Object.assign({}, BOARD_DEF, await getSetting('board.cfg', {}));
+  return { at: nowStr(), month, me: { name: m.name, admin: m.admin, owner: m.owner }, stock, monthly: mon, recent, stk, cfg, types: m.admin ? await coTypes() : [] };
+}
+// v61: 상황판 관리 (코일 관리자·운영자만). 알림 기준 무게는 코일 앱과 같은 coil_types.alert (adminCall setTypes로 바꿈)
+const BOARD_DEF: any = { notice: '', noticeUntil: '', show: { stock: true, monthly: true, recent: true, stk: true, soon: true }, orderTo: '', orderMode: 'month', orderRound: 5, basis: 3, redWeeks: 4 };
+async function boardSet(token: any, a: any) {
+  const m = await me(token, 'co'); if (!m.admin) err('상황판 관리는 코일 관리자와 운영자만 할 수 있습니다.');
+  a = a || {}; const old = Object.assign({}, BOARD_DEF, await getSetting('board.cfg', {}));
+  const sh: any = {}; Object.keys(BOARD_DEF.show).forEach((k) => { sh[k] = !(a.show && a.show[k] === false); });
+  const until = String(a.noticeUntil || '').trim();
+  if (until && !/^\d{4}-\d{2}-\d{2}$/.test(until)) err('공지 끝나는 날은 2026-12-03 처럼 적어 주세요.');
+  const cfg = { notice: txt(a.notice).slice(0, 80), noticeUntil: until, show: sh, orderTo: txt(a.orderTo).slice(0, 60),
+    orderMode: a.orderMode === 'base' ? 'base' : 'month', orderRound: [1, 5, 10].indexOf(Number(a.orderRound)) >= 0 ? Number(a.orderRound) : 5,
+    basis: Number(a.basis) === 6 ? 6 : 3, redWeeks: Math.max(1, Math.min(26, Math.round(num(a.redWeeks) || 4))) };
+  await putSetting('board.cfg', cfg);
+  await stLog(m.name, '상황판 설정', 'board', JSON.stringify(old), JSON.stringify(cfg));
+  return cfg;
 }
 // v6 (4-6): 재고조사 '있는지만 확인' — QR만 찍으면 이번 달 확인됨 (관리자, 휴대폰 보관 후 늦게 올려도 됨)
 async function stkSeen(token: any, a: any) {
@@ -1349,7 +1369,7 @@ const API: any = {
     addCoil: async (t: any, a: any) => { const d = await findReq(a && a.reqId); return d || onceReq(a && a.reqId, () => addCoil(t, a)); },
     editCoil, cancelMove, setOrder, setSafety, assignNumbers: async () => ({ count: 0, nos: [] }), adminCall: coAdmin,
     getInit: coInit, getJobs: async (t: any) => { await me(t, 'co'); return recentJobs(); }, getStock: async (t: any) => { await me(t, 'co'); return stockCalc(); },
-    getCoil, getHistory, getMonthly, labelData, clientLog, stkSeen, askEdit, board,
+    getCoil, getHistory, getMonthly, labelData, clientLog, stkSeen, askEdit, board, boardSet,
   },
   st: {
     login: async (n: any, p: any) => { const r = await login('st', n, p); return { token: r.token, name: r.name, mustChange: r.mustChange, sup: r.sup }; },

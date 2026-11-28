@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>사무실 상황판</title>
-<!-- 6단계 사무실 상황판 v1 (2026-11-28): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<!-- 6단계 사무실 상황판 v2 (2026-11-28, ⚙ 관리 메뉴): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
 <link rel="icon" href="../icon-192.png">
 <meta name="theme-color" content="#1f6fb2">
 <style>
@@ -22,6 +22,13 @@
   header .sp { flex:1; }
   header button { font-size:1.2rem; padding:.6rem 1.1rem; background:var(--blue); color:#fff; font-weight:700; }
   header button.g { background:#dfe4ea; color:var(--ink); }
+  .notice { margin-top:.6rem; background:#fff4d6; border:2px solid #f0b400; border-radius:.8rem; padding:.4rem 1rem; font-size:1.9rem; font-weight:800; text-align:center; }
+  .pane .fl { display:block; margin:.8rem 0 .2rem; font-weight:700; }
+  .pane input[type=text], .pane input[type=date], .pane input[type=number] { font-size:1.25rem; padding:.4rem .6rem; border:2px solid var(--line); border-radius:.5rem; }
+  .pane .opts { display:flex; gap:.5rem; flex-wrap:wrap; }
+  .pane .opts button { font-size:1.15rem; padding:.45rem .9rem; background:#eef1f5; color:var(--ink); border:2px solid var(--line); }
+  .pane .opts button.on { background:var(--blue); color:#fff; border-color:var(--blue); font-weight:700; }
+  .pane section { border-top:1px solid var(--line); padding-top:.4rem; margin-top:.8rem; }
   .card { background:var(--card); border-radius:1rem; padding:.9rem 1.1rem; box-shadow:0 1px 4px rgba(0,0,0,.08); min-height:0; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
   .card h2 { font-size:1.45rem; margin:0 0 .3rem; display:flex; gap:.8rem; align-items:baseline; }
   .card h2 small { font-size:1rem; color:var(--sub); font-weight:400; }
@@ -81,7 +88,7 @@
   .ov { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:9; }
   .pane { background:#fff; border-radius:1rem; width:min(92vw, 70rem); max-height:92vh; overflow:auto; padding:1.4rem 1.6rem; font-size:1.25rem; }
   .pane h3 { font-size:1.8rem; margin:0 0 .8rem; }
-  .pane .btns { display:flex; gap:.8rem; justify-content:flex-end; margin-top:1rem; }
+  .pane .btns { position:sticky; bottom:-1.4rem; background:#fff; padding:.6rem 0; display:flex; gap:.8rem; justify-content:flex-end; margin-top:1rem; }
   .pane .btns button { font-size:1.25rem; padding:.7rem 1.3rem; background:var(--blue); color:#fff; font-weight:700; }
   .pane .btns button.g { background:#dfe4ea; color:var(--ink); }
   .pane td { white-space:normal; max-width:none; }
@@ -114,28 +121,29 @@
 </div>
 
 <div id="board" class="hide">
-  <header>
+  <div><header>
     <h1>🖥️ 권선 작업실 상황판</h1>
     <span class="time" id="time"></span>
     <span class="sp"></span>
     <button onclick="openOrder()">🧾 발주서 만들기</button>
     <button onclick="openPosco()">📋 포스코 등록표</button>
     <button class="g" onclick="load()">🔄 새로고침</button>
-    <button class="g" onclick="location.href='../'">🏠</button>
+    <button class="g hide" id="admBtn" onclick="openAdmin()">⚙ 관리</button>
   </header>
+  <div id="notice" class="notice hide"></div></div>
   <div class="kpis">
     <div class="kpi"><div class="l">총 재고</div><div class="v" id="k1">-</div></div>
     <div class="kpi"><div class="l" id="k2l">이번 달 사용량</div><div class="v" id="k2">-</div></div>
     <div class="kpi" id="k3box"><div class="l">발주 필요 규격</div><div class="v" id="k3">-</div></div>
   </div>
-  <div class="row r1">
-    <div class="card">
+  <div class="row r1" id="r1">
+    <div class="card" id="cStock">
       <h2>규격별 재고 <small>AIW·인버터 · 주황 점선 = 알림 기준 · 빨강 = 기준 아래</small></h2>
       <div class="bars" id="bars"></div>
       <div class="xl" id="xl"></div>
       <div class="inroll" id="inroll"></div>
     </div>
-    <div class="card">
+    <div class="card" id="cMonthly">
       <h2>월별 사용량</h2>
       <div class="mbig" id="mbig">-</div>
       <div class="mbars" id="mbars"></div>
@@ -143,13 +151,13 @@
       <div class="legend" id="mleg"></div>
     </div>
   </div>
-  <div class="row r2">
-    <div class="card">
-      <h2>최근 작업 10건</h2>
+  <div class="row r2" id="r2">
+    <div class="card" id="cRecent">
+      <h2>최근 작업</h2>
       <div style="flex:1;min-height:0;overflow:hidden"><table><thead><tr><th>작업번호</th><th>날짜</th><th>작업자</th><th>kW</th><th style="text-align:right">코일 사용량</th><th>선경</th></tr></thead><tbody id="recent"></tbody></table></div>
     </div>
-    <div class="card">
-      <h2>재고조사 · 소진 예측</h2>
+    <div class="card" id="cSide">
+      <h2 id="sideH">재고조사 · 소진 예측</h2>
       <button class="stk" id="stk" onclick="openStk()">-</button>
       <div class="soon" id="soon"></div>
     </div>
@@ -189,7 +197,34 @@ var KIND_ORDER = { AIW: 0, '인버터': 1 };
 function isInroll(s) { return s.type && s.type !== '일반 환선'; }
 function specNum(s) { var n = parseFloat(String(s).replace(/[^0-9.]/g, '')); return isFinite(n) ? n : 999; }
 function lows() { return (D.stock || []).filter(function (s) { return s.low; }); }
+function C() { return D.cfg || {}; }
+function todayStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function layout() {
+  var sh = C().show || {}, on = function (k) { return sh[k] !== false; };
+  $('cStock').classList.toggle('hide', !on('stock')); $('cMonthly').classList.toggle('hide', !on('monthly')); $('cRecent').classList.toggle('hide', !on('recent'));
+  $('stk').classList.toggle('hide', !on('stk')); $('soon').classList.toggle('hide', !on('soon')); $('cSide').classList.toggle('hide', !on('stk') && !on('soon'));
+  $('sideH').textContent = on('stk') && on('soon') ? '재고조사 · 소진 예측' : on('stk') ? '재고조사' : '소진 예측';
+  var rows = ['auto', 'auto'];
+  [['r1', on('stock'), on('monthly'), '1fr'], ['r2', on('recent'), on('stk') || on('soon'), '1.08fr']].forEach(function (r) {
+    var el = $(r[0]); el.classList.toggle('hide', !r[1] && !r[2]); el.style.gridTemplateColumns = r[1] && r[2] ? '' : '1fr';
+    if (r[1] || r[2]) rows.push(r[3]);
+  });
+  $('board').style.gridTemplateRows = rows.join(' ');
+  var c = C(), nt = c.notice && (!c.noticeUntil || todayStr() <= c.noticeUntil);
+  $('notice').classList.toggle('hide', !nt); $('notice').textContent = nt ? '📢 ' + c.notice : '';
+  $('admBtn').classList.toggle('hide', !(D.me && (D.me.admin || D.me.owner)));
+}
+function basis() { return C().basis === 6 ? 6 : 3; }
+// 공지 줄 등으로 자리가 모자라면 안 보이는 아래 줄은 숨김 (반쯤 잘린 줄 없게)
+function fitRecent() {
+  var box = $('cRecent'), tb = $('recent'); if (!box || box.classList.contains('hide')) return;
+  [].forEach.call(tb.rows, function (r) { r.style.display = ''; });
+  var bot = box.getBoundingClientRect().bottom - 6;
+  [].forEach.call(tb.rows, function (r) { if (r.getBoundingClientRect().bottom > bot) r.style.display = 'none'; });
+}
+window.addEventListener('resize', function () { if (D) fitRecent(); });
 function render() {
+  layout(); setTimeout(fitRecent, 0);
   var st = D.stock || [], round = st.filter(function (s) { return !isInroll(s); }), inr = st.filter(isInroll);
   $('time').textContent = D.at + ' 기준 · 1분마다 새로고침';
   var tot = st.reduce(function (a, s) { return a + (Number(s.total) || 0); }, 0);
@@ -213,8 +248,8 @@ function render() {
   var specs = []; rows.forEach(function (r) { if (specs.indexOf(r.spec) < 0) specs.push(r.spec); }); specs.sort(function (a, b) { return specNum(a) - specNum(b); });
   var col = function (i) { return 'hsl(' + Math.round(210 - i * (180 / Math.max(1, specs.length - 1))) + ',65%,' + (42 + (i % 2) * 12) + '%)'; };
   var mm = Math.max.apply(null, months.map(function (m) { return (mo.total[m] || {}).used || 0; }).concat([1]));
-  var avg3 = 0; for (var i = 1; i <= 3; i++) avg3 += ((mo.total[mo.months[i]] || {}).used || 0); avg3 /= 3;
-  $('mbig').innerHTML = nf(mt.used || 0, 0) + ' kg<small>이번 달 · 지난 3달 평균 ' + nf(avg3, 0) + ' kg</small>';
+  var nb = Math.min(basis(), mo.months.length - 1), avg3 = 0; for (var i = 1; i <= nb; i++) avg3 += ((mo.total[mo.months[i]] || {}).used || 0); avg3 /= Math.max(1, nb);
+  $('mbig').innerHTML = nf(mt.used || 0, 0) + ' kg<small>이번 달 · 지난 ' + basis() + '달 평균 ' + nf(avg3, 0) + ' kg</small>';
   $('mbars').innerHTML = months.map(function (m) {
     var u = (mo.total[m] || {}).used || 0;
     var parts = specs.map(function (sp, i) { var v = 0; rows.forEach(function (r) { if (r.spec === sp && r.m[m]) v += r.m[m].used || 0; }); return v > 0 ? '<div style="height:' + (v / mm * 100) + '%;background:' + col(i) + '" title="' + esc(sp) + ' ' + nf(v) + 'kg"></div>' : ''; }).join('');
@@ -234,11 +269,12 @@ function render() {
     ' · 무게 차이 <b class="' + (k.diff.length ? 'bad' : 'ok') + '">' + k.diff.length + '개</b> · ' + (k.done >= k.total ? '행방불명' : '아직 못 찾음') + ' <b class="' + (k.missing.length ? 'bad' : 'ok') + '">' + k.missing.length + '개</b> ›' : mn + ' 재고조사 대상 없음';
   $('stk').innerHTML = line;
   // 소진 예측 (지난 3달 평균 사용 속도)
-  var soon = (mo.rows || []).filter(function (r) { return r.cover != null && r.avg > 0; }).map(function (r) { return { spec: r.spec, kind: r.kind, stock: r.stock, wk: r.cover * 4.35 }; })
+  var b6 = basis() === 6, red = C().redWeeks || 4;
+  var soon = (mo.rows || []).map(function (r) { return { spec: r.spec, kind: r.kind, stock: r.stock, avg: b6 ? r.avg6 : r.avg, cover: b6 ? r.cover6 : r.cover }; }).filter(function (r) { return r.cover != null && r.avg > 0; }).map(function (r) { return { spec: r.spec, kind: r.kind, stock: r.stock, wk: r.cover * 4.35 }; })
     .sort(function (a, b) { return a.wk - b.wk; }).slice(0, 5);
-  $('soon').innerHTML = '<div style="color:var(--sub);font-size:1.05rem;border:0">⏳ 지금 쓰는 속도면 (지난 3달 평균)</div>' + (soon.length ? soon.map(function (s) {
-    var w = Math.floor(s.wk); return '<div><span>' + esc(s.kind) + ' ' + esc(s.spec) + ' <span style="color:var(--sub)">(' + nf(s.stock, 0) + 'kg)</span></span><span class="w' + (w < 4 ? ' red' : '') + '">' + (w < 1 ? '1주 안에 소진' : '약 ' + w + '주 뒤 소진') + '</span></div>';
-  }).join('') : '<div class="empty" style="border:0">사용 기록이 3달 쌓이면 보입니다</div>');
+  $('soon').innerHTML = '<div style="color:var(--sub);font-size:1.05rem;border:0">⏳ 지금 쓰는 속도면 (지난 ' + basis() + '달 평균, ' + red + '주 안이면 빨강)</div>' + (soon.length ? soon.map(function (s) {
+    var w = Math.floor(s.wk); return '<div><span>' + esc(s.kind) + ' ' + esc(s.spec) + ' <span style="color:var(--sub)">(' + nf(s.stock, 0) + 'kg)</span></span><span class="w' + (s.wk < red ? ' red' : '') + '">' + (w < 1 ? '1주 안에 소진' : '약 ' + w + '주 뒤 소진') + '</span></div>';
+  }).join('') : '<div class="empty" style="border:0">사용 기록이 쌓이면 보입니다</div>');
 }
 // ── 겹쳐 뜨는 창 ──
 function openOv(h) { $('pane').innerHTML = h; $('ov').classList.remove('hide'); }
@@ -253,20 +289,50 @@ function openStk() {
 }
 // 발주서: 부족 규격 + 필요 수량 자동 (고쳐 쓸 수 있음). 단가는 비워 둠. 인쇄 / PDF 저장만 (메일 안 보냄)
 function needOf(s) {
-  var avg = 0; ((D.monthly || {}).rows || []).forEach(function (r) { if (r.spec === s.spec && r.kind === s.kind) avg = r.avg || 0; });
-  var n = Math.max(0, (Number(s.safety) || 0) - (Number(s.total) || 0)) + (isInroll(s) ? 0 : avg);
+  var avg = 0, c = C(), rd = c.orderRound || 5; ((D.monthly || {}).rows || []).forEach(function (r) { if (r.spec === s.spec && r.kind === s.kind) avg = (basis() === 6 ? r.avg6 : r.avg) || 0; });
+  var n = Math.max(0, (Number(s.safety) || 0) - (Number(s.total) || 0)) + (isInroll(s) || c.orderMode === 'base' ? 0 : avg);
   if (isInroll(s) && s.unit) return { q: Math.max(1, Math.ceil(n / s.unit)), u: '대' };
-  return { q: Math.max(1, Math.ceil(n / 5) * 5), u: 'kg' };
+  return { q: Math.max(rd, Math.ceil(n / rd) * rd), u: 'kg' };
 }
 function openOrder() {
   var L = lows(), d = new Date(), ds = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
-  var h = '<h3>코일 발주서</h3><table style="margin-bottom:.8rem"><tr><td style="width:8rem">작성일</td><td>' + ds + '</td><td style="width:8rem">작성자</td><td contenteditable>' + esc(D.me.name) + '</td></tr><tr><td>받는 곳</td><td contenteditable colspan="3"></td></tr></table>';
+  var h = '<h3>코일 발주서</h3><table style="margin-bottom:.8rem"><tr><td style="width:8rem">작성일</td><td>' + ds + '</td><td style="width:8rem">작성자</td><td contenteditable>' + esc(D.me.name) + '</td></tr><tr><td>받는 곳</td><td contenteditable colspan="3">' + esc(C().orderTo || '') + '</td></tr></table>';
   h += L.length ? '<table><tr><th>순번</th><th>코일 종류</th><th>규격(mm)</th><th>지금 재고</th><th>알림 기준</th><th>발주 수량</th><th>단가</th><th>비고</th></tr>' + L.map(function (s, i) {
     var n = needOf(s), nm = isInroll(s) ? s.type : s.kind;
     return '<tr><td>' + (i + 1) + '</td><td>' + esc(nm) + '</td><td>' + esc(s.spec) + '</td><td class="n">' + nf(s.total) + ' kg' + (s.unit ? ' (' + (s.units || 0) + '대)' : '') + '</td><td class="n">' + nf(s.safety) + ' kg</td><td class="n" contenteditable>' + n.q + ' ' + n.u + '</td><td contenteditable></td><td contenteditable>' + (s.order ? '이미 발주함 ' + esc(String(s.orderAt || '').slice(5, 10)) : '') + '</td></tr>';
   }).join('') + '</table>' : '<p>지금 알림 기준보다 적은 규격이 없습니다.</p>';
-  h += '<p class="note noprint">· 발주 수량 = (알림 기준 − 지금 재고) + 한 달 평균 사용량, 5kg 단위로 올림. 인롤은 대 수. 노란 칸은 눌러서 고칠 수 있어요.<br>· 단가는 자주 바뀌어서 비워 둡니다. 메일은 보내지 않습니다 — 인쇄하거나 PDF로 저장한 뒤 직접 보내세요.<br>· 회사 발주서 양식을 주시면 그 모양 그대로 바꿔 드립니다.</p>';
+  h += '<p class="note noprint">· 발주 수량 = (알림 기준 − 지금 재고)' + (C().orderMode === 'base' ? '' : ' + 한 달 평균 사용량') + ', ' + (C().orderRound || 5) + 'kg 단위로 올림 (⚙ 관리에서 바꿈). 인롤은 대 수. 노란 칸은 눌러서 고칠 수 있어요.<br>· 단가는 자주 바뀌어서 비워 둡니다. 메일은 보내지 않습니다 — 인쇄하거나 PDF로 저장한 뒤 직접 보내세요.<br>· 회사 발주서 양식을 주시면 그 모양 그대로 바꿔 드립니다.</p>';
   openOv(h + '<div class="btns"><button class="g" onclick="closeOv()">닫기</button><button onclick="window.print()">🖨️ 인쇄 / PDF 저장</button></div>');
+}
+// ── ⚙ 관리 (코일 관리자·운영자만, 서버에서도 막음). 알림 기준은 코일 앱 관리 탭과 같은 값 ──
+function opt(name, list, cur) { return '<div class="opts" data-opt="' + name + '">' + list.map(function (o) { return '<button type="button" data-v="' + esc(o[0]) + '"' + (String(o[0]) === String(cur) ? ' class="on"' : '') + ' onclick="optPick(this)">' + esc(o[1]) + '</button>'; }).join('') + '</div>'; }
+function optPick(b) { [].forEach.call(b.parentNode.children, function (x) { x.classList.toggle('on', x === b); }); }
+function optVal(name) { var b = document.querySelector('[data-opt="' + name + '"] .on'); return b ? b.getAttribute('data-v') : ''; }
+function clearNotice() { $('aNotice').value = ''; $('aUntil').value = ''; }
+function openAdmin() {
+  if (!(D.me.admin || D.me.owner)) return;
+  var c = C(), sh = c.show || {}, T = D.types || [];
+  var h = '<h3>⚙ 상황판 관리 <small style="font-size:1rem;color:var(--sub);font-weight:400">코일 관리자·운영자만</small></h3>';
+  h += '<section><span class="fl">📢 맨 위 공지 한 줄</span><input type="text" id="aNotice" maxlength="80" style="width:100%" placeholder="예) 12월 3일 오후 재고조사" value="' + esc(c.notice || '') + '">' +
+    '<div style="margin-top:.4rem">끝나는 날 (이날까지 보임, 비우면 계속) <input type="date" id="aUntil" value="' + esc(c.noticeUntil || '') + '"> <button type="button" style="background:#eef1f5;padding:.3rem .8rem" onclick="clearNotice()">공지 지우기</button></div></section>';
+  h += '<section><span class="fl">👁 보일 칸 (눌러서 켜고 끄기)</span><div class="opts" id="aShow">' + [['stock', '규격별 재고'], ['monthly', '월별 사용량'], ['recent', '최근 작업'], ['stk', '재고조사'], ['soon', '소진 예측']].map(function (o) { return '<button type="button" data-v="' + o[0] + '"' + (sh[o[0]] !== false ? ' class="on"' : '') + ' onclick="this.classList.toggle(\'on\')">' + o[1] + '</button>'; }).join('') + '</div></section>';
+  h += '<section><span class="fl">🔔 부족 알림 기준 (kg) <small style="font-weight:400;color:var(--sub)">코일 앱 관리 탭과 같은 값 · 어느 쪽에서 바꿔도 같이 바뀜 · 비우면 알림 없음</small></span><table>' + T.map(function (t, i) {
+    return '<tr><td>' + esc(t.name === '일반 환선' ? '일반 환선 (AIW·인버터 모든 규격)' : t.name) + (t.unit ? ' <small style="color:var(--sub)">1대 ' + t.unit + 'kg</small>' : '') + '</td><td><input type="number" min="0" step="1" style="width:8rem" data-al="' + i + '" value="' + (t.alert == null ? '' : t.alert) + '" placeholder="알림 없음"> kg</td></tr>';
+  }).join('') + '</table></section>';
+  h += '<section><span class="fl">🧾 발주서 기본값</span>받는 곳 <input type="text" id="aTo" maxlength="60" style="width:24rem" value="' + esc(c.orderTo || '') + '" placeholder="거래처 이름">' +
+    '<div style="margin-top:.5rem">수량 계산</div>' + opt('mode', [['month', '알림 기준 + 한 달 사용량'], ['base', '알림 기준까지만']], c.orderMode || 'month') +
+    '<div style="margin-top:.5rem">올림 단위</div>' + opt('round', [[1, '1kg'], [5, '5kg'], [10, '10kg']], c.orderRound || 5) + '</section>';
+  h += '<section><span class="fl">⏳ 소진 예측 기준</span>' + opt('basis', [[3, '지난 3달 평균'], [6, '지난 6달 평균']], c.basis || 3) +
+    '<div style="margin-top:.5rem">빨간색으로 보일 때: <input type="number" id="aRed" min="1" max="26" style="width:5rem" value="' + (c.redWeeks || 4) + '"> 주 안에 소진</div></section>';
+  openOv(h + '<div class="btns"><button class="g" onclick="closeOv()">닫기</button><button onclick="saveAdmin()">💾 저장</button></div>');
+}
+function saveAdmin() {
+  var show = {}; [].forEach.call($('aShow').children, function (b) { show[b.getAttribute('data-v')] = b.classList.contains('on'); });
+  var cfg = { notice: $('aNotice').value.trim(), noticeUntil: $('aUntil').value, show: show, orderTo: $('aTo').value.trim(), orderMode: optVal('mode'), orderRound: Number(optVal('round')), basis: Number(optVal('basis')), redWeeks: Number($('aRed').value) };
+  var rows = [], T = D.types || [];
+  [].forEach.call(document.querySelectorAll('[data-al]'), function (el) { var i = Number(el.getAttribute('data-al')), v = el.value.trim(), o = T[i].alert == null ? '' : String(T[i].alert); if (v !== o) rows.push({ old: T[i].name, name: T[i].name, alert: v }); });
+  call('boardSet', [tok(), cfg]).then(function () { return rows.length ? call('adminCall', [tok(), 'setTypes', { rows: rows }]) : null; })
+    .then(function () { closeOv(); msg('저장했어요'); load(); }, function (e) { msg('저장 못 했어요: ' + e.message, 5000); });
 }
 // 포스코 자재 등록용 표 (칸 순서는 포스코 등록 화면을 확인한 뒤 맞춤)
 var POSCO_COLS = ['순번', '자재명', '규격', '단위', '수량', '비고'];
