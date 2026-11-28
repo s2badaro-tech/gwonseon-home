@@ -479,11 +479,11 @@ function applyDefaults() {
   Object.keys(D).forEach(function (k) { var el = document.getElementById('i_' + k); if (el && !el.value) el.value = D[k]; });
   slotsRefresh(); pitchAuto();
 }
-var STEP_MIN = { strands: 0, series: 1 };
+var STEP_MIN = { strands: 0, series: 1, turns: 1 };
 function stepBy(key, d) {
   var el = document.getElementById('i_' + key), mn = STEP_MIN[key] || 0;
-  var v = parseInt(el.value, 10); if (isNaN(v)) v = mn;
-  v = Math.max(mn, v + d); el.value = String(v); el.removeAttribute('data-auto'); saveDraft();
+  var v = parseInt(el.value, 10);
+  v = isNaN(v) ? (d > 0 ? Math.max(mn, 1) : mn) : Math.max(mn, v + d); el.value = String(v); el.removeAttribute('data-auto'); saveDraft(); // 빈칸에서 ＋ 누르면 1부터
 }
 // 슬롯수: 극수×3의 배수 중 자주 쓰는 값 (실제 기록이 쌓이면 자주 나온 값으로 바꿀 것)
 var SLOTS_BY_POLES = { '2': [24, 36, 48], '4': [36, 48, 60, 72], '6': [36, 54, 72, 90], '8': [48, 72, 96], '10': [60, 90, 120], '12': [72, 108, 144] };
