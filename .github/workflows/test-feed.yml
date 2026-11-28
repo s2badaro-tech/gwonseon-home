@@ -7,7 +7,12 @@ name: 실사용 시험 입력
 on:
   schedule:
     - cron: '15 * * * *'      # 매시간 15분 (UTC 기준이지만 매시간이라 한국 시각도 매시간 15분)
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      check:
+        description: '확인만 (데이터 안 넣고 비밀값·서버 연결만 봄)'
+        type: boolean
+        default: true
 permissions:
   actions: write
 concurrency:
@@ -18,8 +23,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 58
     steps:
+      - name: 비밀값·서버 확인만
+        if: github.event_name == 'workflow_dispatch' && inputs.check
+        env:
+          API: ${{ secrets.SUPABASE_API_URL }}
+          KEY: ${{ secrets.TEST_FEED_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then echo "TEST_FEED_KEY 비밀값이 없습니다"; exit 1; fi
+          body=$(jq -nc --arg k "$KEY" '{app:"sys",fn:"testCount",args:[$k]}')
+          out=$(curl -s -m 60 -X POST -H 'Content-Type: text/plain;charset=utf-8' --data "$body" "$API")
+          echo "$out"
+          echo "$out" | grep -q '"ok":true'
       - name: 시험 기간 확인
         id: win
+        if: github.event_name != 'workflow_dispatch' || !inputs.check
         run: |
           now=$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')
           echo "지금 한국 시각: $now"
