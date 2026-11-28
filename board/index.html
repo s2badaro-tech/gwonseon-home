@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>사무실 상황판</title>
-<!-- 6단계 사무실 상황판 v3 (2026-11-28, ⚙ 관리 메뉴, 받는 곳 칸 뺌): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<!-- 6단계 사무실 상황판 v4 (2026-11-28, ⚙ 관리 메뉴 쉬운 말): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
 <link rel="icon" href="../icon-192.png">
 <meta name="theme-color" content="#1f6fb2">
 <style>
@@ -313,17 +313,16 @@ function openAdmin() {
   if (!(D.me.admin || D.me.owner)) return;
   var c = C(), sh = c.show || {}, T = D.types || [];
   var h = '<h3>⚙ 상황판 관리 <small style="font-size:1rem;color:var(--sub);font-weight:400">코일 관리자·운영자만</small></h3>';
-  h += '<section><span class="fl">📢 맨 위 공지 한 줄</span><input type="text" id="aNotice" maxlength="80" style="width:100%" placeholder="예) 12월 3일 오후 재고조사" value="' + esc(c.notice || '') + '">' +
-    '<div style="margin-top:.4rem">끝나는 날 (이날까지 보임, 비우면 계속) <input type="date" id="aUntil" value="' + esc(c.noticeUntil || '') + '"> <button type="button" style="background:#eef1f5;padding:.3rem .8rem" onclick="clearNotice()">공지 지우기</button></div></section>';
-  h += '<section><span class="fl">👁 보일 칸 (눌러서 켜고 끄기)</span><div class="opts" id="aShow">' + [['stock', '규격별 재고'], ['monthly', '월별 사용량'], ['recent', '최근 작업'], ['stk', '재고조사'], ['soon', '소진 예측']].map(function (o) { return '<button type="button" data-v="' + o[0] + '"' + (sh[o[0]] !== false ? ' class="on"' : '') + ' onclick="this.classList.toggle(\'on\')">' + o[1] + '</button>'; }).join('') + '</div></section>';
-  h += '<section><span class="fl">🔔 부족 알림 기준 (kg) <small style="font-weight:400;color:var(--sub)">코일 앱 관리 탭과 같은 값 · 어느 쪽에서 바꿔도 같이 바뀜 · 비우면 알림 없음</small></span><table>' + T.map(function (t, i) {
+  h += '<section><span class="fl">📢 맨 위 알림 글 <small style="font-weight:400;color:var(--sub)">상황판 맨 위에 크게 뜸</small></span><input type="text" id="aNotice" maxlength="80" style="width:100%" placeholder="예) 12월 3일 오후 재고조사" value="' + esc(c.notice || '') + '">' +
+    '<div style="margin-top:.4rem">이 날까지 보이기 (비우면 계속) <input type="date" id="aUntil" value="' + esc(c.noticeUntil || '') + '"> <button type="button" style="background:#eef1f5;padding:.3rem .8rem" onclick="clearNotice()">알림 글 지우기</button></div></section>';
+  h += '<section><span class="fl">👁 상황판에 보일 것 <small style="font-weight:400;color:var(--sub)">파란색 = 보임, 눌러서 켜고 끄기</small></span><div class="opts" id="aShow">' + [['stock', '규격별 재고'], ['monthly', '월별 사용량'], ['recent', '최근 작업'], ['stk', '재고조사'], ['soon', '언제 다 쓸지']].map(function (o) { return '<button type="button" data-v="' + o[0] + '"' + (sh[o[0]] !== false ? ' class="on"' : '') + ' onclick="this.classList.toggle(\'on\')">' + o[1] + '</button>'; }).join('') + '</div></section>';
+  h += '<section><span class="fl">🔔 부족 알림 무게 (kg) <small style="font-weight:400;color:var(--sub)">남은 무게가 이보다 적으면 빨간색 · 코일 앱 관리 탭과 같은 값 · 비우면 알림 없음</small></span><table>' + T.map(function (t, i) {
     return '<tr><td>' + esc(t.name === '일반 환선' ? '일반 환선 (AIW·인버터 모든 규격)' : t.name) + (t.unit ? ' <small style="color:var(--sub)">1대 ' + t.unit + 'kg</small>' : '') + '</td><td><input type="number" min="0" step="1" style="width:8rem" data-al="' + i + '" value="' + (t.alert == null ? '' : t.alert) + '" placeholder="알림 없음"> kg</td></tr>';
   }).join('') + '</table></section>';
-  h += '<section><span class="fl">🧾 발주서 기본값</span>' +
-    '<div>수량 계산</div>' + opt('mode', [['month', '알림 기준 + 한 달 사용량'], ['base', '알림 기준까지만']], c.orderMode || 'month') +
-    '<div style="margin-top:.5rem">올림 단위</div>' + opt('round', [[1, '1kg'], [5, '5kg'], [10, '10kg']], c.orderRound || 5) + '</section>';
-  h += '<section><span class="fl">⏳ 소진 예측 기준</span>' + opt('basis', [[3, '지난 3달 평균'], [6, '지난 6달 평균']], c.basis || 3) +
-    '<div style="margin-top:.5rem">빨간색으로 보일 때: <input type="number" id="aRed" min="1" max="26" style="width:5rem" value="' + (c.redWeeks || 4) + '"> 주 안에 소진</div></section>';
+  h += '<section><span class="fl">🧾 발주서에 적을 주문량 ' + '<small style="font-weight:400;color:var(--sub)">알림 무게보다 모자란 만큼 채움</small></span>' + opt('mode', [['month', '모자란 만큼 + 한 달 쓸 양 더'], ['base', '모자란 만큼만']], c.orderMode || 'month') +
+    '<span class="fl">🔢 주문량 끝자리 맞추기 <small style="font-weight:400;color:var(--sub)">모자란 양이 23kg이면 → 1kg: 23kg · 5kg: 25kg · 10kg: 30kg</small></span>' + opt('round', [[1, '1kg 단위'], [5, '5kg 단위'], [10, '10kg 단위']], c.orderRound || 5) + '</section>';
+  h += '<section><span class="fl">⏳ 언제 다 쓸지 계산 <small style="font-weight:400;color:var(--sub)">몇 달 동안 쓴 양을 보고 계산할지</small></span>' + opt('basis', [[3, '최근 3달 쓴 양으로'], [6, '최근 6달 쓴 양으로']], c.basis || 3) +
+    '<div style="margin-top:.5rem">빨간 글씨로 보일 때: <input type="number" id="aRed" min="1" max="26" style="width:5rem" value="' + (c.redWeeks || 4) + '"> 주 안에 소진</div></section>';
   openOv(h + '<div class="btns"><button class="g" onclick="closeOv()">닫기</button><button onclick="saveAdmin()">💾 저장</button></div>');
 }
 function saveAdmin() {
