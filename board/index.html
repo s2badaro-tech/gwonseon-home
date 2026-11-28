@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>사무실 상황판</title>
+<!-- 6단계 사무실 상황판 v1 (2026-11-28): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<link rel="icon" href="../icon-192.png">
+<meta name="theme-color" content="#1f6fb2">
+<style>
+  :root { --bg:#eef1f5; --card:#fff; --ink:#1d2430; --sub:#5b6677; --line:#d5dae1; --blue:#1f6fb2; --blue2:#6fa8dc; --org:#d9730d; --grn:#2e7d32; --red:#c62828; }
+  * { box-sizing:border-box; }
+  /* 화면 크기에 맞춰 모든 글씨·칸이 같이 커짐 (1920×1080 기준 1rem ≈ 19px) */
+  html { font-size:min(1vw, 1.78vh); }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif; }
+  button { font:inherit; cursor:pointer; border:0; border-radius:.6rem; }
+  .hide { display:none !important; }
+  #board { height:100vh; overflow:hidden; display:grid; gap:.8rem; padding:.8rem; grid-template-rows:auto auto 1fr 1.08fr; }
+  header { display:flex; align-items:center; gap:1rem; }
+  header h1 { font-size:2.1rem; margin:0; }
+  header .time { font-size:1.3rem; color:var(--sub); }
+  header .sp { flex:1; }
+  header button { font-size:1.2rem; padding:.6rem 1.1rem; background:var(--blue); color:#fff; font-weight:700; }
+  header button.g { background:#dfe4ea; color:var(--ink); }
+  .card { background:var(--card); border-radius:1rem; padding:.9rem 1.1rem; box-shadow:0 1px 4px rgba(0,0,0,.08); min-height:0; min-width:0; display:flex; flex-direction:column; overflow:hidden; }
+  .card h2 { font-size:1.45rem; margin:0 0 .3rem; display:flex; gap:.8rem; align-items:baseline; }
+  .card h2 small { font-size:1rem; color:var(--sub); font-weight:400; }
+  .kpis { display:grid; grid-template-columns:repeat(3, 1fr); gap:.8rem; }
+  .kpi { background:var(--card); border-radius:1rem; padding:.45rem 1.2rem; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  .kpi .l { font-size:1.35rem; color:var(--sub); }
+  .kpi .v { font-size:3.1rem; font-weight:800; line-height:1.1; }
+  .kpi .v small { font-size:1.6rem; font-weight:700; margin-left:.3rem; }
+  .kpi.red .v { color:var(--red); }
+  .row { display:grid; gap:.8rem; min-height:0; }
+  .r1 { grid-template-columns:1.5fr 1fr; }
+  .r2 { grid-template-columns:1.5fr 1fr; }
+  /* 막대그래프 */
+  .bars { flex:1; display:flex; align-items:flex-end; gap:.35rem; min-height:0; padding-top:1.6rem; border-bottom:2px solid var(--line); position:relative; }
+  .bar { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; min-width:0; position:relative; }
+  .bar .col { width:78%; background:var(--blue); border-radius:.3rem .3rem 0 0; position:relative; }
+  .bar.inv .col { background:var(--blue2); }
+  .bar.low .col { background:var(--red); }
+  .bar .val { font-size:1rem; font-weight:700; white-space:nowrap; }
+  .bar.low .val { color:var(--red); }
+  .bar .safe { position:absolute; left:4%; right:4%; border-top:2px dashed var(--org); }
+  .xl { display:flex; gap:.35rem; }
+  .xl div { flex:1; text-align:center; font-size:.95rem; font-weight:700; min-width:0; white-space:nowrap; overflow:hidden; }
+  .xl div.inv { color:#3d7fb8; }
+  .legend { font-size:1rem; color:var(--sub); display:flex; gap:1.2rem; flex-wrap:wrap; margin-top:.35rem; }
+  .legend i { display:inline-block; width:1rem; height:1rem; border-radius:.2rem; vertical-align:-.15rem; margin-right:.3rem; }
+  .inroll { font-size:1.15rem; margin-top:.35rem; }
+  .inroll b { font-size:1.3rem; }
+  .inroll .low { color:var(--red); }
+  /* 월별 사용량 (쌓은 막대) */
+  .mbig { font-size:2.4rem; font-weight:800; }
+  .mbig small { font-size:1.2rem; color:var(--sub); font-weight:400; margin-left:.5rem; }
+  .mbars { flex:1; display:flex; align-items:flex-end; gap:1rem; min-height:0; padding-top:1.5rem; border-bottom:2px solid var(--line); }
+  .mbar { flex:1; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; }
+  .mbar .stack { width:70%; display:flex; flex-direction:column-reverse; }
+  .mbar .stack div { width:100%; }
+  .mbar .val { font-size:1.05rem; font-weight:700; }
+  .mx { display:flex; gap:1rem; }
+  .mx div { flex:1; text-align:center; font-size:1.05rem; font-weight:700; }
+  .mx div.now { color:var(--blue); }
+  /* 표 */
+  table { width:100%; border-collapse:collapse; font-size:1.2rem; }
+  th { text-align:left; color:var(--sub); font-weight:400; font-size:1.05rem; border-bottom:2px solid var(--line); padding:.15rem .4rem; }
+  #recent td { font-size:1.1rem; padding:.04rem .4rem; line-height:1.32; }
+  td { border-bottom:1px solid #edf0f3; padding:.2rem .4rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:18rem; }
+  td.n { text-align:right; font-weight:700; }
+  .stk { font-size:1.4rem; padding:.6rem .8rem; border-radius:.7rem; background:#f4f7fb; cursor:pointer; border:2px solid var(--line); text-align:left; width:100%; }
+  .stk b.bad { color:var(--red); }
+  .stk b.ok { color:var(--grn); }
+  .soon { font-size:1.2rem; margin-top:.6rem; overflow:hidden; }
+  .soon div { padding:.15rem 0; border-bottom:1px solid #edf0f3; display:flex; justify-content:space-between; }
+  .soon .w { font-weight:800; }
+  .soon .w.red { color:var(--red); }
+  .empty { color:var(--sub); font-size:1.2rem; padding:1rem 0; }
+  #msg { position:fixed; bottom:.6rem; left:50%; transform:translateX(-50%); background:#333; color:#fff; padding:.5rem 1rem; border-radius:.5rem; font-size:1.1rem; }
+  /* 겹쳐 뜨는 창 (재고조사 상세·발주서·포스코 표) */
+  .ov { position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; z-index:9; }
+  .pane { background:#fff; border-radius:1rem; width:min(92vw, 70rem); max-height:92vh; overflow:auto; padding:1.4rem 1.6rem; font-size:1.25rem; }
+  .pane h3 { font-size:1.8rem; margin:0 0 .8rem; }
+  .pane .btns { display:flex; gap:.8rem; justify-content:flex-end; margin-top:1rem; }
+  .pane .btns button { font-size:1.25rem; padding:.7rem 1.3rem; background:var(--blue); color:#fff; font-weight:700; }
+  .pane .btns button.g { background:#dfe4ea; color:var(--ink); }
+  .pane td { white-space:normal; max-width:none; }
+  .pane td[contenteditable] { background:#fffbe6; outline:1px dashed #e0c060; }
+  .pane .note { color:var(--sub); font-size:1.05rem; margin:.5rem 0; }
+  /* 로그인 */
+  #login { max-width:30rem; margin:12vh auto; background:#fff; border-radius:1rem; padding:2rem; font-size:1.5rem; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  #login input { width:100%; font-size:1.6rem; padding:.6rem; margin:.3rem 0 1rem; border:2px solid var(--line); border-radius:.6rem; }
+  #login button { width:100%; font-size:1.6rem; padding:.8rem; background:var(--blue); color:#fff; font-weight:700; }
+  /* 인쇄: 발주서·포스코 표만 */
+  @media print {
+    html { font-size:12px; }
+    body { background:#fff; }
+    #board, #login, #msg { display:none !important; }
+    .ov { position:static; background:none; display:block; }
+    .pane { width:auto; max-height:none; overflow:visible; box-shadow:none; padding:0; }
+    .pane .btns, .pane .noprint { display:none !important; }
+    .pane td[contenteditable] { background:none; outline:none; }
+    table { font-size:12px; } th, td { border:1px solid #888; padding:4px 6px; }
+  }
+</style>
+</head>
+<body>
+<div id="login" class="hide">
+  <h2 style="margin-top:0">🖥️ 사무실 상황판</h2>
+  <div>이름</div><input id="lName" autocomplete="username">
+  <div>PIN</div><input id="lPin" type="password" inputmode="numeric" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+  <button onclick="doLogin()">들어가기</button>
+  <p id="lMsg" style="color:var(--red);font-size:1.2rem"></p>
+</div>
+
+<div id="board" class="hide">
+  <header>
+    <h1>🖥️ 권선 작업실 상황판</h1>
+    <span class="time" id="time"></span>
+    <span class="sp"></span>
+    <button onclick="openOrder()">🧾 발주서 만들기</button>
+    <button onclick="openPosco()">📋 포스코 등록표</button>
+    <button class="g" onclick="load()">🔄 새로고침</button>
+    <button class="g" onclick="location.href='../'">🏠</button>
+  </header>
+  <div class="kpis">
+    <div class="kpi"><div class="l">총 재고</div><div class="v" id="k1">-</div></div>
+    <div class="kpi"><div class="l" id="k2l">이번 달 사용량</div><div class="v" id="k2">-</div></div>
+    <div class="kpi" id="k3box"><div class="l">발주 필요 규격</div><div class="v" id="k3">-</div></div>
+  </div>
+  <div class="row r1">
+    <div class="card">
+      <h2>규격별 재고 <small>AIW·인버터 · 주황 점선 = 알림 기준 · 빨강 = 기준 아래</small></h2>
+      <div class="bars" id="bars"></div>
+      <div class="xl" id="xl"></div>
+      <div class="inroll" id="inroll"></div>
+    </div>
+    <div class="card">
+      <h2>월별 사용량</h2>
+      <div class="mbig" id="mbig">-</div>
+      <div class="mbars" id="mbars"></div>
+      <div class="mx" id="mx"></div>
+      <div class="legend" id="mleg"></div>
+    </div>
+  </div>
+  <div class="row r2">
+    <div class="card">
+      <h2>최근 작업 10건</h2>
+      <div style="flex:1;min-height:0;overflow:hidden"><table><thead><tr><th>작업번호</th><th>날짜</th><th>작업자</th><th>kW</th><th style="text-align:right">코일 사용량</th><th>선경</th></tr></thead><tbody id="recent"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>재고조사 · 소진 예측</h2>
+      <button class="stk" id="stk" onclick="openStk()">-</button>
+      <div class="soon" id="soon"></div>
+    </div>
+  </div>
+</div>
+<div id="ov" class="ov hide" onclick="if(event.target===this)closeOv()"><div class="pane" id="pane"></div></div>
+<div id="msg" class="hide"></div>
+
+<script src="../auth.js"></script>
+<script>
+var API = 'https://difrlthubqaoeqyprhhj.supabase.co/functions/v1/api';
+var D = null, TIMER = null;
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function ls(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function tok() { return ls('coilinv_token') || ls('wr_token') || ''; }
+function nf(n, d) { n = Number(n) || 0; return n.toLocaleString('ko-KR', { maximumFractionDigits: d == null ? 1 : d }); }
+function msg(t, ms) { var m = $('msg'); m.textContent = t; m.classList.remove('hide'); clearTimeout(msg.t); msg.t = setTimeout(function () { m.classList.add('hide'); }, ms || 3000); }
+function call(fn, args) {
+  return fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ app: 'co', fn: fn, args: args || [] }) })
+    .then(function (r) { return r.json(); }).then(function (j) { if (j && j.ok) return j.v; throw new Error(String((j && j.e) || '서버 응답이 이상합니다')); });
+}
+function showLogin(t) { $('board').classList.add('hide'); $('login').classList.remove('hide'); $('lName').value = (window.GW && GW.name()) || ''; $('lMsg').textContent = t || ''; }
+function doLogin() {
+  var n = $('lName').value.trim(), p = $('lPin').value.trim(); if (!n || !p) return;
+  $('lMsg').textContent = '확인 중…';
+  GW.login(n, p).then(function () { $('lPin').value = ''; $('login').classList.add('hide'); load(); }, function (e) { $('lMsg').textContent = e.message; });
+}
+function load() {
+  if (!tok()) { showLogin(); return; }
+  call('board', [tok()]).then(function (d) { D = d; $('login').classList.add('hide'); $('board').classList.remove('hide'); render(); }, function (e) {
+    if (/로그인|출입증/.test(e.message)) showLogin('다시 로그인해 주세요'); else msg('새로고침 실패: ' + e.message + ' (1분 뒤 다시 시도)', 5000);
+  });
+}
+// ── 그리기 ──
+var KIND_ORDER = { AIW: 0, '인버터': 1 };
+function isInroll(s) { return s.type && s.type !== '일반 환선'; }
+function specNum(s) { var n = parseFloat(String(s).replace(/[^0-9.]/g, '')); return isFinite(n) ? n : 999; }
+function lows() { return (D.stock || []).filter(function (s) { return s.low; }); }
+function render() {
+  var st = D.stock || [], round = st.filter(function (s) { return !isInroll(s); }), inr = st.filter(isInroll);
+  $('time').textContent = D.at + ' 기준 · 1분마다 새로고침';
+  var tot = st.reduce(function (a, s) { return a + (Number(s.total) || 0); }, 0);
+  $('k1').innerHTML = nf(tot, 0) + '<small>kg</small>';
+  var mo = D.monthly || { months: [], total: {} }, cur = mo.months[0], mt = (mo.total[cur] || {});
+  $('k2l').textContent = (cur ? Number(cur.slice(5)) + '월' : '이번 달') + ' 사용량';
+  $('k2').innerHTML = nf(mt.used || 0, 0) + '<small>kg</small>';
+  var L = lows(); $('k3').innerHTML = L.length + '<small>개</small>'; $('k3box').classList.toggle('red', L.length > 0);
+  // 규격별 재고 (AIW·인버터 한 그래프)
+  round.sort(function (a, b) { return (KIND_ORDER[a.kind] == null ? 9 : KIND_ORDER[a.kind]) - (KIND_ORDER[b.kind] == null ? 9 : KIND_ORDER[b.kind]) || specNum(a.spec) - specNum(b.spec); });
+  var mx = Math.max.apply(null, round.map(function (s) { return Math.max(Number(s.total) || 0, Number(s.safety) || 0); }).concat([1]));
+  $('bars').innerHTML = round.length ? round.map(function (s) {
+    var h = (Number(s.total) || 0) / mx * 88, sf = s.safety != null ? (Number(s.safety) / mx * 88) : null, inv = s.kind !== 'AIW';
+    return '<div class="bar' + (inv ? ' inv' : '') + (s.low ? ' low' : '') + '" title="' + esc(s.kind + ' ' + s.spec) + '"><div class="val">' + nf(s.total, 0) + '</div><div class="col" style="height:' + h + '%"></div>' +
+      (sf != null ? '<div class="safe" style="bottom:' + sf + '%"></div>' : '') + '</div>';
+  }).join('') : '<div class="empty">아직 재고가 없습니다</div>';
+  $('xl').innerHTML = round.map(function (s) { return '<div class="' + (s.kind !== 'AIW' ? 'inv' : '') + '">' + esc(s.spec) + (s.kind !== 'AIW' ? '<br>' + esc(s.kind === '인버터' ? '인버터' : s.kind) : '') + '</div>'; }).join('');
+  $('inroll').innerHTML = inr.length ? '🌀 인롤 ' + inr.map(function (s) { return '<span class="' + (s.low ? 'low' : '') + '"><b>' + esc(s.type.replace(/^인롤\s*/, '')) + '</b> ' + (s.unit ? (s.units || 0) + '대분 · ' : '') + nf(s.total, 0) + 'kg</span>'; }).join(' &nbsp;·&nbsp; ') : '';
+  // 월별 사용량 (굵기별 색)
+  var months = mo.months.slice().reverse(), rows = (mo.rows || []).filter(function (r) { return months.some(function (m) { return r.m[m] && r.m[m].used > 0; }); });
+  var specs = []; rows.forEach(function (r) { if (specs.indexOf(r.spec) < 0) specs.push(r.spec); }); specs.sort(function (a, b) { return specNum(a) - specNum(b); });
+  var col = function (i) { return 'hsl(' + Math.round(210 - i * (180 / Math.max(1, specs.length - 1))) + ',65%,' + (42 + (i % 2) * 12) + '%)'; };
+  var mm = Math.max.apply(null, months.map(function (m) { return (mo.total[m] || {}).used || 0; }).concat([1]));
+  var avg3 = 0; for (var i = 1; i <= 3; i++) avg3 += ((mo.total[mo.months[i]] || {}).used || 0); avg3 /= 3;
+  $('mbig').innerHTML = nf(mt.used || 0, 0) + ' kg<small>이번 달 · 지난 3달 평균 ' + nf(avg3, 0) + ' kg</small>';
+  $('mbars').innerHTML = months.map(function (m) {
+    var u = (mo.total[m] || {}).used || 0;
+    var parts = specs.map(function (sp, i) { var v = 0; rows.forEach(function (r) { if (r.spec === sp && r.m[m]) v += r.m[m].used || 0; }); return v > 0 ? '<div style="height:' + (v / mm * 100) + '%;background:' + col(i) + '" title="' + esc(sp) + ' ' + nf(v) + 'kg"></div>' : ''; }).join('');
+    return '<div class="mbar"><div class="val">' + (u ? nf(u, 0) : '') + '</div><div class="stack" style="height:' + (u / mm * 85) + '%">' + parts + '</div></div>';
+  }).join('');
+  $('mx').innerHTML = months.map(function (m) { return '<div class="' + (m === cur ? 'now' : '') + '">' + Number(m.slice(5)) + '월</div>'; }).join('');
+  $('mleg').innerHTML = specs.map(function (sp, i) { return '<span><i style="background:' + col(i) + '"></i>' + esc(sp) + '</span>'; }).join('');
+  // 최근 작업
+  var R = D.recent || [];
+  $('recent').innerHTML = R.length ? R.map(function (j) {
+    var p = String(j.target).split(/\s+/);
+    return '<tr><td><b>' + esc(p[0]) + '</b> <span style="color:var(--sub)">' + esc(p.slice(1).join(' ')) + '</span></td><td>' + esc(String(j.at).slice(5, 10)) + '</td><td>' + esc(j.worker) + '</td><td>' + esc(j.kw) + '</td><td class="n">' + nf(j.used) + ' kg</td><td style="color:var(--sub)">' + esc(j.specs) + '</td></tr>';
+  }).join('') : '<tr><td colspan="6" class="empty">아직 코일 사용 기록이 없습니다</td></tr>';
+  // 재고조사 한 줄
+  var k = D.stk || {}, mn = k.month ? Number(k.month.slice(5)) + '월' : '';
+  var line = k.total ? (k.done >= k.total ? mn + ' 재고조사 <b class="ok">완료</b>' : mn + ' 재고조사 ' + k.done + ' / ' + k.total + '개 확인') +
+    ' · 무게 차이 <b class="' + (k.diff.length ? 'bad' : 'ok') + '">' + k.diff.length + '개</b> · ' + (k.done >= k.total ? '행방불명' : '아직 못 찾음') + ' <b class="' + (k.missing.length ? 'bad' : 'ok') + '">' + k.missing.length + '개</b> ›' : mn + ' 재고조사 대상 없음';
+  $('stk').innerHTML = line;
+  // 소진 예측 (지난 3달 평균 사용 속도)
+  var soon = (mo.rows || []).filter(function (r) { return r.cover != null && r.avg > 0; }).map(function (r) { return { spec: r.spec, kind: r.kind, stock: r.stock, wk: r.cover * 4.35 }; })
+    .sort(function (a, b) { return a.wk - b.wk; }).slice(0, 5);
+  $('soon').innerHTML = '<div style="color:var(--sub);font-size:1.05rem;border:0">⏳ 지금 쓰는 속도면 (지난 3달 평균)</div>' + (soon.length ? soon.map(function (s) {
+    var w = Math.floor(s.wk); return '<div><span>' + esc(s.kind) + ' ' + esc(s.spec) + ' <span style="color:var(--sub)">(' + nf(s.stock, 0) + 'kg)</span></span><span class="w' + (w < 4 ? ' red' : '') + '">' + (w < 1 ? '1주 안에 소진' : '약 ' + w + '주 뒤 소진') + '</span></div>';
+  }).join('') : '<div class="empty" style="border:0">사용 기록이 3달 쌓이면 보입니다</div>');
+}
+// ── 겹쳐 뜨는 창 ──
+function openOv(h) { $('pane').innerHTML = h; $('ov').classList.remove('hide'); }
+function closeOv() { $('ov').classList.add('hide'); $('pane').innerHTML = ''; }
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeOv(); });
+function openStk() {
+  var k = D.stk || {}; if (!k.total) return;
+  var h = '<h3>' + esc(k.month) + ' 재고조사</h3><p>확인 ' + k.done + ' / ' + k.total + '개 (무게 잴 것 ' + k.weigh + ' · 있는지만 확인 ' + k.check + ')</p>';
+  h += '<h4>⚖️ 무게 차이 (1kg 넘게) ' + k.diff.length + '개</h4>' + (k.diff.length ? '<table><tr><th>번호</th><th>규격</th><th>선반</th><th>차이</th></tr>' + k.diff.map(function (x) { return '<tr><td>' + esc(x.no) + '</td><td>' + esc(x.spec) + '</td><td>' + esc(x.loc) + '</td><td class="n">' + (x.diff > 0 ? '+' : '') + nf(x.diff) + ' kg</td></tr>'; }).join('') + '</table>' : '<p class="note">없음</p>');
+  h += '<h4>❓ ' + (k.done >= k.total ? '행방불명' : '아직 못 찾음') + ' ' + k.missing.length + '개</h4>' + (k.missing.length ? '<table><tr><th>번호</th><th>규격</th><th>선반</th><th>남은 양</th><th>할 일</th></tr>' + k.missing.map(function (x) { return '<tr><td>' + esc(x.no) + '</td><td>' + esc(x.kind + ' ' + x.spec) + '</td><td>' + esc(x.loc) + '</td><td class="n">' + nf(x.rem) + ' kg</td><td>' + (x.g === 'w' ? '⚖️ 무게 재기' : '👀 있는지 확인') + '</td></tr>'; }).join('') + '</table>' : '<p class="note">없음</p>');
+  openOv(h + '<div class="btns"><button class="g" onclick="closeOv()">닫기</button></div>');
+}
+// 발주서: 부족 규격 + 필요 수량 자동 (고쳐 쓸 수 있음). 단가는 비워 둠. 인쇄 / PDF 저장만 (메일 안 보냄)
+function needOf(s) {
+  var avg = 0; ((D.monthly || {}).rows || []).forEach(function (r) { if (r.spec === s.spec && r.kind === s.kind) avg = r.avg || 0; });
+  var n = Math.max(0, (Number(s.safety) || 0) - (Number(s.total) || 0)) + (isInroll(s) ? 0 : avg);
+  if (isInroll(s) && s.unit) return { q: Math.max(1, Math.ceil(n / s.unit)), u: '대' };
+  return { q: Math.max(1, Math.ceil(n / 5) * 5), u: 'kg' };
+}
+function openOrder() {
+  var L = lows(), d = new Date(), ds = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  var h = '<h3>코일 발주서</h3><table style="margin-bottom:.8rem"><tr><td style="width:8rem">작성일</td><td>' + ds + '</td><td style="width:8rem">작성자</td><td contenteditable>' + esc(D.me.name) + '</td></tr><tr><td>받는 곳</td><td contenteditable colspan="3"></td></tr></table>';
+  h += L.length ? '<table><tr><th>순번</th><th>코일 종류</th><th>규격(mm)</th><th>지금 재고</th><th>알림 기준</th><th>발주 수량</th><th>단가</th><th>비고</th></tr>' + L.map(function (s, i) {
+    var n = needOf(s), nm = isInroll(s) ? s.type : s.kind;
+    return '<tr><td>' + (i + 1) + '</td><td>' + esc(nm) + '</td><td>' + esc(s.spec) + '</td><td class="n">' + nf(s.total) + ' kg' + (s.unit ? ' (' + (s.units || 0) + '대)' : '') + '</td><td class="n">' + nf(s.safety) + ' kg</td><td class="n" contenteditable>' + n.q + ' ' + n.u + '</td><td contenteditable></td><td contenteditable>' + (s.order ? '이미 발주함 ' + esc(String(s.orderAt || '').slice(5, 10)) : '') + '</td></tr>';
+  }).join('') + '</table>' : '<p>지금 알림 기준보다 적은 규격이 없습니다.</p>';
+  h += '<p class="note noprint">· 발주 수량 = (알림 기준 − 지금 재고) + 한 달 평균 사용량, 5kg 단위로 올림. 인롤은 대 수. 노란 칸은 눌러서 고칠 수 있어요.<br>· 단가는 자주 바뀌어서 비워 둡니다. 메일은 보내지 않습니다 — 인쇄하거나 PDF로 저장한 뒤 직접 보내세요.<br>· 회사 발주서 양식을 주시면 그 모양 그대로 바꿔 드립니다.</p>';
+  openOv(h + '<div class="btns"><button class="g" onclick="closeOv()">닫기</button><button onclick="window.print()">🖨️ 인쇄 / PDF 저장</button></div>');
+}
+// 포스코 자재 등록용 표 (칸 순서는 포스코 등록 화면을 확인한 뒤 맞춤)
+var POSCO_COLS = ['순번', '자재명', '규격', '단위', '수량', '비고'];
+function openPosco() {
+  var L = lows(), rows = L.map(function (s, i) { var n = needOf(s); return [i + 1, '권선용 코일 ' + (isInroll(s) ? s.type : s.kind), s.spec + (isInroll(s) ? '' : ' mm'), n.u === '대' ? '대' : 'KG', n.q, '']; });
+  var h = '<h3>포스코 자재 등록용 표</h3><table id="ptab"><tr>' + POSCO_COLS.map(function (c) { return '<th>' + c + '</th>'; }).join('') + '</tr>' +
+    (rows.length ? rows.map(function (r) { return '<tr>' + r.map(function (v, i) { return '<td' + (i ? ' contenteditable' : '') + '>' + esc(v) + '</td>'; }).join('') + '</tr>'; }).join('') : '<tr><td colspan="' + POSCO_COLS.length + '">부족한 규격이 없습니다</td></tr>') + '</table>';
+  h += '<p class="note noprint">· 칸 순서는 아직 임시입니다. 포스코 등록 화면 칸 순서를 알려 주시면 똑같이 맞춰 드립니다.<br>· [표 복사]를 누르면 엑셀에 그대로 붙여 넣을 수 있어요.</p>';
+  openOv(h + '<div class="btns"><button class="g" onclick="closeOv()">닫기</button><button class="g" onclick="copyTab()">📋 표 복사</button><button onclick="window.print()">🖨️ 인쇄 / PDF 저장</button></div>');
+}
+function copyTab() {
+  var t = [].map.call($('ptab').rows, function (r) { return [].map.call(r.cells, function (c) { return c.innerText.trim(); }).join('\t'); }).join('\n');
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { msg('복사했어요. 엑셀에 붙여 넣으세요'); }, function () { msg('복사가 안 됐어요. 표를 드래그해서 복사해 주세요'); });
+}
+load();
+TIMER = setInterval(function () { if ($('ov').classList.contains('hide')) load(); }, 60000);
+</script>
+</body>
+</html>

@@ -448,7 +448,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v59';
+const CO_VERSION = 'v60';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -805,6 +805,39 @@ async function getMonthly(token: any) {
     return x;
   }).sort((a, b) => (num(a.spec) - num(b.spec)) || (a.kind < b.kind ? -1 : 1));
   return { months, rows, total: tot };
+}
+// v60 (6단계): 사무실 상황판 — 한 번에 다 줌 (로그인한 사람 누구나 봄, 바꾸는 기능 없음)
+async function board(token: any) {
+  const m = await me(token, 'co');
+  const [stock, mon] = await Promise.all([stockCalc(), getMonthly(token)]);
+  const month = today().slice(0, 7);
+  // 최근 작업 10건 = 최근 출고를 작업번호로 묶음 (취소된 것 뺌)
+  const mv = await history({ type: '출고', from: dayStr(Date.now() - 120 * DAY) }, 3000);
+  const J: any = {}, order: string[] = [];
+  mv.forEach((o) => {
+    if (o.cancelled || !String(o.target || '').trim()) return;
+    const k = String(o.target).trim();
+    if (!J[k]) { if (order.length >= 10) return; J[k] = { target: k, at: o.at, workers: [], kw: '', used: 0, specs: {} }; order.push(k); }
+    const j = J[k]; if (o.at > j.at) j.at = o.at;
+    if (o.worker && j.workers.indexOf(o.worker) < 0) j.workers.push(o.worker);
+    if (!j.kw && o.kw) j.kw = o.kw;
+    const u = -num(o.delta); if (isFinite(u)) { j.used = r2(j.used + u); j.specs[o.spec] = r2((j.specs[o.spec] || 0) + u); }
+  });
+  // kW가 비면 작업기록(작업번호 같은 모터 기록)에서 찾아 씀
+  const need = order.filter((k) => !J[k].kw).map((k) => k.split(/\s+/)[0]);
+  if (need.length) {
+    const wr: any[] = await q(db.from('work_records').select('*').eq('kind', 'motor').order('seq', { ascending: false }).limit(500));
+    wr.forEach((r) => { const no = vget(r, 'ledgerNo').trim(), kw = vget(r, 'kw').trim(); order.forEach((k) => { if (!J[k].kw && kw && k.split(/\s+/)[0] === no) J[k].kw = kw; }); });
+  }
+  const recent = order.map((k) => { const j = J[k]; return { target: j.target, at: j.at, worker: j.workers.join(', '), kw: j.kw, used: j.used, specs: Object.keys(j.specs).map((s) => s + ' ' + j.specs[s] + 'kg').join(', ') }; });
+  // 재고조사 이번 달
+  const st = await CO_ADMIN.stocktake(m, {});
+  const w = st.items.filter((x: any) => x.g === 'w'), c = st.items.filter((x: any) => x.g === 'c');
+  const stk = { month: st.month, total: st.items.length, done: st.items.filter((x: any) => x.done).length,
+    diff: st.items.filter((x: any) => x.done === 'w' && Math.abs(num(x.diff)) > 1).map((x: any) => ({ no: x.no, spec: x.spec, loc: x.loc, diff: x.diff })),
+    missing: st.items.filter((x: any) => !x.done).map((x: any) => ({ no: x.no, spec: x.spec, kind: x.kind, loc: x.loc, rem: x.rem, g: x.g })),
+    weigh: w.length, check: c.length };
+  return { at: nowStr(), month, me: { name: m.name, admin: m.admin, owner: m.owner }, stock, monthly: mon, recent, stk };
 }
 // v6 (4-6): 재고조사 '있는지만 확인' — QR만 찍으면 이번 달 확인됨 (관리자, 휴대폰 보관 후 늦게 올려도 됨)
 async function stkSeen(token: any, a: any) {
@@ -1316,7 +1349,7 @@ const API: any = {
     addCoil: async (t: any, a: any) => { const d = await findReq(a && a.reqId); return d || onceReq(a && a.reqId, () => addCoil(t, a)); },
     editCoil, cancelMove, setOrder, setSafety, assignNumbers: async () => ({ count: 0, nos: [] }), adminCall: coAdmin,
     getInit: coInit, getJobs: async (t: any) => { await me(t, 'co'); return recentJobs(); }, getStock: async (t: any) => { await me(t, 'co'); return stockCalc(); },
-    getCoil, getHistory, getMonthly, labelData, clientLog, stkSeen, askEdit,
+    getCoil, getHistory, getMonthly, labelData, clientLog, stkSeen, askEdit, board,
   },
   st: {
     login: async (n: any, p: any) => { const r = await login('st', n, p); return { token: r.token, name: r.name, mustChange: r.mustChange, sup: r.sup }; },
