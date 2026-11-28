@@ -1,0 +1,58 @@
+# 실사용 부하 시험 (2026-11-30 00:15 ~ 12-04 17:00, 한국 시각)
+# 매시간 15분에 시작해서, 작업자마다 한 시간에 작업기록 30건 + 그 작업에 쓴 코일(시험용 TEST 코일) 30건을 넣습니다.
+# 30건을 한 번에 넣지 않고 6번(약 8분 간격)에 나눠 5건씩 → 휴대폰 여러 대가 쓰는 것처럼.
+# 시험 데이터 표시: 작업번호 TEST- , 코일 TEST-9001부터 (진짜 C- 번호를 안 먹음). 사진 없음, 부족 알림 메일 없음.
+# 비밀값: 깃허브 Secrets의 SUPABASE_API_URL, TEST_FEED_KEY (코드에는 안 씀). 기간이 끝나면 스스로 꺼집니다.
+name: 실사용 시험 입력
+on:
+  schedule:
+    - cron: '15 * * * *'      # 매시간 15분 (UTC 기준이지만 매시간이라 한국 시각도 매시간 15분)
+  workflow_dispatch: {}
+permissions:
+  actions: write
+concurrency:
+  group: test-feed
+  cancel-in-progress: false
+jobs:
+  feed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 58
+    steps:
+      - name: 시험 기간 확인
+        id: win
+        run: |
+          now=$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')
+          echo "지금 한국 시각: $now"
+          if [[ "$now" > "2026-12-04 17:00" ]]; then
+            echo "시험 기간이 끝났습니다. 이 예약 작업을 끕니다."
+            gh workflow disable test-feed.yml -R "$GITHUB_REPOSITORY" || true
+            echo "go=no" >> $GITHUB_OUTPUT; exit 0
+          fi
+          if [[ "$now" < "2026-11-30 00:15" ]]; then echo "아직 시작 전입니다."; echo "go=no" >> $GITHUB_OUTPUT; exit 0; fi
+          echo "go=yes" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: 작업기록·코일 사용 넣기
+        if: steps.win.outputs.go == 'yes'
+        env:
+          API: ${{ secrets.SUPABASE_API_URL }}
+          KEY: ${{ secrets.TEST_FEED_KEY }}
+        run: |
+          if [ -z "$API" ] || [ -z "$KEY" ]; then echo "비밀값(SUPABASE_API_URL, TEST_FEED_KEY)이 없습니다"; exit 1; fi
+          WORKERS='1 2 3 4 5 6 7 8'   # 명단 순서 (이름은 서버가 찾음)
+          fail=0
+          for round in 1 2 3 4 5 6; do
+            now=$(TZ=Asia/Seoul date '+%Y-%m-%d %H:%M')
+            if [[ "$now" > "2026-12-04 17:00" ]]; then echo "끝 시각 지남, 멈춤"; break; fi
+            reads=false; [ $round -eq 1 ] && reads=true
+            echo "── $round번째 ($now)"
+            for w in $WORKERS; do
+              ( body=$(jq -nc --arg k "$KEY" --arg w "$w" --argjson r $reads '{app:"sys",fn:"testFeed",args:[$k,$w,5,5,$r]}')
+                out=$(curl -s -m 140 -X POST -H 'Content-Type: text/plain;charset=utf-8' --data "$body" "$API")
+                echo "작업자$w: $(echo "$out" | jq -c '{ok, n:(.v.recs|length), u:(.v.uses|length), add:(.v.added|length), ms:(.v.ms // {} | with_entries(.value=.value.avg)), errs:.v.errs, e}' 2>/dev/null || echo "$out" | head -c 300)"
+                echo "$out" | grep -q '"ok":true' || echo FAIL >> fails.txt ) &
+            done
+            wait
+            [ $round -lt 6 ] && sleep 450
+          done
+          if [ -f fails.txt ]; then echo "실패 $(wc -l < fails.txt)건"; exit 1; fi

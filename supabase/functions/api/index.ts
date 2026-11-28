@@ -1424,7 +1424,8 @@ async function testStock(spec: string) {
 }
 async function testFeed(key: any, who: any, nRec: any, nUse: any, reads: any) {
   await testCheck(key);
-  const P = await people(), u = findP(P, who); if (!u || u.off) err('명단에 없는 사람: ' + who);
+  const P = await people(), on = P.filter((x) => !x.off), u = /^\d+$/.test(String(who)) ? on[Number(who) - 1] : findP(P, who); // 숫자 = 명단 순서 (공개 저장소에 이름 안 씀)
+  if (!u || u.off) err('명단에 없는 사람: ' + who);
   const adm = P.find((x) => x.owner && !x.off) || u;
   const token = await testToken(u), aTok = adm.id === u.id ? token : await testToken(adm);
   const ms: any = {}, errs: string[] = [], recs: string[] = [], uses: string[] = [], added: string[] = [];
@@ -1461,7 +1462,7 @@ async function testFeed(key: any, who: any, nRec: any, nUse: any, reads: any) {
       }
       let done = false;
       for (let tr = 0; tr < 3 && !done; tr++) {
-        const c = L.find((x) => Number(x.rem) >= kg) || L[L.length - 1]; if (!c) break;
+        const c = L[tr % Math.max(1, L.length)]; if (!c) break; // 남은 양 적은 타래부터 (현장 '먼저 쓰기'처럼)
         const use = Math.min(kg, Number(c.rem));
         const r = await time('co.saveMove', () => API.co.saveMove(token, { type: '출고', no: c.no, value: use, mode: 'net', target: j.no + ' ' + (j.v.customer || j.v.maker || ''), worker: u.name, kw: j.v.kw, reqId: 'TEST-U' + uuid(), ts: Date.now() }));
         if (r) { uses.push(c.no + ' ' + use + 'kg'); done = true; } else L = await testStock(spec);
@@ -1474,7 +1475,7 @@ async function testFeed(key: any, who: any, nRec: any, nUse: any, reads: any) {
   const sum: any = {}; Object.keys(ms).forEach((k) => { const a = ms[k]; sum[k] = { n: a.length, avg: Math.round(a.reduce((t: number, x: number) => t + x, 0) / a.length), max: Math.max(...a) }; });
   const out = { at: nowStr(), who: u.name, recs, uses, added, ms: sum, errs };
   await db.from('migration_log').insert({ what: 'test feed', info: out });
-  return out;
+  return Object.assign({}, out, { who: undefined }); // 깃허브 기록(공개)에 이름이 안 나가게
 }
 
 // 지난 기록 한꺼번에 (1회용): from~to 날짜(일요일 빼고)에 모터·전자브레이크 기록과 코일 사용을 시간순으로 만듦. 이미 했으면 거절
