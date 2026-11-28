@@ -485,11 +485,13 @@ function typeOf(T: any[], name: any) {
   name = String(name || '').trim() || TYPE_DEF; name = TYPE_ALIAS[name] || name;
   return T.find((x) => x.name === name) || T.find((x) => x.name === TYPE_DEF);
 }
-async function readCoils(T?: any[]) {
+async function readCoils(T?: any[], kind?: string) {
   T = T || await coTypes();
   const out: any[] = [];
   for (let from = 0; ; from += 1000) {
-    const r: any[] = await q(db.from('coils').select('*').order('seq').range(from, from + 999));
+    let qy = db.from('coils').select('*');
+    if (kind) qy = qy.eq('kind', kind); // v64: 한 선종만 (부족 알림 확인 때 전체를 안 읽음)
+    const r: any[] = await q(qy.order('seq').range(from, from + 999));
     r.forEach((c) => {
       if (c.status === ST_VOID) return; // v8: 잘못 등록해서 취소한 타래는 어디에도 안 셈
       const t = typeOf(T!, c.ctype), t0 = c.tare === null || c.tare === undefined ? NaN : Number(c.tare);
@@ -507,15 +509,15 @@ async function readSpecs() {
   const m: any = {}; r.forEach((x) => { m[x.key] = { safety: x.safety === null ? NaN : Number(x.safety), order: x.order_state, orderAt: x.order_at, orderMemo: x.order_memo }; });
   return m;
 }
-async function stockCalc() {
-  const T = await coTypes(), C = await readCoils(T), P = await readSpecs(), g: any = {};
+async function stockCalc(kind?: string) {
+  const T = await coTypes(), C = await readCoils(T, kind), P = await readSpecs(), g: any = {};
   C.forEach((c) => {
     const k = specKey(c.spec, c.kind, c.type);
     if (!g[k]) g[k] = { spec: c.spec, kind: c.kind, type: c.type, total: 0, count: 0, coils: [] };
     if (c.status !== ST_EMPTY) { g[k].total += c.rem; g[k].count++; }
     g[k].coils.push(coilOut(c));
   });
-  Object.keys(P).forEach((k) => { if (!g[k] && P[k].order) { const p = k.split('|'); g[k] = { spec: p[0], kind: p[1], type: p[2] || TYPE_DEF, total: 0, count: 0, coils: [] }; } });
+  Object.keys(P).forEach((k) => { if (!kind && !g[k] && P[k].order) { const p = k.split('|'); g[k] = { spec: p[0], kind: p[1], type: p[2] || TYPE_DEF, total: 0, count: 0, coils: [] }; } });
   return Object.keys(g).map((k) => {
     const x = g[k], p = P[k] || {};
     x.total = r2(x.total);
@@ -702,7 +704,7 @@ async function saveMove(token: any, a: any) {
   return { id, no, before, after, delta, status, low, tare: c.tare, tareMsg };
 }
 async function checkLow(spec: string, kind: string, type: string) {
-  const all = await stockCalc(), x = all.find((s) => specKey(s.spec, s.kind, s.type) === specKey(spec, kind, type));
+  const all = await stockCalc(String(kind || '') || undefined), x = all.find((s) => specKey(s.spec, s.kind, s.type) === specKey(spec, kind, type));
   if (!x || !x.low) return '';
   const dae = (kg: number) => x.unit ? Math.floor(kg / x.unit + 1e-9) + '대분 · ' : '';
   const msg = spec + 'mm ' + (kind || '') + (x.type && x.type !== TYPE_DEF ? ' ' + x.type : '') + ' 재고 ' + dae(x.total) + x.total + 'kg — 알림 기준 ' + dae(x.safety) + x.safety + 'kg 아래입니다.' + (x.order ? ' (발주완료 ' + x.orderAt + ')' : '');
@@ -1420,7 +1422,7 @@ async function testStock(spec: string) {
   const r: any[] = await q(db.from('coils').select('no,rem,status').eq('kind', TEST_KIND).eq('spec', spec).neq('status', ST_VOID).order('rem'));
   return r.filter((c) => Number(c.rem) > 0.2);
 }
-async function testFeed(key: any, who: any, nRec: any, nUse: any) {
+async function testFeed(key: any, who: any, nRec: any, nUse: any, reads: any) {
   await testCheck(key);
   const P = await people(), u = findP(P, who); if (!u || u.off) err('명단에 없는 사람: ' + who);
   const adm = P.find((x) => x.owner && !x.off) || u;
@@ -1428,16 +1430,18 @@ async function testFeed(key: any, who: any, nRec: any, nUse: any) {
   const ms: any = {}, errs: string[] = [], recs: string[] = [], uses: string[] = [], added: string[] = [];
   const time = async (name: string, f: () => Promise<any>) => { const t = Date.now(); try { return await f(); } catch (e) { errs.push(name + ': ' + String((e as any)?.message ?? e).slice(0, 120)); return null; } finally { (ms[name] = ms[name] || []).push(Date.now() - t); } };
   try {
-    // 휴대폰이 앱을 열 때 부르는 것들 (속도 재기)
+    // 휴대폰이 앱을 열 때 부르는 것들 (속도 재기) — 한 시간에 한 번만 (데이터 나가는 양 줄이기)
+    if (reads !== false) {
     await time('wl.getConfig', () => API.wl.getConfig(token));
     await time('wl.recentRecords', () => API.wl.recentRecords(token, 30));
     await time('co.getInit', () => API.co.getInit(token));
     await time('co.getJobs', () => API.co.getJobs(token));
-    const n1 = Math.min(Math.max(parseInt(nRec, 10) || 2, 0), 5), n2 = Math.min(Math.max(parseInt(nUse, 10) || 2, 0), 5);
+    }
+    const n1 = Math.min(Math.max(parseInt(nRec, 10) || 2, 0), 10), n2 = Math.min(Math.max(parseInt(nUse, 10) || 2, 0), 10);
     const k = kst(), stamp = k.slice(5, 7) + k.slice(8, 10) + k.slice(11, 13);
     const jobs: any[] = [];
     for (let i = 0; i < n1; i++) {
-      const motor = Math.random() < 0.6, no = 'TEST-' + (motor ? 'M' : 'B') + stamp + '-' + u.id + (i + 1);
+      const motor = Math.random() < 0.6, no = 'TEST-' + (motor ? 'M' : 'B') + stamp + k.slice(14, 16) + '-' + u.id + '-' + (i + 1);
       const values = motor ? testMotor(no) : testBrake(no), rid = 'TEST-R' + Date.now() + Math.floor(Math.random() * 1000);
       const r = await time('wl.saveRecord', () => API.wl.saveRecord({ kind: motor ? 'motor' : 'coil', id: rid, qid: 'TEST-Q' + uuid(), values, ts: Date.now() }, token));
       if (r) { recs.push(no); jobs.push({ no, motor, v: values }); }
