@@ -149,7 +149,7 @@ const KINDS: any = {
     ['poles', '극수', 'pick', ['2', '4', '6', '8', '10', '12']], ['volt', '전압(V)', 'pick', ['220', '380', '440', '3300', '6600']],
     ['hz', '주파수(Hz)', 'pick', ['60', '50']], ['rpm', '회전수(rpm)', 'num'], ['slots', '슬롯수', 'slots'],
     ['windType', '권선형식(2층 중첩권, 단층 중첩권/동심권)', 'pick', ['2층 중첩권', '단층 중첩권', '단층 동심권']],
-    ['wireKind', '코일 종류', 'pick', ['AIW', '인버터', '기타']],
+    ['wireKind', '코일 종류', 'pick', ['AIW', '인버터', '인롤', '기타']],
     ['wire', '코일선경(mm)', 'wire', ['0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.1', '1.2', '1.3', '1.4']],
     ['strands', '가닥수', 'step'], ['turns', '코일턴수', 'num'], ['series', '직렬수', 'step'], ['parallel', '병렬수', 'text'],
     ['pitch', '피치', 'pitch'], ['conn', '결선', 'pick', ['1Y', '2Y', '3Y', '4Y', '1Δ', '2Δ', '3Δ', '4Δ', '1Y-Δ', '2Y-Δ', '3Y-Δ', '4Y-Δ']],
@@ -448,7 +448,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v56';
+const CO_VERSION = 'v57';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -543,7 +543,7 @@ async function recentJobs() {
     const motor = r.kind === 'motor';
     const x = { no, src: motor ? '모터' : '코일', at, today: day === to, who: r.author,
       desc: (motor ? ['customer', 'target'] : ['maker', 'model']).map((k) => vget(r, k).trim()).filter(String).join(' '),
-      kw: motor ? vget(r, 'kw').trim() : '', wire: vget(r, 'wire').trim() };
+      kw: motor ? vget(r, 'kw').trim() : '', wire: vget(r, 'wire').trim(), wk: motor ? vget(r, 'wireKind').trim() : '' };
     if (!byNo[no] || byNo[no].at < at) byNo[no] = x;
   });
   return Object.keys(byNo).map((k) => byNo[k]).sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 60);
