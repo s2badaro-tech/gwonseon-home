@@ -448,7 +448,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v63';
+const CO_VERSION = 'v64';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -463,8 +463,10 @@ function specKey(spec: any, kind: any, type: any) {
 function normNo(s: any, S: any) {
   s = String(s || '').trim().toUpperCase().replace(/\s+/g, '');
   if (!s) return '';
-  const pre = String(S.prefix || 'C-').toUpperCase(), m = s.match(/(\d+)$/);
+  const m = s.match(/(\d+)$/);
   if (!m) return s;
+  if (/^TEST-?\d+$/.test(s)) return 'TEST-' + Number(m[1]); // v64: 시험용 코일 번호는 그대로 (C- 번호를 안 먹음)
+  const pre = String(S.prefix || 'C-').toUpperCase();
   return pre + ('000' + Number(m[1])).slice(-Math.max(3, String(Number(m[1])).length));
 }
 async function coTypes() {
@@ -546,7 +548,7 @@ async function recentJobs() {
       kw: motor ? vget(r, 'kw').trim() : '', wire: vget(r, 'wire').trim(), wk: motor ? vget(r, 'wireKind').trim() : '' };
     if (!byNo[no] || byNo[no].at < at) byNo[no] = x;
   });
-  return Object.keys(byNo).map((k) => byNo[k]).sort((a, b) => (a.at < b.at ? 1 : -1)).slice(0, 60);
+  return Object.keys(byNo).map((k) => byNo[k]).sort((a, b) => (Number(isTestNo(a.no)) - Number(isTestNo(b.no))) || (a.at < b.at ? 1 : -1)).slice(0, 60);
 }
 async function targets() {
   const out: string[] = [], seen: any = {};
@@ -559,7 +561,7 @@ async function targets() {
     const extra = (r.kind === 'motor' ? ['customer', 'target'] : ['maker', 'model']).map((k) => vget(r, k).trim()).filter(String).join(' ');
     add(no + (extra ? ' ' + extra : ''));
   });
-  return out.slice(0, 80);
+  return out.filter((t) => !isTestNo(t)).concat(out.filter((t) => isTestNo(t))).slice(0, 80);
 }
 function moveOut(r: any, cancelled: boolean) {
   return { id: r.id, at: r.at, no: r.no, type: r.type, spec: specTxt(r.spec), kind: r.kind, worker: r.worker, target: r.target, mode: r.mode,
@@ -677,6 +679,7 @@ async function saveMove(token: any, a: any) {
   const row: any = await q(db.from('coils').select('*').eq('no', no).maybeSingle());
   if (!row) err(no + ' 번 타래가 없습니다.');
   if (row.status === ST_VOID) err(no + ' 번은 잘못 등록해서 취소한 타래입니다. 쓸 수 없어요. 라벨을 떼어 주세요.');
+  if (isTestNo(no) !== isTestNo(a.target) && a.type === '출고') err(isTestNo(no) ? no + ' 번은 시험용(TEST) 코일입니다. 진짜 작업에는 못 씁니다.' : '시험 작업(TEST-)에는 시험용 코일만 씁니다.');
   const c = await readCoilRow(row, T);
   const before = r2(c.rem), gross = a.mode === 'gross';
   let after: number, tareMsg = '';
@@ -704,6 +707,7 @@ async function checkLow(spec: string, kind: string, type: string) {
   const dae = (kg: number) => x.unit ? Math.floor(kg / x.unit + 1e-9) + '대분 · ' : '';
   const msg = spec + 'mm ' + (kind || '') + (x.type && x.type !== TYPE_DEF ? ' ' + x.type : '') + ' 재고 ' + dae(x.total) + x.total + 'kg — 알림 기준 ' + dae(x.safety) + x.safety + 'kg 아래입니다.' + (x.order ? ' (발주완료 ' + x.orderAt + ')' : '');
   if (x.order) return msg;
+  if (String(kind).toUpperCase() === TEST_KIND) return msg; // v64: 시험용 코일은 부족 알림 메일을 절대 안 보냄
   const S = await coSet(), k = specKey(spec, kind, type), sent = await getSetting('coil.mailed', {});
   if (S.mail && !(sent[k] && Date.now() - sent[k] < 6 * 3600000)) {
     sent[k] = Date.now(); await putSetting('coil.mailed', sent);
@@ -1074,7 +1078,7 @@ const CO_ADMIN: any = {
     (await q(db.from('stk_checks').select('no,at,by').eq('month', month).limit(5000))).forEach((r: any) => { seen[r.no] = r; });
     const items: any[] = [];
     (await readCoils()).forEach((c) => {
-      if (!c.no) return;
+      if (!c.no || isTestNo(c.no)) return; // v64: 시험용 코일은 실제로 없으니 재고조사에서 뺌
       const w = done[c.no], sn = seen[c.no];
       if (c.status === ST_EMPTY && !w && !sn) return;
       const g = full || used[c.no] ? 'w' : 'c';
@@ -1362,6 +1366,119 @@ async function verify() {
   return { counts, stock, coilsChecked: chk.length, mismatch: bad.slice(0, 50), mismatchCount: bad.length };
 }
 
+// ═════════════════ 시험 입력 (실사용 부하 시험, 2026-11-30 ~ 12-04) ═════════════════
+// 깃허브 예약 작업이 한 시간마다 사람마다 한 번 부름. 진짜 화면이 쓰는 함수(saveRecord·saveMove·addCoil)를 그대로 거침.
+// 시험 데이터 표시: 작업번호·기록ID는 'TEST-'로 시작, 코일은 선종 'TEST' 번호 'TEST-9001'부터 (C- 번호를 안 먹음). 사진 없음, 부족 알림 메일 없음.
+// 열쇠는 app_secrets 'test_key' (깃허브 Secrets에만). app_settings 'test.feed' = {on, until} 로 언제든 끔.
+const TEST_KIND = 'TEST';
+function isTestNo(s: any) { return /^TEST-/i.test(String(s || '').trim()); }
+const TEST_SPECS = ['0.4', '0.5', '0.6', '0.7', '0.75', '0.8', '0.85', '0.9', '1.0', '1.1', '1.2', '1.3'];
+function pick<T>(a: T[]): T { return a[Math.floor(Math.random() * a.length)]; }
+function rnd(a: number, b: number) { return a + Math.random() * (b - a); }
+function wpick(list: [any, number][]) { let t = 0; list.forEach((x) => { t += x[1]; }); let r = Math.random() * t; for (const x of list) { r -= x[1]; if (r <= 0) return x[0]; } return list[0][0]; }
+function testMotor(no: string) {
+  const kw = pick([0.75, 1.5, 2.2, 3.7, 5.5, 7.5, 11, 15, 18.5, 22, 30, 37, 45, 55, 75, 90, 110, 132, 160, 200]);
+  const poles = wpick([['2', 2], ['4', 6], ['6', 2], ['8', 1]]), P = Number(poles);
+  const slots = String(P * 3 * pick(P <= 4 ? [2, 3, 4] : [2, 3]));
+  const full = Math.round(Number(slots) / P), two = Math.random() < 0.8;
+  const wire = pick(['0.7', '0.75', '0.8', '0.85', '0.9', '1.0', '1.1', '1.2', '1.3']);
+  const strands = String(Math.max(1, Math.round(rnd(1, 3) + kw / 25)));
+  const conn = wpick([['1Y', 2], ['2Y', 2], ['1Δ', 3], ['2Δ', 2], ['1Y-Δ', 2], ['2Y-Δ', 1]]);
+  return { ledgerNo: no, customer: wpick([['포스코', 8], ['현대제철', 1], ['동국제강', 1]]), maker: pick(['현대', '효성', 'LS', 'WEG', 'ABB', '']),
+    target: wpick([['고정자', 9], ['회전자', 1]]), kw: String(kw), poles, volt: wpick([['440', 7], ['380', 2], ['220', 1]]), hz: '60', slots,
+    windType: two ? '2층 중첩권' : pick(['단층 중첩권', '단층 동심권']), wireKind: wpick([['AIW', 8], ['인버터', 2]]), wire, strands,
+    turns: String(Math.round(rnd(4, 40))), series: '1', pitch: '1-' + (two ? full : full + 1), conn, leads: /Y-Δ/.test(conn) ? '6' : '3',
+    coilKg: String(Math.round(Math.max(0.3, kw * rnd(0.25, 0.45)) * 10) / 10), memo: '시험용(TEST)' };
+}
+function testBrake(no: string) {
+  const size = wpick([['단일 코일형', 5], ['다극코일형', 3], ['기타', 1]]);
+  const v: any = { ledgerNo: no, maker: pick(['미쓰비시', '오구라', '신코', '']), model: 'TB-' + Math.round(rnd(10, 99)), kw: String(pick([0.4, 0.75, 1.5, 2.2, 3.7, 5.5, 7.5])), size,
+    coilVolt: pick(['24', '90', '110', '220']), acdc: pick(['DC', 'DC', 'AC']), hz: '60', turns: String(Math.round(rnd(300, 4000))),
+    wire: pick(['0.4', '0.5', '0.6', '0.7']), ohm: String(Math.round(rnd(5, 400) * 10) / 10), coilG: String(Math.round(rnd(150, 3000))), memo: '시험용(TEST)' };
+  if (size === '단일 코일형') { v.ringID = String(Math.round(rnd(40, 120))); v.ringOD = String(Number(v.ringID) + Math.round(rnd(20, 60))); v.ringH = String(Math.round(rnd(15, 50))); }
+  else if (size === '다극코일형') { v.coilPoles = pick(['2', '4', '6', '8']); v.mpID = String(Math.round(rnd(30, 100))); v.mpOD = String(Number(v.mpID) + Math.round(rnd(30, 80))); v.mpH = String(Math.round(rnd(20, 60))); }
+  else v.bobbin = Math.round(rnd(40, 90)) + ', ' + Math.round(rnd(90, 150)) + ', ' + Math.round(rnd(20, 50));
+  return v;
+}
+async function testCheck(key: any) {
+  const k = await secret('test_key'); if (!k || String(key) !== k) err('열쇠가 맞지 않습니다.');
+  const f = await getSetting('test.feed', {});
+  if (f.on !== true) err('시험 입력이 꺼져 있습니다.');
+  if (f.until && nowStr() > String(f.until)) err('시험 기간이 끝났습니다 (' + f.until + ').');
+}
+async function testToken(u: Person) {
+  const token = randHex(32), now = Date.now();
+  await q(db.from('sessions').insert({ token_hash: await sha256hex(token), person_id: u.id, created_ms: now, last_ms: now }));
+  return token;
+}
+async function testNextNo() {
+  const r: any[] = await q(db.from('coils').select('no').ilike('no', 'TEST-%'));
+  let max = 9000; r.forEach((x) => { const mm = String(x.no).match(/(\d+)$/); if (mm) max = Math.max(max, Number(mm[1])); });
+  return 'TEST-' + (max + 1);
+}
+async function testStock(spec: string) {
+  const r: any[] = await q(db.from('coils').select('no,rem,status').eq('kind', TEST_KIND).eq('spec', spec).neq('status', ST_VOID).order('rem'));
+  return r.filter((c) => Number(c.rem) > 0.2);
+}
+async function testFeed(key: any, who: any, nRec: any, nUse: any) {
+  await testCheck(key);
+  const P = await people(), u = findP(P, who); if (!u || u.off) err('명단에 없는 사람: ' + who);
+  const adm = P.find((x) => x.owner && !x.off) || u;
+  const token = await testToken(u), aTok = adm.id === u.id ? token : await testToken(adm);
+  const ms: any = {}, errs: string[] = [], recs: string[] = [], uses: string[] = [], added: string[] = [];
+  const time = async (name: string, f: () => Promise<any>) => { const t = Date.now(); try { return await f(); } catch (e) { errs.push(name + ': ' + String((e as any)?.message ?? e).slice(0, 120)); return null; } finally { (ms[name] = ms[name] || []).push(Date.now() - t); } };
+  try {
+    // 휴대폰이 앱을 열 때 부르는 것들 (속도 재기)
+    await time('wl.getConfig', () => API.wl.getConfig(token));
+    await time('wl.recentRecords', () => API.wl.recentRecords(token, 30));
+    await time('co.getInit', () => API.co.getInit(token));
+    await time('co.getJobs', () => API.co.getJobs(token));
+    const n1 = Math.min(Math.max(parseInt(nRec, 10) || 2, 0), 5), n2 = Math.min(Math.max(parseInt(nUse, 10) || 2, 0), 5);
+    const k = kst(), stamp = k.slice(5, 7) + k.slice(8, 10) + k.slice(11, 13);
+    const jobs: any[] = [];
+    for (let i = 0; i < n1; i++) {
+      const motor = Math.random() < 0.6, no = 'TEST-' + (motor ? 'M' : 'B') + stamp + '-' + u.id + (i + 1);
+      const values = motor ? testMotor(no) : testBrake(no), rid = 'TEST-R' + Date.now() + Math.floor(Math.random() * 1000);
+      const r = await time('wl.saveRecord', () => API.wl.saveRecord({ kind: motor ? 'motor' : 'coil', id: rid, qid: 'TEST-Q' + uuid(), values, ts: Date.now() }, token));
+      if (r) { recs.push(no); jobs.push({ no, motor, v: values }); }
+    }
+    for (let i = 0; i < n2; i++) {
+      const j = jobs[i % Math.max(1, jobs.length)]; if (!j) break;
+      const spec = specTxt(TEST_SPECS.map(specTxt).indexOf(specTxt(j.v.wire)) >= 0 ? j.v.wire : pick(TEST_SPECS));
+      const kg = Math.round((j.motor ? rnd(1, 12) : rnd(0.2, 2)) * 10) / 10;
+      let L = await testStock(spec), tot = L.reduce((t, c) => t + Number(c.rem), 0);
+      for (let g = 0; tot < 80 && g < 4; g++) { // 시험 재고가 모자라면 시험용 타래를 새로 등록 (관리자 이름으로)
+        for (let tr = 0; tr < 5; tr++) {
+          const no = await testNextNo();
+          const r = await time('co.addCoil', () => API.co.addCoil(aTok, { no, spec, kind: TEST_KIND, ctype: TYPE_DEF, value: 25, mode: 'net', loc: pick(['1번 선반', '2번 선반', '3번 선반']), memo: '시험용(TEST)', reqId: 'TEST-A' + uuid() }));
+          if (r) { added.push(r.no); tot += 25; break; }
+        }
+        L = await testStock(spec);
+      }
+      let done = false;
+      for (let tr = 0; tr < 3 && !done; tr++) {
+        const c = L.find((x) => Number(x.rem) >= kg) || L[L.length - 1]; if (!c) break;
+        const use = Math.min(kg, Number(c.rem));
+        const r = await time('co.saveMove', () => API.co.saveMove(token, { type: '출고', no: c.no, value: use, mode: 'net', target: j.no + ' ' + (j.v.customer || j.v.maker || ''), worker: u.name, kw: j.v.kw, reqId: 'TEST-U' + uuid(), ts: Date.now() }));
+        if (r) { uses.push(c.no + ' ' + use + 'kg'); done = true; } else L = await testStock(spec);
+      }
+    }
+  } finally {
+    await db.from('sessions').delete().eq('token_hash', await sha256hex(token));
+    if (aTok !== token) await db.from('sessions').delete().eq('token_hash', await sha256hex(aTok));
+  }
+  const sum: any = {}; Object.keys(ms).forEach((k) => { const a = ms[k]; sum[k] = { n: a.length, avg: Math.round(a.reduce((t: number, x: number) => t + x, 0) / a.length), max: Math.max(...a) }; });
+  const out = { at: nowStr(), who: u.name, recs, uses, added, ms: sum, errs };
+  await db.from('migration_log').insert({ what: 'test feed', info: out });
+  return out;
+}
+// 시험 데이터 건수 (지우기 전에 보여 줄 것)
+async function testCount(key: any) {
+  const k = await secret('test_key'); if (!k || String(key) !== k) err('열쇠가 맞지 않습니다.');
+  const c = async (t: string, col: string) => { const { count } = await db.from(t).select('*', { count: 'exact', head: true }).ilike(col, 'TEST-%'); return count || 0; };
+  return { work_records: await c('work_records', 'record_id'), coils: await c('coils', 'no'), coil_moves: await c('coil_moves', 'no'), job_plans: await c('job_plans', 'job') };
+}
+
 // ═════════════════ 창구 ═════════════════
 const API: any = {
   wl: {
@@ -1387,6 +1504,7 @@ const API: any = {
     import: async (k: any, part: string, rows: any[], opts: any) => { await sysCheck(k); return importData(part, rows, opts); },
     verify: async (k: any) => { await sysCheck(k); return verify(); },
     setBackupInfo: async (k: any, info: any) => { await sysCheck(k); await putSetting('backup.last', info); return true; },
+    testFeed, testCount,
   },
 };
 

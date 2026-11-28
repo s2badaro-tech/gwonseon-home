@@ -827,9 +827,12 @@ function kindStock(kind) {
   return m;
 }
 // 이 굵기를 가장 많이 가진 선종 (없으면 AIW) — 추천은 같은 선종 안에서만
+// v61: 시험용(TEST) 코일은 진짜 작업 추천·보빈 목록에 안 나옴 (시험 작업 TEST- 에만)
+function isTestKind(g) { return String(g && g.kind || '').toUpperCase() === 'TEST'; }
+function isTestJob(no) { return /^TEST-/i.test(String(no || '').trim()); }
 function jobKind(d) {
   var best = 'AIW', cnt = -1;
-  ((INIT && INIT.stock) || []).forEach(function (g) { if (Math.abs(firstNum(g.spec) - d) < 0.001 && (!g.type || g.type === '일반 환선')) { var k = (g.coils || []).filter(function (c) { return c.status !== '소진'; }).length; if (k > cnt || (k === cnt && g.kind === 'AIW')) { cnt = k; best = g.kind; } } });
+  ((INIT && INIT.stock) || []).forEach(function (g) { if (isTestKind(g)) return; if (Math.abs(firstNum(g.spec) - d) < 0.001 && (!g.type || g.type === '일반 환선')) { var k = (g.coils || []).filter(function (c) { return c.status !== '소진'; }).length; if (k > cnt || (k === cnt && g.kind === 'AIW')) { cnt = k; best = g.kind; } } });
   return best || 'AIW';
 }
 // 추천 조합: 원래+한 단계 아래 → 더 아래 → (아래가 다 없을 때만) 위 단계. 총 단면적을 원래에 최대한 가깝게, 재고 보빈 수 안에서
@@ -910,6 +913,7 @@ function fitCoils(j) {
   var ws = wireSpecs(j && j.wire), al = allowedSpecs(j); if (al) Object.keys(al).forEach(function (d) { d = Number(d); if (ws.indexOf(d) < 0) ws.push(d); });
   var L = [];
   ((INIT && INIT.stock) || []).forEach(function (g) {
+    if (isTestKind(g) !== isTestJob(j && j.no)) return;
     var k = ws.findIndex(function (x) { return Math.abs(x - firstNum(g.spec)) < 0.001; }); if (k < 0) return;
     (g.coils || []).forEach(function (c) { if (c.status !== '소진') L.push(c); });
   });
@@ -1492,7 +1496,7 @@ $('mSave').onclick = function () {
 // ── QR 읽기: 앱 안 카메라가 되면 바로 켜고, 막혀 있으면 휴대폰 카메라로 사진을 찍어 읽음 ──
 var LIVE = null, LIVE_OK = null;
 // v32: 화면 버전과 카메라 상태를 QR 칸 아래 작게 보여 줌 (안 될 때 캡처하면 원인을 알 수 있게)
-var SCREEN_V = 'v60', CAM_ERR = '', CAM_PERM = '';
+var SCREEN_V = 'v61', CAM_ERR = '', CAM_PERM = '';
 function camDiag() {
   var a = ['화면 ' + SCREEN_V, '카메라 ' + (navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? '있음' : '없음'),
     'QR읽기 ' + (BD ? '내장' : window.jsQR ? 'jsQR' : '준비중'), (window.matchMedia && matchMedia('(display-mode: standalone)').matches ? '설치앱' : '브라우저')];
