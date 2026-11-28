@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>사무실 상황판</title>
-<!-- 6단계 사무실 상황판 v5 (2026-11-28, 작업 진행: 코일기록·코일등록 완료): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<!-- 6단계 사무실 상황판 v5 (2026-11-28, 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
 <link rel="icon" href="../icon-192.png">
 <meta name="theme-color" content="#1f6fb2">
 <style>
@@ -81,6 +81,9 @@
   .st { font-weight:800; }
   .st.ok { color:var(--grn); }
   .st.no { color:var(--org); }
+  #recent tr.done td { background:#eef8ef; }
+  #recent td.pg { max-width:none; }
+  #recent td.sp { max-width:11rem; }
   .soon { font-size:1.2rem; margin-top:.6rem; overflow:hidden; }
   .soon div { padding:.15rem 0; border-bottom:1px solid #edf0f3; display:flex; justify-content:space-between; }
   .soon .w { font-weight:800; }
@@ -157,7 +160,7 @@
   <div class="row r2" id="r2">
     <div class="card" id="cRecent">
       <h2>작업 진행 <small>작업번호로 맞춤 · 작업기록 앱에 기록 → 코일 앱에서 코일 쓰기</small></h2>
-      <div style="flex:1;min-height:0;overflow:hidden"><table><thead><tr><th>작업번호</th><th>날짜</th><th>작업자</th><th>kW</th><th>코일기록</th><th>코일등록</th><th>선경</th></tr></thead><tbody id="recent"></tbody></table></div>
+      <div style="flex:1;min-height:0;overflow:hidden"><table><thead><tr><th>작업번호</th><th>날짜</th><th>작업자</th><th>kW</th><th>진행</th><th style="text-align:right">코일</th><th>선경</th></tr></thead><tbody id="recent"></tbody></table></div>
     </div>
     <div class="card" id="cSide">
       <h2 id="sideH">재고조사 · 소진 예측</h2>
@@ -263,9 +266,9 @@ function render() {
   // 최근 작업
   var R = D.recent || [];
   $('recent').innerHTML = R.length ? R.map(function (j) {
-    return '<tr><td><b>' + esc(j.no) + '</b> <span style="color:var(--sub)">' + esc(j.desc) + '</span></td><td>' + esc(String(j.at).slice(5, 10)) + '</td><td>' + esc(j.worker) + '</td><td>' + esc(j.kw) + '</td>' +
-      '<td>' + (j.rec ? '<span class="st ok">✅ 완료</span>' : '<span class="st no">⏳ 아직</span>') + '</td>' +
-      '<td>' + (j.coil ? '<span class="st ok">✅ 완료</span> <b>' + nf(j.used) + 'kg</b>' : '<span class="st no">⏳ 아직</span>') + '</td><td style="color:var(--sub)">' + esc(j.specs) + '</td></tr>';
+    return '<tr' + (j.rec && j.coil ? ' class="done"' : '') + '><td><b>' + esc(j.no) + '</b> <span style="color:var(--sub)">' + esc(j.desc) + '</span></td><td>' + esc(String(j.at).slice(5, 10)) + '</td><td>' + esc(j.worker) + '</td><td>' + esc(j.kw) + '</td>' +
+      '<td class="pg">' + (j.rec ? '<span class="st ok">✅ 코일기록 완료</span>' : '<span class="st no">⬜ 코일기록 전</span>') + ' · ' + (j.coil ? '<span class="st ok">✅ 코일등록 완료</span>' : '<span class="st no">⬜ 코일등록 전</span>') + '</td>' +
+      '<td class="n">' + (j.coil ? nf(j.used) + 'kg' : '') + '</td><td class="sp" style="color:var(--sub)">' + esc(j.specs) + '</td></tr>';
   }).join('') : '<tr><td colspan="7" class="empty">아직 작업 기록이 없습니다</td></tr>';
   // 재고조사 한 줄
   var k = D.stk || {}, mn = k.month ? Number(k.month.slice(5)) + '월' : '';
