@@ -1431,6 +1431,7 @@ async function testFeed(key: any, who: any, nRec: any, nUse: any, reads: any) {
   const ms: any = {}, errs: string[] = [], recs: string[] = [], uses: string[] = [], added: string[] = [];
   const time = async (name: string, f: () => Promise<any>) => { const t = Date.now(); try { return await f(); } catch (e) { errs.push(name + ': ' + String((e as any)?.message ?? e).slice(0, 120)); return null; } finally { (ms[name] = ms[name] || []).push(Date.now() - t); } };
   try {
+    if (reads !== false && u.id === on[0].id) await time('test.orders', async () => { const r = await testOrders(adm.name, false, 0); added.push(...r.recv); errs.push(...r.notes); });
     // 휴대폰이 앱을 열 때 부르는 것들 (속도 재기) — 한 시간에 한 번만 (데이터 나가는 양 줄이기)
     if (reads !== false) {
     await time('wl.getConfig', () => API.wl.getConfig(token));
@@ -1451,15 +1452,8 @@ async function testFeed(key: any, who: any, nRec: any, nUse: any, reads: any) {
       const j = jobs[i % Math.max(1, jobs.length)]; if (!j) break;
       const spec = specTxt(TEST_SPECS.map(specTxt).indexOf(specTxt(j.v.wire)) >= 0 ? j.v.wire : pick(TEST_SPECS));
       const kg = Math.round((j.motor ? rnd(1, 12) : rnd(0.2, 2)) * 10) / 10;
-      let L = await testStock(spec), tot = L.reduce((t, c) => t + Number(c.rem), 0);
-      for (let g = 0; tot < 80 && g < 4; g++) { // 시험 재고가 모자라면 시험용 타래를 새로 등록 (관리자 이름으로)
-        for (let tr = 0; tr < 5; tr++) {
-          const no = await testNextNo();
-          const r = await time('co.addCoil', () => API.co.addCoil(aTok, { no, spec, kind: TEST_KIND, ctype: TYPE_DEF, value: 25, mode: 'net', loc: pick(['1번 선반', '2번 선반', '3번 선반']), memo: '시험용(TEST)', reqId: 'TEST-A' + uuid() }));
-          if (r) { added.push(r.no); tot += 25; break; }
-        }
-        L = await testStock(spec);
-      }
+      let L = await testStock(spec);
+      if (!L.length) { errs.push('재고 없음(발주 기다림): ' + spec + 'mm TEST'); continue; }
       let done = false;
       for (let tr = 0; tr < 3 && !done; tr++) {
         const c = L[tr % Math.max(1, L.length)]; if (!c) break; // 남은 양 적은 타래부터 (현장 '먼저 쓰기'처럼)
@@ -1522,6 +1516,52 @@ async function testBackfill(key: any, from: any, to: any, nMotor: any, nBrake: a
   await db.from('migration_log').insert({ what: 'test backfill', info: out });
   return out;
 }
+
+// 시험 자동 발주·입고 (경선 님 11-29): 시험 코일이 모자라면 [발주완료] 표시 → 정한 시간(기본 24시간) 뒤 시험 코일 입고 → 계속 반복. 메일 없음.
+// 발주 시점 = 재고가 '하루 쓰는 양 × 1.2' 밑 (또는 알림 기준 50kg 밑). 발주량 = 하루 쓰는 양 × 1.5 (25kg 타래로 올림, 최소 4개).
+async function testOrders(admName: string, force: boolean, forceKg: number) {
+  const f = await getSetting('test.feed', {}), lagH = isFinite(Number(f.orderLagH)) ? Number(f.orderLagH) : 24;
+  const live: any[] = await q(db.from('coils').select('spec,rem').eq('kind', TEST_KIND).neq('status', ST_VOID).gt('rem', 0.2).limit(20000));
+  const stock: any = {}; TEST_SPECS.forEach((sp) => { stock[specTxt(sp)] = 0; }); live.forEach((c) => { stock[c.spec] = (stock[c.spec] || 0) + Number(c.rem); });
+  const since = kst(Date.now() - DAY); const sinceS = since.slice(0, 10) + ' ' + since.slice(11, 16);
+  const used: any = {};
+  for (let from = 0; ; from += 1000) {
+    const r: any[] = await q(db.from('coil_moves').select('spec,delta').eq('kind', TEST_KIND).eq('type', '출고').gte('at', sinceS).range(from, from + 999));
+    r.forEach((x) => { used[x.spec] = (used[x.spec] || 0) - Number(x.delta); }); if (r.length < 1000) break;
+  }
+  const specs: any[] = await q(db.from('coil_specs').select('*').like('key', '%|' + TEST_KIND));
+  const P: any = {}; specs.forEach((x) => { P[x.spec] = x; });
+  const recv: string[] = [], notes: string[] = [], now = Date.now();
+  const coils: any[] = [], moves: any[] = []; let nextN = Number((await testNextNo()).slice(5));
+  for (const sp of Object.keys(stock)) {
+    const st = stock[sp], u = used[sp] || 0, o = P[sp];
+    const ordered = o && o.order_state, age = ordered ? (now - Date.parse(String(o.order_at).replace(' ', 'T') + ':00+09:00')) / 3600000 : 0;
+    if (force || (ordered && age >= lagH)) {
+      const want = force ? forceKg : Number((String(o.order_memo).match(/(\d+)kg/) || [])[1]) || 100;
+      const n = Math.max(4, Math.ceil(want / 25)), at = nowStr();
+      for (let i = 0; i < n; i++) {
+        const no = 'TEST-' + (++nextN);
+        coils.push({ no, spec: sp, kind: TEST_KIND, maker: '', tare: 1, rem: 25, loc: pick(['1번 선반', '2번 선반', '3번 선반']), status: ST_USE, reg_at: at, reg_by: admName, changed_at: at, memo: '시험용(TEST) 자동 입고', ctype: TYPE_DEF });
+        moves.push({ id: 'TEST-L' + Date.now().toString(36) + i + sp.replace('.', ''), at, no, type: '신규등록', spec: sp, kind: TEST_KIND, worker: admName, target: '', mode: '라벨 순수무게', gross: null, delta: 25, before: 0, after: 25, by: admName, memo: '시험 자동 입고', req_id: '', kw: '', cancel_of: '' });
+      }
+      recv.push(sp + 'mm ' + n + '타래'); continue;
+    }
+    if (!ordered && (st < 50 || st < u * 1.2)) {
+      const kg = Math.max(100, Math.ceil(u * 1.5 / 25) * 25);
+      await setOrderRow(sp, '시험 자동 발주 ' + kg + 'kg (' + admName + ')');
+      notes.push('자동 발주 ' + sp + 'mm ' + kg + 'kg');
+    }
+  }
+  for (let i = 0; i < coils.length; i += 500) await q(db.from('coils').insert(coils.slice(i, i + 500)));
+  for (let i = 0; i < moves.length; i += 500) await q(db.from('coil_moves').insert(moves.slice(i, i + 500)));
+  for (const r of recv) await clearOrder(r.split('mm')[0], TEST_KIND, TYPE_DEF);
+  return { recv, notes, stock, used };
+}
+async function setOrderRow(spec: string, memo: string) {
+  const k = specKey(spec, TEST_KIND, TYPE_DEF), v = { order_state: '발주완료', order_at: nowStr(), order_memo: memo };
+  const ex: any = await q(db.from('coil_specs').select('key').eq('key', k).maybeSingle());
+  if (ex) await q(db.from('coil_specs').update(v).eq('key', k)); else await q(db.from('coil_specs').insert(Object.assign({ key: k, spec, kind: TEST_KIND, ctype: '' }, v)));
+}
 // 시험 데이터 건수 (지우기 전에 보여 줄 것)
 async function testCount(key: any) {
   const k = await secret('test_key'); if (!k || String(key) !== k) err('열쇠가 맞지 않습니다.');
@@ -1555,6 +1595,7 @@ const API: any = {
     verify: async (k: any) => { await sysCheck(k); return verify(); },
     setBackupInfo: async (k: any, info: any) => { await sysCheck(k); await putSetting('backup.last', info); return true; },
     testFeed, testCount, testBackfill,
+    testStockUp: async (k: any, kg: any) => { await testCheck(k); const P = await people(); const a = P.find((x) => x.owner && !x.off) || P[0]; const r = await testOrders(a.name, true, Number(kg) || 100); return { recv: r.recv }; },
   },
 };
 
