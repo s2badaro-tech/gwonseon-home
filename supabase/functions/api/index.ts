@@ -1604,6 +1604,7 @@ const API: any = {
     verify: async (k: any) => { await sysCheck(k); return verify(); },
     setBackupInfo: async (k: any, info: any) => { await sysCheck(k); await putSetting('backup.last', info); return true; },
     testFeed, testCount, testBackfill,
+    testPeek: async (k: any) => { await testCheck(k); const st = await stockCalc(); return st.filter((g) => g.type && g.type !== TYPE_DEF).map((g) => ({ spec: g.spec, kind: g.kind, type: g.type, total: g.total, units: g.units, count: g.count })); },
     testStockUp: async (k: any, kg: any, only: any) => { await testCheck(k); const P = await people(); const a = P.find((x) => x.owner && !x.off) || P[0]; const r = await testOrders(a.name, true, Number(kg) || 100, only); return { recv: r.recv }; },
   },
 };
