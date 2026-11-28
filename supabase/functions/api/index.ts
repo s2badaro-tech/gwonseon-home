@@ -1472,6 +1472,51 @@ async function testFeed(key: any, who: any, nRec: any, nUse: any) {
   await db.from('migration_log').insert({ what: 'test feed', info: out });
   return out;
 }
+
+// 지난 기록 한꺼번에 (1회용): from~to 날짜(일요일 빼고)에 모터·전자브레이크 기록과 코일 사용을 시간순으로 만듦. 이미 했으면 거절
+async function testBackfill(key: any, from: any, to: any, nMotor: any, nBrake: any) {
+  await testCheck(key);
+  const { count } = await db.from('work_records').select('*', { count: 'exact', head: true }).eq('ledger_no', 'TEST-M0001');
+  if (count) err('이미 넣었습니다.');
+  const days: string[] = [];
+  for (let t = Date.parse(String(from) + 'T00:00:00Z'); t <= Date.parse(String(to) + 'T00:00:00Z'); t += DAY) { const d = new Date(t); if (d.getUTCDay() !== 0) days.push(d.toISOString().slice(0, 10)); }
+  const P = (await people()).filter((u) => !u.off), adm = P.find((x) => x.owner) || P[0];
+  const ev: any[] = [];
+  const nm = Math.min(parseInt(nMotor, 10) || 0, 3000), nb = Math.min(parseInt(nBrake, 10) || 0, 3000);
+  for (let i = 0; i < nm + nb; i++) { const mins = 7 * 60 + Math.floor(Math.random() * 11 * 60); ev.push({ motor: i < nm, at: pick(days) + ' ' + ('0' + Math.floor(mins / 60)).slice(-2) + ':' + ('0' + mins % 60).slice(-2), who: pick(P).name }); }
+  ev.sort((a, b) => (a.at < b.at ? -1 : 1));
+  const addMin = (at: string, m: number) => { const t = Date.parse(at.replace(' ', 'T') + ':00Z') + m * 60000; const k = new Date(t).toISOString(); return k.slice(0, 10) + ' ' + k.slice(11, 16); };
+  let nextN = Number((await testNextNo()).slice(5)), mv = 0, cm = 0, cb = 0;
+  const recs: any[] = [], coils: any = {}, pool: any = {}, moves: any[] = [];
+  const mid = () => 'TEST-L' + ('00000' + (++mv)).slice(-6);
+  ev.forEach((e, i) => {
+    const no = 'TEST-' + (e.motor ? 'M' + ('000' + (++cm)).slice(-4) : 'B' + ('000' + (++cb)).slice(-4));
+    const v: any = e.motor ? testMotor(no) : testBrake(no);
+    recs.push({ record_id: 'TEST-R' + ('00000' + (i + 1)).slice(-5), kind: e.motor ? 'motor' : 'coil', recorded_at: e.at, author: e.who, ledger_no: no, vals: v, photo: '' });
+    const spec = specTxt(TEST_SPECS.map(specTxt).indexOf(specTxt(v.wire)) >= 0 ? v.wire : pick(TEST_SPECS));
+    const at = addMin(e.at, 5 + Math.floor(Math.random() * 40));
+    const L = pool[spec] = pool[spec] || [];
+    let tot = L.reduce((t: number, c: any) => t + c.rem, 0);
+    while (tot < 80) {
+      const c = { no: 'TEST-' + (++nextN), spec, kind: TEST_KIND, maker: '', tare: 1, rem: 25, loc: pick(['1번 선반', '2번 선반', '3번 선반']), status: ST_USE, reg_at: addMin(at, -2), reg_by: adm.name, changed_at: addMin(at, -2), memo: '시험용(TEST)', ctype: TYPE_DEF };
+      coils[c.no] = c; L.push(c); tot += 25;
+      moves.push({ id: mid(), at: c.reg_at, no: c.no, type: '신규등록', spec, kind: TEST_KIND, worker: adm.name, target: '', mode: '라벨 순수무게', gross: null, delta: 25, before: 0, after: 25, by: adm.name, memo: '시험용(TEST)', req_id: '', kw: '', cancel_of: '' });
+    }
+    const kg = Math.round((e.motor ? rnd(1, 12) : rnd(0.2, 2)) * 10) / 10;
+    const c = L.find((x: any) => x.rem >= kg) || L[L.length - 1];
+    const use = r2(Math.min(kg, c.rem)), before = c.rem; c.rem = r2(c.rem - use); c.changed_at = at;
+    if (c.rem <= 0.2) { c.status = ST_EMPTY; L.splice(L.indexOf(c), 1); }
+    moves.push({ id: mid(), at, no: c.no, type: '출고', spec, kind: TEST_KIND, worker: e.who, target: no + ' ' + (v.customer || v.maker || ''), mode: '무게 직접', gross: null, delta: -use, before, after: c.rem, by: e.who, memo: '', req_id: '', kw: v.kw || '', cancel_of: '' });
+  });
+  moves.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : 1));
+  const C = Object.keys(coils).map((k) => coils[k]);
+  for (let i = 0; i < recs.length; i += 500) await q(db.from('work_records').insert(recs.slice(i, i + 500)));
+  for (let i = 0; i < C.length; i += 500) await q(db.from('coils').insert(C.slice(i, i + 500)));
+  for (let i = 0; i < moves.length; i += 500) await q(db.from('coil_moves').insert(moves.slice(i, i + 500)));
+  const out = { at: nowStr(), days: days.length, records: recs.length, motor: cm, brake: cb, coils: C.length, moves: moves.length, used: r2(moves.filter((m) => m.type === '출고').reduce((t, m) => t - m.delta, 0)), first: recs[0] && recs[0].recorded_at, last: recs.length ? recs[recs.length - 1].recorded_at : '' };
+  await db.from('migration_log').insert({ what: 'test backfill', info: out });
+  return out;
+}
 // 시험 데이터 건수 (지우기 전에 보여 줄 것)
 async function testCount(key: any) {
   const k = await secret('test_key'); if (!k || String(key) !== k) err('열쇠가 맞지 않습니다.');
@@ -1504,7 +1549,7 @@ const API: any = {
     import: async (k: any, part: string, rows: any[], opts: any) => { await sysCheck(k); return importData(part, rows, opts); },
     verify: async (k: any) => { await sysCheck(k); return verify(); },
     setBackupInfo: async (k: any, info: any) => { await sysCheck(k); await putSetting('backup.last', info); return true; },
-    testFeed, testCount,
+    testFeed, testCount, testBackfill,
   },
 };
 
