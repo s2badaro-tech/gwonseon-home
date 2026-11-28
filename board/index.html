@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>사무실 상황판</title>
-<!-- 6단계 사무실 상황판 v7 (2026-11-29, 시험(TEST) 데이터는 🧪 줄무늬로 구분, 발주서·발주 필요 수에서 뺌) · v6 (2026-11-28, ⚙ 관리에 부족 알림 메일(관리자·운영자, 대문과 같은 값) · 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<!-- 6단계 사무실 상황판 v8 (2026-11-29, 인롤은 재고 0이어도 종류마다 보임, 시험 인롤 🧪) · v7 (2026-11-29, 시험(TEST) 데이터는 🧪 줄무늬로 구분, 발주서·발주 필요 수에서 뺌) · v6 (2026-11-28, ⚙ 관리에 부족 알림 메일(관리자·운영자, 대문과 같은 값) · 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
 <link rel="icon" href="../icon-192.png">
 <meta name="theme-color" content="#1f6fb2">
 <style>
@@ -256,7 +256,11 @@ function render() {
       (sf != null ? '<div class="safe" style="bottom:' + sf + '%"></div>' : '') + '</div>';
   }).join('') : '<div class="empty">아직 재고가 없습니다</div>';
   $('xl').innerHTML = round.map(function (s) { return '<div class="' + (isTest(s) ? 'test' : s.kind !== 'AIW' ? 'inv' : '') + '">' + esc(s.spec) + (s.kind !== 'AIW' ? '<br>' + (isTest(s) ? '🧪TEST' : esc(s.kind === '인버터' ? '인버터' : s.kind)) : '') + '</div>'; }).join('');
-  $('inroll').innerHTML = inr.length ? '🌀 인롤 ' + inr.map(function (s) { return '<span class="' + (s.low ? 'low' : '') + '"><b>' + esc(s.type.replace(/^인롤\s*/, '')) + '</b> ' + (s.unit ? (s.units || 0) + '대분 · ' : '') + nf(s.total, 0) + 'kg</span>'; }).join(' &nbsp;·&nbsp; ') : '';
+  // v8: 인롤은 재고가 0이어도 종류마다 한 줄에 보임 (진짜 먼저, 시험은 🧪)
+  var real = inr.filter(function (s) { return !isTest(s); }), tst = inr.filter(isTest);
+  (D.inrollTypes || []).forEach(function (t) { if (!real.some(function (s) { return s.type === t.type; })) real.push({ type: t.type, unit: t.unit, units: 0, total: 0, low: t.safety != null && t.safety > 0 }); });
+  var one = function (s) { var tt = isTest(s); return '<span class="' + (s.low && !tt ? 'low' : '') + '">' + (tt ? '<span class="tbadge">🧪 시험</span> ' : '') + '<b>' + esc(s.type.replace(/^인롤\s*/, '')) + '</b> ' + (s.unit ? (s.units || 0) + '대분 · ' : '') + nf(s.total, 0) + 'kg</span>'; };
+  $('inroll').innerHTML = real.length + tst.length ? '🌀 인롤 ' + real.concat(tst).map(one).join(' &nbsp;·&nbsp; ') : '';
   // 월별 사용량 (굵기별 색)
   var months = mo.months.slice().reverse(), rows = (mo.rows || []).filter(function (r) { return months.some(function (m) { return r.m[m] && r.m[m].used > 0; }); });
   var specs = []; rows.forEach(function (r) { if (specs.indexOf(r.spec) < 0) specs.push(r.spec); }); specs.sort(function (a, b) { return specNum(a) - specNum(b); });

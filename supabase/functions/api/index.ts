@@ -853,7 +853,7 @@ async function board(token: any) {
   (await q(db.rpc('coil_monthly', { p_from: m7[6] + '-01' })) as any[]).forEach((o) => { if (past6.indexOf(o.month) < 0) return; const k = specTxt(o.spec) + '|' + o.kind; u6[k] = (u6[k] || 0) + Number(o.used); });
   mon.rows.forEach((r: any) => { r.avg6 = r2((u6[r.spec + '|' + r.kind] || 0) / 6); r.cover6 = r.avg6 > 0 ? Math.round(r.stock / r.avg6 * 10) / 10 : null; });
   const cfg = Object.assign({}, BOARD_DEF, await getSetting('board.cfg', {}));
-  return { at: nowStr(), month, me: { name: m.name, admin: m.admin, owner: m.owner }, stock, monthly: mon, recent, stk, cfg, types: m.admin ? await coTypes() : [], mail: m.admin ? String((await coSet()).mail || '') : null };
+  return { at: nowStr(), month, me: { name: m.name, admin: m.admin, owner: m.owner }, inrollTypes: (await coTypes()).filter((t) => t.spec).map((t) => ({ type: t.name, spec: t.spec, unit: t.unit, safety: t.alert })), stock, monthly: mon, recent, stk, cfg, types: m.admin ? await coTypes() : [], mail: m.admin ? String((await coSet()).mail || '') : null };
 }
 // v61: 상황판 관리 (코일 관리자·운영자만). 알림 기준 무게는 코일 앱과 같은 coil_types.alert (adminCall setTypes로 바꿈)
 const BOARD_DEF: any = { notice: '', noticeUntil: '', show: { stock: true, monthly: true, recent: true, stk: true, soon: true }, orderTo: '', orderMode: 'month', orderRound: 5, basis: 3, redWeeks: 4 };
@@ -1374,6 +1374,7 @@ async function verify() {
 // 열쇠는 app_secrets 'test_key' (깃허브 Secrets에만). app_settings 'test.feed' = {on, until} 로 언제든 끔.
 const TEST_KIND = 'TEST';
 function isTestNo(s: any) { return /^TEST-/i.test(String(s || '').trim()); }
+const TEST_INROLL = [{ spec: '4.5', type: '인롤 4.5 환선', unit: 30 }, { spec: '3.5×7', type: '인롤 3.5×7 평각선', unit: 50 }];
 const TEST_SPECS = ['0.4', '0.5', '0.6', '0.7', '0.75', '0.8', '0.85', '0.9', '1.0', '1.1', '1.2', '1.3'];
 function pick<T>(a: T[]): T { return a[Math.floor(Math.random() * a.length)]; }
 function rnd(a: number, b: number) { return a + Math.random() * (b - a); }
@@ -1383,12 +1384,13 @@ function testMotor(no: string) {
   const poles = wpick([['2', 2], ['4', 6], ['6', 2], ['8', 1]]), P = Number(poles);
   const slots = String(P * 3 * pick(P <= 4 ? [2, 3, 4] : [2, 3]));
   const full = Math.round(Number(slots) / P), two = Math.random() < 0.8;
-  const wire = pick(['0.7', '0.75', '0.8', '0.85', '0.9', '1.0', '1.1', '1.2', '1.3']);
-  const strands = String(Math.max(1, Math.round(rnd(1, 3) + kw / 25)));
+  const wk = kw >= 55 && Math.random() < 0.3 ? '인롤' : wpick([['AIW', 8], ['인버터', 2]]); // 큰 모터 일부는 인롤
+  const wire = wk === '인롤' ? pick(TEST_INROLL).spec : pick(['0.7', '0.75', '0.8', '0.85', '0.9', '1.0', '1.1', '1.2', '1.3']);
+  const strands = wk === '인롤' ? '' : String(Math.max(1, Math.round(rnd(1, 3) + kw / 25)));
   const conn = wpick([['1Y', 2], ['2Y', 2], ['1Δ', 3], ['2Δ', 2], ['1Y-Δ', 2], ['2Y-Δ', 1]]);
   return { ledgerNo: no, customer: wpick([['포스코', 8], ['현대제철', 1], ['동국제강', 1]]), maker: pick(['현대', '효성', 'LS', 'WEG', 'ABB', '']),
     target: wpick([['고정자', 9], ['회전자', 1]]), kw: String(kw), poles, volt: wpick([['440', 7], ['380', 2], ['220', 1]]), hz: '60', slots,
-    windType: two ? '2층 중첩권' : pick(['단층 중첩권', '단층 동심권']), wireKind: wpick([['AIW', 8], ['인버터', 2]]), wire, strands,
+    windType: two ? '2층 중첩권' : pick(['단층 중첩권', '단층 동심권']), wireKind: wk, wire, strands,
     turns: String(Math.round(rnd(4, 40))), series: '1', pitch: '1-' + (two ? full : full + 1), conn, leads: /Y-Δ/.test(conn) ? '6' : '3',
     coilKg: String(Math.round(Math.max(0.3, kw * rnd(0.25, 0.45)) * 10) / 10), memo: '시험용(TEST)' };
 }
@@ -1418,8 +1420,8 @@ async function testNextNo() {
   let max = 9000; r.forEach((x) => { const mm = String(x.no).match(/(\d+)$/); if (mm) max = Math.max(max, Number(mm[1])); });
   return 'TEST-' + (max + 1);
 }
-async function testStock(spec: string) {
-  const r: any[] = await q(db.from('coils').select('no,rem,status').eq('kind', TEST_KIND).eq('spec', spec).neq('status', ST_VOID).gt('rem', 0.2).order('rem').limit(50));
+async function testStock(spec: string, ctype?: string) {
+  const r: any[] = await q(db.from('coils').select('no,rem,status').eq('kind', TEST_KIND).eq('spec', spec).eq('ctype', ctype || TYPE_DEF).neq('status', ST_VOID).gt('rem', 0.2).order('rem').limit(50));
   return r.filter((c) => Number(c.rem) > 0.2);
 }
 async function testFeed(key: any, who: any, nRec: any, nUse: any, reads: any) {
@@ -1450,16 +1452,17 @@ async function testFeed(key: any, who: any, nRec: any, nUse: any, reads: any) {
     }
     for (let i = 0; i < n2; i++) {
       const j = jobs[i % Math.max(1, jobs.length)]; if (!j) break;
-      const spec = specTxt(TEST_SPECS.map(specTxt).indexOf(specTxt(j.v.wire)) >= 0 ? j.v.wire : pick(TEST_SPECS));
-      const kg = Math.round((j.motor ? rnd(1, 12) : rnd(0.2, 2)) * 10) / 10;
-      let L = await testStock(spec);
+      const inr = TEST_INROLL.find((t) => j.v.wireKind === '인롤' && t.spec === j.v.wire);
+      const spec = inr ? inr.spec : specTxt(TEST_SPECS.map(specTxt).indexOf(specTxt(j.v.wire)) >= 0 ? j.v.wire : pick(TEST_SPECS));
+      const kg = Math.round((inr ? rnd(15, 60) : j.motor ? rnd(1, 12) : rnd(0.2, 2)) * 10) / 10;
+      let L = await testStock(spec, inr ? inr.type : TYPE_DEF);
       if (!L.length) { errs.push('재고 없음(발주 기다림): ' + spec + 'mm TEST'); continue; }
       let done = false;
       for (let tr = 0; tr < 3 && !done; tr++) {
         const c = L[tr % Math.max(1, L.length)]; if (!c) break; // 남은 양 적은 타래부터 (현장 '먼저 쓰기'처럼)
         const use = Math.min(kg, Number(c.rem));
         const r = await time('co.saveMove', () => API.co.saveMove(token, { type: '출고', no: c.no, value: use, mode: 'net', target: j.no + ' ' + (j.v.customer || j.v.maker || ''), worker: u.name, kw: j.v.kw, reqId: 'TEST-U' + uuid(), ts: Date.now() }));
-        if (r) { uses.push(c.no + ' ' + use + 'kg'); done = true; } else L = await testStock(spec);
+        if (r) { uses.push(c.no + ' ' + use + 'kg'); done = true; } else L = await testStock(spec, inr ? inr.type : TYPE_DEF);
       }
     }
   } finally {
@@ -1519,48 +1522,54 @@ async function testBackfill(key: any, from: any, to: any, nMotor: any, nBrake: a
 
 // 시험 자동 발주·입고 (경선 님 11-29): 시험 코일이 모자라면 [발주완료] 표시 → 정한 시간(기본 24시간) 뒤 시험 코일 입고 → 계속 반복. 메일 없음.
 // 발주 시점 = 재고가 '하루 쓰는 양 × 1.2' 밑 (또는 알림 기준 50kg 밑). 발주량 = 하루 쓰는 양 × 1.5 (25kg 타래로 올림, 최소 4개).
-async function testOrders(admName: string, force: boolean, forceKg: number) {
+async function testOrders(admName: string, force: boolean, forceKg: number, only?: string) {
   const f = await getSetting('test.feed', {}), lagH = isFinite(Number(f.orderLagH)) ? Number(f.orderLagH) : 24;
-  const live: any[] = await q(db.from('coils').select('spec,rem').eq('kind', TEST_KIND).neq('status', ST_VOID).gt('rem', 0.2).limit(20000));
-  const stock: any = {}; TEST_SPECS.forEach((sp) => { stock[specTxt(sp)] = 0; }); live.forEach((c) => { stock[c.spec] = (stock[c.spec] || 0) + Number(c.rem); });
+  // 묶음 = 규격 + 코일 종류 (일반 환선은 25kg 타래, 인롤은 1대 무게)
+  const G: any = {};
+  TEST_SPECS.forEach((sp) => { G[specTxt(sp) + '|' + TYPE_DEF] = { spec: specTxt(sp), ctype: TYPE_DEF, unit: 25, alert: 50, st: 0, u: 0 }; });
+  TEST_INROLL.forEach((t) => { G[t.spec + '|' + t.type] = { spec: t.spec, ctype: t.type, unit: t.unit, alert: t.unit * 2, st: 0, u: 0 }; });
+  const gk = (spec: string, ct: string) => spec + '|' + (ct || TYPE_DEF);
+  const live: any[] = await q(db.from('coils').select('spec,rem,ctype').eq('kind', TEST_KIND).neq('status', ST_VOID).gt('rem', 0.2).limit(20000));
+  live.forEach((c) => { const g = G[gk(c.spec, c.ctype)]; if (g) g.st += Number(c.rem); });
   const since = kst(Date.now() - DAY); const sinceS = since.slice(0, 10) + ' ' + since.slice(11, 16);
-  const used: any = {};
+  const ctOf: any = {}; TEST_INROLL.forEach((t) => { ctOf[t.spec] = t.type; });
   for (let from = 0; ; from += 1000) {
     const r: any[] = await q(db.from('coil_moves').select('spec,delta').eq('kind', TEST_KIND).eq('type', '출고').gte('at', sinceS).range(from, from + 999));
-    r.forEach((x) => { used[x.spec] = (used[x.spec] || 0) - Number(x.delta); }); if (r.length < 1000) break;
+    r.forEach((x) => { const g = G[gk(x.spec, ctOf[x.spec])]; if (g) g.u -= Number(x.delta); }); if (r.length < 1000) break;
   }
-  const specs: any[] = await q(db.from('coil_specs').select('*').like('key', '%|' + TEST_KIND));
-  const P: any = {}; specs.forEach((x) => { P[x.spec] = x; });
-  const recv: string[] = [], notes: string[] = [], now = Date.now();
+  const specs: any[] = await q(db.from('coil_specs').select('*').like('key', '%|' + TEST_KIND + '%'));
+  const P: any = {}; specs.forEach((x) => { P[x.key] = x; });
+  const recv: string[] = [], notes: string[] = [], now = Date.now(), done: any[] = [];
   const coils: any[] = [], moves: any[] = []; let nextN = Number((await testNextNo()).slice(5));
-  for (const sp of Object.keys(stock)) {
-    const st = stock[sp], u = used[sp] || 0, o = P[sp];
+  for (const k of Object.keys(G)) {
+    const g = G[k], o = P[specKey(g.spec, TEST_KIND, g.ctype)];
+    if (only === 'inroll' && g.ctype === TYPE_DEF) continue;
     const ordered = o && o.order_state, age = ordered ? (now - Date.parse(String(o.order_at).replace(' ', 'T') + ':00+09:00')) / 3600000 : 0;
     if (force || (ordered && age >= lagH)) {
-      const want = force ? forceKg : Number((String(o.order_memo).match(/(\d+)kg/) || [])[1]) || 100;
-      const n = Math.max(4, Math.ceil(want / 25)), at = nowStr();
+      const want = force ? (g.ctype === TYPE_DEF ? forceKg : forceKg / 5) : Number((String(o.order_memo).match(/(\d+)kg/) || [])[1]) || 100;
+      const n = Math.max(4, Math.ceil(want / g.unit)), at = nowStr();
       for (let i = 0; i < n; i++) {
         const no = 'TEST-' + (++nextN);
-        coils.push({ no, spec: sp, kind: TEST_KIND, maker: '', tare: 1, rem: 25, loc: pick(['1번 선반', '2번 선반', '3번 선반']), status: ST_USE, reg_at: at, reg_by: admName, changed_at: at, memo: '시험용(TEST) 자동 입고', ctype: TYPE_DEF });
-        moves.push({ id: 'TEST-L' + Date.now().toString(36) + i + sp.replace('.', ''), at, no, type: '신규등록', spec: sp, kind: TEST_KIND, worker: admName, target: '', mode: '라벨 순수무게', gross: null, delta: 25, before: 0, after: 25, by: admName, memo: '시험 자동 입고', req_id: '', kw: '', cancel_of: '' });
+        coils.push({ no, spec: g.spec, kind: TEST_KIND, maker: '', tare: g.ctype === TYPE_DEF ? 1 : 0, rem: g.unit, loc: pick(['1번 선반', '2번 선반', '3번 선반']), status: ST_USE, reg_at: at, reg_by: admName, changed_at: at, memo: '시험용(TEST) 자동 입고', ctype: g.ctype });
+        moves.push({ id: 'TEST-L' + Date.now().toString(36) + nextN, at, no, type: '신규등록', spec: g.spec, kind: TEST_KIND, worker: admName, target: '', mode: '라벨 순수무게', gross: null, delta: g.unit, before: 0, after: g.unit, by: admName, memo: '시험 자동 입고', req_id: '', kw: '', cancel_of: '' });
       }
-      recv.push(sp + 'mm ' + n + '타래'); continue;
+      recv.push(g.spec + (g.ctype === TYPE_DEF ? 'mm ' + n + '타래' : ' ' + g.ctype + ' ' + n + '대')); done.push(g); continue;
     }
-    if (!ordered && (st < 50 || st < u * 1.2)) {
-      const kg = Math.max(100, Math.ceil(u * 1.5 / 25) * 25);
-      await setOrderRow(sp, '시험 자동 발주 ' + kg + 'kg (' + admName + ')');
-      notes.push('자동 발주 ' + sp + 'mm ' + kg + 'kg');
+    if (!ordered && (g.st < g.alert || g.st < g.u * 1.2)) {
+      const kg = Math.max(g.unit * 4, Math.ceil(g.u * 1.5 / g.unit) * g.unit);
+      await setOrderRow(g.spec, g.ctype, '시험 자동 발주 ' + kg + 'kg (' + admName + ')');
+      notes.push('자동 발주 ' + g.spec + ' ' + (g.ctype === TYPE_DEF ? '' : g.ctype + ' ') + kg + 'kg');
     }
   }
   for (let i = 0; i < coils.length; i += 500) await q(db.from('coils').insert(coils.slice(i, i + 500)));
   for (let i = 0; i < moves.length; i += 500) await q(db.from('coil_moves').insert(moves.slice(i, i + 500)));
-  for (const r of recv) await clearOrder(r.split('mm')[0], TEST_KIND, TYPE_DEF);
-  return { recv, notes, stock, used };
+  for (const g of done) await clearOrder(g.spec, TEST_KIND, g.ctype);
+  return { recv, notes };
 }
-async function setOrderRow(spec: string, memo: string) {
-  const k = specKey(spec, TEST_KIND, TYPE_DEF), v = { order_state: '발주완료', order_at: nowStr(), order_memo: memo };
+async function setOrderRow(spec: string, ctype: string, memo: string) {
+  const k = specKey(spec, TEST_KIND, ctype), v = { order_state: '발주완료', order_at: nowStr(), order_memo: memo };
   const ex: any = await q(db.from('coil_specs').select('key').eq('key', k).maybeSingle());
-  if (ex) await q(db.from('coil_specs').update(v).eq('key', k)); else await q(db.from('coil_specs').insert(Object.assign({ key: k, spec, kind: TEST_KIND, ctype: '' }, v)));
+  if (ex) await q(db.from('coil_specs').update(v).eq('key', k)); else await q(db.from('coil_specs').insert(Object.assign({ key: k, spec, kind: TEST_KIND, ctype: ctype && ctype !== TYPE_DEF ? ctype : '' }, v)));
 }
 // 시험 데이터 건수 (지우기 전에 보여 줄 것)
 async function testCount(key: any) {
@@ -1595,7 +1604,7 @@ const API: any = {
     verify: async (k: any) => { await sysCheck(k); return verify(); },
     setBackupInfo: async (k: any, info: any) => { await sysCheck(k); await putSetting('backup.last', info); return true; },
     testFeed, testCount, testBackfill,
-    testStockUp: async (k: any, kg: any) => { await testCheck(k); const P = await people(); const a = P.find((x) => x.owner && !x.off) || P[0]; const r = await testOrders(a.name, true, Number(kg) || 100); return { recv: r.recv }; },
+    testStockUp: async (k: any, kg: any, only: any) => { await testCheck(k); const P = await people(); const a = P.find((x) => x.owner && !x.off) || P[0]; const r = await testOrders(a.name, true, Number(kg) || 100, only); return { recv: r.recv }; },
   },
 };
 
