@@ -145,16 +145,18 @@ const KINDS: any = {
   motor: { sheet: '모터재권선', title: '모터 재권선', fields: [
     ['ledgerNo', '작업번호', 'text'], ['customer', '고객·설비', 'text'], ['maker', '제조사', 'text'],
     ['target', '권선 대상', 'pick', ['고정자', '회전자']], ['kw', '출력(kW)', 'num'],
-    ['poles', '극수', 'list', ['2', '4', '6', '8', '10', '12']], ['volt', '전압(V)', 'list', ['220', '380', '440', '3300', '6600']],
-    ['hz', '주파수(Hz)', 'list', ['60', '50']], ['rpm', '회전수(rpm)', 'num'], ['slots', '슬롯수', 'num'],
+    // v10 (5단계): 극수·전압·주파수는 버튼(기본 4극·440V·60Hz), 회전수는 화면에서 뺌(옛 기록 값은 그대로 보관), 슬롯수는 극수별 버튼
+    ['poles', '극수', 'pick', ['2', '4', '6', '8', '10', '12']], ['volt', '전압(V)', 'pick', ['220', '380', '440', '3300', '6600']],
+    ['hz', '주파수(Hz)', 'pick', ['60', '50']], ['rpm', '회전수(rpm)', 'num'], ['slots', '슬롯수', 'slots'],
     ['windType', '권선형식(2층 중첩권, 단층 중첩권/동심권)', 'pick', ['2층 중첩권', '단층 중첩권', '단층 동심권']],
+    ['wireKind', '코일 종류', 'pick', ['AIW', '인버터', '기타']],
     ['wire', '코일선경(mm)', 'wire', ['0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.1', '1.2', '1.3', '1.4']],
-    ['strands', '가닥수', 'num'], ['turns', '코일턴수', 'num'], ['series', '직렬수', 'text'], ['parallel', '병렬수', 'text'],
-    ['pitch', '피치', 'text'], ['conn', '결선', 'pick', ['1Y', '2Y', '3Y', '4Y', '1Δ', '2Δ', '3Δ', '4Δ', '1Y-Δ', '2Y-Δ', '3Y-Δ', '4Y-Δ']],
-    ['leads', '리드수', 'num'], ['coilKg', '코일무게(kg)', 'num'], ['memo', '메모', 'area'],
+    ['strands', '가닥수', 'step'], ['turns', '코일턴수', 'num'], ['series', '직렬수', 'step'], ['parallel', '병렬수', 'text'],
+    ['pitch', '피치', 'pitch'], ['conn', '결선', 'pick', ['1Y', '2Y', '3Y', '4Y', '1Δ', '2Δ', '3Δ', '4Δ', '1Y-Δ', '2Y-Δ', '3Y-Δ', '4Y-Δ']],
+    ['leads', '리드수', 'num'], ['coilKg', '폐코일 무게(kg)', 'num'], ['memo', '메모', 'area'],
   ] },
   coil: { sheet: '마그네틱코일', title: '마그네틱 코일', fields: [
-    ['ledgerNo', '작업번호', 'text'], ['maker', '제조사', 'text'], ['model', '모델명', 'text'],
+    ['ledgerNo', '작업번호', 'text'], ['maker', '제조사', 'text'], ['model', '모델명', 'text'], ['kw', '출력(kW)', 'num'],
     ['size', '코일 배치 타입', 'select', ['단일 코일형', '다극코일형', '기타']],
     ['ringID', '보빈 내경(mm)', 'num', [], { when: 'size', is: '단일 코일형' }], ['ringOD', '보빈 외경(mm)', 'num', [], { when: 'size', is: '단일 코일형' }],
     ['ringH', '보빈 높이(mm)', 'num', [], { when: 'size', is: '단일 코일형' }],
@@ -170,9 +172,11 @@ const KINDS: any = {
 };
 const RANGES = {
   motor: { kw: [0.1, 2000], rpm: [100, 3600], slots: [6, 200], strands: [1, 40], turns: [1, 300], leads: [3, 12], coilKg: [0.05, 1000], wire: [0.1, 3.0] },
-  coil: { turns: [10, 30000], ohm: [0.01, 10000], wire: [0.05, 3.0], coilG: [1, 100000], ringID: [1, 1000], ringOD: [1, 1500], ringH: [1, 1000], mpID: [1, 1000], mpOD: [1, 1500], mpH: [1, 1000] },
+  coil: { kw: [0.01, 2000], turns: [10, 30000], ohm: [0.01, 10000], wire: [0.05, 3.0], coilG: [1, 100000], ringID: [1, 1000], ringOD: [1, 1500], ringH: [1, 1000], mpID: [1, 1000], mpOD: [1, 1500], mpH: [1, 1000] },
 };
 // v9: 작업기록 관리자는 그 방 자료(현황·수정기록·엑셀·사진)까지. 사람·권한·백업은 설정방(운영자)
+// 화면에서만 뺀 칸 (옛 기록 값·엑셀·백업에는 그대로 남음)
+const FORM_GONE: any = { motor: ['rpm'] };
 const ADMIN_LITE = ['stats', 'changeLog', 'links', 'exportAll', 'recent'];
 const GUIDE_URL: any = { mp: 'https://s2badaro-tech.github.io/gwonseon-home/worklog/guide_mp.jpg' };
 function kindDef(k: string) { const d = KINDS[k]; if (!d) err('알 수 없는 종류: ' + k); return d; }
@@ -187,7 +191,7 @@ async function wlKinds() {
   const out: any = {};
   Object.keys(KINDS).forEach((k) => {
     const tag = k === 'motor' ? '모터:' : '코일:';
-    out[k] = { title: KINDS[k].title, fields: KINDS[k].fields.filter((f: any) => !H[f[1]] && !H[tag + f[1]]).map((f: any) => {
+    out[k] = { title: KINDS[k].title, fields: KINDS[k].fields.filter((f: any) => !H[f[1]] && !H[tag + f[1]] && (FORM_GONE[k] || []).indexOf(f[0]) < 0).map((f: any) => {
       const l = lists[tag + f[1]] || lists[f[1]]; const g = f.slice(); if (l && l.length) g[3] = l; return g;
     }) };
   });
@@ -245,7 +249,7 @@ async function saveRecord(rec: any, token: any) {
   def.fields.forEach((f: any) => {
     if (!rec.values || rec.values[f[0]] === undefined) return; // 화면에서 숨긴 칸은 그대로 둠
     let v: any = String(rec.values[f[0]]).trim();
-    if (f[2] === 'num' && v !== '' && !isNaN(Number(v))) v = String(Number(v));
+    if ((f[2] === 'num' || f[2] === 'step' || f[2] === 'slots') && v !== '' && !isNaN(Number(v))) v = String(Number(v));
     vals[f[0]] = v;
   });
   let photo = old ? old.photo : '';

@@ -97,6 +97,12 @@
   .wtools { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
   .wbtns button.on { background:var(--pri); color:#fff; }
   .wbtns.w2 { grid-template-columns:1fr 1fr; }
+  /* v34 (5단계): 빼기·더하기 칸, 자동값 안내 */
+  .step { display:grid; grid-template-columns:64px 1fr 64px; gap:8px; align-items:stretch; }
+  .step button { min-height:56px; font-size:30px; font-weight:900; border:1px solid var(--pri); background:var(--pri2); color:var(--pri); border-radius:10px; padding:0; }
+  .step button:active { background:var(--pri); color:#fff; }
+  .step input { text-align:center; font-size:24px; font-weight:800; }
+  .autohint { font-size:14px; color:var(--sub, #667); margin-top:4px; }
   .fbox { background:#fff; border:1px solid var(--line); border-radius:11px; padding:10px; margin-bottom:8px; }
   .fbox { padding-top:2px; }
   .fbox .fl { font-size:14px; color:var(--sub); margin:10px 2px 4px; }
@@ -412,7 +418,7 @@ function buildForm() {
   var fs = CFG.kinds[kind].fields, h = '';
   fs.forEach(function (f) {
     var key = f[0], lab = f[1], typ = f[2], opts = f[3] || [];
-    var wide = (typ === 'area' || typ === 'wire' || typ === 'pick' || key === 'customer' || key === 'model' || key === 'bobbin' || key === 'memo') ? ' wide' : '';
+    var wide = (typ === 'area' || typ === 'wire' || typ === 'pick' || typ === 'slots' || typ === 'pitch' || typ === 'step' || key === 'customer' || key === 'model' || key === 'bobbin' || key === 'memo') ? ' wide' : '';
     var cond = f[4] ? ' data-when="' + esc(f[4].when) + '" data-is="' + esc(f[4].is) + '"' : '';
     if (GUIDE_AT[key]) h += '<div class="f wide"' + cond + '><button type="button" class="gbtn" onclick="showGuide(\'' + GUIDE_AT[key] + '\')">📏 치수 재는 법 (그림 보기)</button></div>';
     h += '<div class="f' + wide + '"' + cond + '><label for="i_' + key + '">' + esc(lab) + '</label>';
@@ -430,15 +436,26 @@ function buildForm() {
       h += '<input id="i_' + key + '" autocomplete="off" placeholder="아래에서 고르세요 (직접 적어도 됨)" oninput="pickRefresh(\'' + key + '\');saveDraft()">' +
         '<div class="wbtns' + (opts.some(function (o) { return String(o).length > 4; }) ? ' w2' : '') + '" id="pb_' + key + '">' + opts.map(function (o) { return '<button type="button" data-v="' + esc(o) + '" onclick="pickSet(\'' + key + '\',this)">' + esc(o) + '</button>'; }).join('') + '</div>';
     }
+    else if (typ === 'step') { // 빼기·더하기 (가닥수 0부터, 직렬수 1부터)
+      h += '<div class="step"><button type="button" onclick="stepBy(\'' + key + '\',-1)">−</button><input id="i_' + key + '" inputmode="numeric" enterkeyhint="next" autocomplete="off" oninput="saveDraft()"><button type="button" onclick="stepBy(\'' + key + '\',1)">＋</button></div>';
+    }
+    else if (typ === 'slots') { // 극수에 맞는 슬롯수 버튼만, 없는 값은 직접
+      h += '<input id="i_' + key + '" inputmode="numeric" enterkeyhint="next" autocomplete="off" placeholder="아래에서 고르거나 직접 적기" oninput="slotsRefresh();pitchAuto();saveDraft()">' +
+        '<div class="wbtns" id="sb_' + key + '"></div>';
+    }
+    else if (typ === 'pitch') { // 슬롯수·극수로 자동 (1-N), 빼기·더하기로 고침
+      h += '<div class="step"><button type="button" onclick="pitchBy(-1)">−</button><input id="i_' + key + '" autocomplete="off" enterkeyhint="next" placeholder="예) 1-9" oninput="this.removeAttribute(\'data-auto\');saveDraft()"><button type="button" onclick="pitchBy(1)">＋</button></div>' +
+        '<div class="autohint" id="ph_' + key + '"></div>';
+    }
     else if (typ === 'select') {
       h += '<select id="i_' + key + '" onchange="applyShow();saveDraft()"><option value="">- 선택 -</option>' +
         opts.map(function (o) { return '<option value="' + esc(o) + '">' + esc(o) + '</option>'; }).join('') + '</select>';
     }
     else {
-      var im = typ === 'num' ? ' inputmode="decimal"' : '';
+      var im = typ === 'num' ? (key === 'turns' || key === 'leads' ? ' inputmode="numeric"' : ' inputmode="decimal"') : '';
       var dl = opts.length ? ' list="d_' + key + '"' : '';
       if (typ === 'list' && opts.every(function (o) { return /^[0-9.\/]+$/.test(o); })) im = ' inputmode="decimal"';
-      h += '<input id="i_' + key + '"' + im + dl + ' autocomplete="off" oninput="saveDraft()">';
+      h += '<input id="i_' + key + '"' + im + dl + ' enterkeyhint="next" autocomplete="off" oninput="' + (key === 'leads' ? 'this.removeAttribute(\'data-auto\');' : '') + 'saveDraft()">';
       if (opts.length) h += '<datalist id="d_' + key + '">' + opts.map(function (o) { return '<option value="' + esc(o) + '">'; }).join('') + '</datalist>';
     }
     h += '</div>';
@@ -449,9 +466,68 @@ function buildForm() {
   document.getElementById('photoIn').value = '';
   document.getElementById('photoPrev').classList.add('hide');
   loadDraft();
+  applyDefaults();
   applyShow();
   wireRefreshAll();
 }
+// ───── v34 (5단계) 기본값·자동 계산 ─────
+// 새 기록일 때 비어 있으면 채움 (작업자가 바꿀 수 있음). 고치기·복사할 때는 원래 값 그대로
+var DEFAULTS = { motor: { poles: '4', volt: '440', hz: '60', wireKind: 'AIW', strands: '0', series: '1' } };
+function applyDefaults() {
+  var D = DEFAULTS[kind] || {};
+  Object.keys(D).forEach(function (k) { var el = document.getElementById('i_' + k); if (el && !el.value) el.value = D[k]; });
+  slotsRefresh(); pitchAuto();
+}
+var STEP_MIN = { strands: 0, series: 1 };
+function stepBy(key, d) {
+  var el = document.getElementById('i_' + key), mn = STEP_MIN[key] || 0;
+  var v = parseInt(el.value, 10); if (isNaN(v)) v = mn;
+  v = Math.max(mn, v + d); el.value = String(v); el.removeAttribute('data-auto'); saveDraft();
+}
+// 슬롯수: 극수×3의 배수 중 자주 쓰는 값 (실제 기록이 쌓이면 자주 나온 값으로 바꿀 것)
+var SLOTS_BY_POLES = { '2': [24, 36, 48], '4': [36, 48, 60, 72], '6': [36, 54, 72, 90], '8': [48, 72, 96], '10': [60, 90, 120], '12': [72, 108, 144] };
+function slotsRefresh() {
+  var box = document.getElementById('sb_slots'); if (!box) return;
+  var p = (document.getElementById('i_poles') || {}).value || '', v = document.getElementById('i_slots').value.trim();
+  var L = SLOTS_BY_POLES[String(p).trim()] || [];
+  box.innerHTML = L.map(function (n) { return '<button type="button" class="' + (String(n) === v ? 'on' : '') + '" onclick="slotsSet(' + n + ')">' + n + '</button>'; }).join('') +
+    '<button type="button" onclick="slotsOther()" style="font-size:16px">✍ 직접</button>';
+}
+function slotsSet(n) { var el = document.getElementById('i_slots'); el.value = el.value.trim() === String(n) ? '' : String(n); slotsRefresh(); pitchAuto(); saveDraft(); }
+function slotsOther() { var el = document.getElementById('i_slots'); el.value = ''; el.focus(); slotsRefresh(); }
+// 피치: 전절 = 슬롯수÷극수. 2층 중첩권은 보통 한 슬롯 단절(1-전절), 단층은 전절(1-(전절+1))
+function pitchCalc() {
+  var sl = parseInt((document.getElementById('i_slots') || {}).value, 10), p = parseInt((document.getElementById('i_poles') || {}).value, 10);
+  if (!(sl > 0 && p > 0) || sl % p) return null;
+  var full = sl / p, wt = (document.getElementById('i_windType') || {}).value || '';
+  var span = /단층/.test(wt) ? full : Math.max(1, full - 1);
+  return { full: full, span: span, txt: '1-' + (span + 1) };
+}
+function pitchAuto() {
+  var el = document.getElementById('i_pitch'), hint = document.getElementById('ph_pitch'); if (!el) return;
+  var c = pitchCalc();
+  if (hint) hint.textContent = c ? '전절 ' + c.full + '슬롯 → 자동 ' + c.txt + (c.span < c.full ? ' (한 슬롯 단절)' : ' (전절)') + ' · 다르면 − ＋ 로 고치세요' : '슬롯수와 극수를 고르면 자동으로 채웁니다';
+  if (c && (!el.value || el.getAttribute('data-auto') === el.value)) { el.value = c.txt; el.setAttribute('data-auto', c.txt); }
+}
+function pitchBy(d) {
+  var el = document.getElementById('i_pitch'), m = String(el.value).match(/^\s*1\s*-\s*(\d+)\s*$/), c = pitchCalc();
+  var n = m ? parseInt(m[1], 10) : (c ? c.span + 1 : 2);
+  n = Math.max(2, n + d); el.value = '1-' + n; el.removeAttribute('data-auto'); saveDraft();
+}
+// 결선을 고르면 리드수 자동: Y·Δ → 3, Y-Δ → 6
+function leadsAuto() {
+  var c = (document.getElementById('i_conn') || {}).value || '', el = document.getElementById('i_leads'); if (!el) return;
+  if (!c) return;
+  var n = /Y\s*-\s*Δ/i.test(c) ? '6' : /[YΔ]/i.test(c) ? '3' : '';
+  if (n && (!el.value || el.getAttribute('data-auto') === el.value)) { el.value = n; el.setAttribute('data-auto', n); }
+}
+// 키패드의 '다음'(엔터)으로 다음 칸
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Enter' || !e.target.closest || !e.target.closest('#form') || e.target.tagName !== 'INPUT') return;
+  e.preventDefault();
+  var L = Array.prototype.filter.call(document.querySelectorAll('#form input, #form textarea, #form select'), function (x) { return x.offsetParent !== null; });
+  var i = L.indexOf(e.target); if (i >= 0 && L[i + 1]) L[i + 1].focus(); else e.target.blur();
+});
 // ───── 코일선경 버튼으로 쌓기: "1.0×2, 0.9×1" ─────
 var wireHist = {};
 function wireParse(s) {
@@ -505,8 +581,8 @@ function wireRefresh(key) {
   var st = document.getElementById('i_strands');
   if (st && key === 'wire') {
     var au = st.getAttribute('data-auto');
-    if (n && (!st.value || st.value === au)) { st.value = n; st.setAttribute('data-auto', String(n)); }
-    else if (!n && au && st.value === au) { st.value = ''; st.removeAttribute('data-auto'); }
+    if (n && (!st.value || st.value === '0' || st.value === au)) { st.value = n; st.setAttribute('data-auto', String(n)); }
+    else if (!n && au && st.value === au) { st.value = kind === 'motor' ? '0' : ''; st.removeAttribute('data-auto'); }
   }
 }
 function wireRefreshAll() { CFG.kinds[kind].fields.forEach(function (f) { if (f[2] === 'wire') wireRefresh(f[0]); if (f[2] === 'pick') pickRefresh(f[0]); }); }
@@ -514,12 +590,18 @@ function wireRefreshAll() { CFG.kinds[kind].fields.forEach(function (f) { if (f[
 function pickSet(key, b) {
   var el = document.getElementById('i_' + key), v = b.getAttribute('data-v');
   el.value = (el.value.trim() === v) ? '' : v;
-  pickRefresh(key); saveDraft();
+  if (key === 'wireKind' && el.value === '기타') { var nm = prompt('코일 종류 이름을 적으세요 (예: PEW)'); if (nm && nm.trim()) el.value = nm.trim(); }
+  pickRefresh(key);
+  if (key === 'poles') { slotsRefresh(); pitchAuto(); }
+  if (key === 'windType') pitchAuto();
+  if (key === 'conn') leadsAuto();
+  saveDraft();
 }
 function pickRefresh(key) {
   var box = document.getElementById('pb_' + key); if (!box) return;
   var v = document.getElementById('i_' + key).value.trim();
-  Array.prototype.forEach.call(box.children, function (b) { b.classList.toggle('on', b.getAttribute('data-v') === v); });
+  var known = Array.prototype.some.call(box.children, function (b) { return b.getAttribute('data-v') === v; });
+  Array.prototype.forEach.call(box.children, function (b) { b.classList.toggle('on', b.getAttribute('data-v') === v || (key === 'wireKind' && v && !known && b.getAttribute('data-v') === '기타')); });
 }
 // 조건 칸 보이기/숨기기 (예: 단일 코일형일 때만 보빈 내경·외경·높이)
 function applyShow() {
@@ -533,8 +615,9 @@ function getValues() {
   var v = {};
   CFG.kinds[kind].fields.forEach(function (f) {
     var el = document.getElementById('i_' + f[0]);
-    var box = el.parentNode;
+    var box = el.closest('.f');
     v[f[0]] = box.classList.contains('hide') ? '' : el.value.trim();
+    if (f[0] === 'strands' && v[f[0]] === '0') v[f[0]] = ''; // 기본 0 = 안 적음
   });
   return v;
 }
@@ -550,7 +633,8 @@ function setValues(v) {
   applyShow();
   wireHist = {};
   var st0 = document.getElementById('i_strands'); if (st0) st0.removeAttribute('data-auto');
-  wireRefreshAll();
+  ['pitch', 'leads'].forEach(function (k) { var x = document.getElementById('i_' + k); if (x) x.removeAttribute('data-auto'); });
+  wireRefreshAll(); slotsRefresh(); pitchAuto();
 }
 function saveDraft() { if (CFG && !editId) ls(LS.draft + kind, JSON.stringify(getValues())); }
 function loadDraft() { var d = ls(LS.draft + kind); if (d) { try { setValues(JSON.parse(d)); } catch (e) {} } }
@@ -734,7 +818,7 @@ function fdefs() {
   if (FILTERS[findKind] === 'form') {
     return fs.filter(function (f) { return skip.indexOf(f[0]) < 0 && f[2] !== 'area'; }).map(function (f) {
       var o = f[3] || [];
-      var mode = o.length && /^(select|pick|wire|list)$/.test(f[2]) ? 'btn' : (f[2] === 'num' ? 'num' : 'text');
+      var mode = o.length && /^(select|pick|wire|list)$/.test(f[2]) ? 'btn' : (/^(num|step|slots)$/.test(f[2]) ? 'num' : 'text');
       return [f[0], f[1], mode, o, f[4] || null];
     });
   }
@@ -800,7 +884,8 @@ var LOADING = {}, LOADGEN = {};
 function kindsNow() { return findKind === 'all' ? ['motor', 'coil'] : [findKind]; }
 function isLoading() { return kindsNow().some(function (k) { return LOADING[k]; }); }
 function rowsNow() { // 전체: 모터+전자브레이크를 날짜 최근 순으로 합침
-  if (findKind !== 'all') return cache[findKind];
+  var byDate = function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; }; // v34: 언제나 최신순
+  if (findKind !== 'all') return cache[findKind] ? cache[findKind].slice().sort(byDate) : cache[findKind];
   if (!cache.motor && !cache.coil) return null;
   return (cache.motor || []).concat(cache.coil || []).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
 }
@@ -883,12 +968,12 @@ function card(r) {
   var v = r.values, t, s, K = r.kind || findKind;
   if (K === 'motor') {
     t = [v.ledgerNo && '#' + v.ledgerNo, v.target, v.kw && v.kw + 'kW', v.poles && v.poles + 'P', v.volt && v.volt + 'V', v.maker].filter(Boolean).join(' · ');
-    s = ['슬롯 ' + (v.slots || '-'), '선경 ' + (v.wire || '-') + (v.strands ? ' (' + v.strands + '가닥)' : ''), '턴 ' + (v.turns || '-'),
+    s = ['슬롯 ' + (v.slots || '-'), '선경 ' + (v.wireKind && v.wireKind !== 'AIW' ? v.wireKind + ' ' : '') + (v.wire || '-') + (v.strands ? ' (' + v.strands + '가닥)' : ''), '턴 ' + (v.turns || '-'),
          '직렬 ' + (v.series || '-'), '피치 ' + (v.pitch || '-'), '결선 ' + (v.conn || '-')].join(' / ');
   } else {
     var dim = v.size === '단일 코일형' ? [v.ringID, v.ringOD, v.ringH].map(function (x) { return x || '-'; }).join('×')
       : v.size === '다극코일형' ? [v.coilPoles && v.coilPoles + '극', (v.mpID || v.mpOD || v.mpH) && ('ID ' + (v.mpID || '-') + ' / OD ' + (v.mpOD || '-') + ' / H ' + (v.mpH || '-'))].filter(Boolean).join(' · ') : (v.bobbin || '');
-    t = [v.ledgerNo && '#' + v.ledgerNo, v.size, dim].filter(Boolean).join(' · ');
+    t = [v.ledgerNo && '#' + v.ledgerNo, v.kw && v.kw + 'kW', v.size, dim].filter(Boolean).join(' · ');
     s = ['턴 ' + (v.turns || '-'), '선경 ' + (v.wire || '-'), '저항 ' + (v.ohm || '-') + 'Ω'].join(' / ');
   }
   var skip = FIND_SKIP[K] || [];
