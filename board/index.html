@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>사무실 상황판</title>
-<!-- 6단계 사무실 상황판 v15 (2026-11-29, 작업 진행 선경은 많이 쓴 2개 + 외 N종) · v14 (2026-11-29, 작업 진행에서 회사 이름 뺌: 작업번호·날짜·kW·진행) · v13 (2026-11-29, 작업자 칸 빼고 진행 표시 옆에 한 사람 이름: 데이터기록 완료(이름) · 코일등록 완료(이름)) · v12 (2026-11-29, 작업 진행 제목 옆 설명 대신 빠진 작업 요약) · v11 (2026-11-29, 막대 20개 넘으면 쪽 나눠 10초마다 넘김, 부족 줄 6개까지 + 외 N개) · v10 (2026-11-29, 인롤도 그래프 막대(보라), 아래 줄은 부족한 것만 ⚠, 없으면 안 보임) · v9 (2026-11-29, 종류별 색: AIW 파랑·인버터 초록·인롤 보라·기타 회색, 부족은 빨간 테두리 ⚠, 색 설명) · v8 (2026-11-29, 인롤은 재고 0이어도 종류마다 보임, 시험 인롤 🧪) · v7 (2026-11-29, 시험(TEST) 데이터는 🧪 줄무늬로 구분, 발주서·발주 필요 수에서 뺌) · v6 (2026-11-28, ⚙ 관리에 부족 알림 메일(관리자·운영자, 대문과 같은 값) · 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<!-- 6단계 사무실 상황판 v16 (2026-11-29, ⚙ 관리에 글씨 크기 작게·보통·크게, 이 PC에만 기억) · v15 (2026-11-29, 작업 진행 선경은 많이 쓴 2개 + 외 N종) · v14 (2026-11-29, 작업 진행에서 회사 이름 뺌: 작업번호·날짜·kW·진행) · v13 (2026-11-29, 작업자 칸 빼고 진행 표시 옆에 한 사람 이름: 데이터기록 완료(이름) · 코일등록 완료(이름)) · v12 (2026-11-29, 작업 진행 제목 옆 설명 대신 빠진 작업 요약) · v11 (2026-11-29, 막대 20개 넘으면 쪽 나눠 10초마다 넘김, 부족 줄 6개까지 + 외 N개) · v10 (2026-11-29, 인롤도 그래프 막대(보라), 아래 줄은 부족한 것만 ⚠, 없으면 안 보임) · v9 (2026-11-29, 종류별 색: AIW 파랑·인버터 초록·인롤 보라·기타 회색, 부족은 빨간 테두리 ⚠, 색 설명) · v8 (2026-11-29, 인롤은 재고 0이어도 종류마다 보임, 시험 인롤 🧪) · v7 (2026-11-29, 시험(TEST) 데이터는 🧪 줄무늬로 구분, 발주서·발주 필요 수에서 뺌) · v6 (2026-11-28, ⚙ 관리에 부족 알림 메일(관리자·운영자, 대문과 같은 값) · 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
 <link rel="icon" href="../icon-192.png">
 <meta name="theme-color" content="#1f6fb2">
 <style>
   :root { --bg:#eef1f5; --card:#fff; --ink:#1d2430; --sub:#5b6677; --line:#d5dae1; --blue:#1f6fb2; --blue2:#6fa8dc; --org:#d9730d; --grn:#2e7d32; --red:#c62828; --aiw:#1f6fb2; --inv:#2e9d5a; --inr:#7b4fb3; --etc:#8a94a3; }
   * { box-sizing:border-box; }
   /* 화면 크기에 맞춰 모든 글씨·칸이 같이 커짐 (1920×1080 기준 1rem ≈ 19px) */
-  html { font-size:min(1vw, 1.78vh); }
+  html { font-size:calc(min(1vw, 1.78vh) * var(--fs, 1)); }
   body { margin:0; background:var(--bg); color:var(--ink); font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif; }
   button { font:inherit; cursor:pointer; border:0; border-radius:.6rem; }
   .hide { display:none !important; }
@@ -98,8 +98,8 @@
   .st.no { color:var(--org); }
   #recent tr.done td { background:#eef8ef; }
   #recent td.pg { max-width:none; }
-  #recent td.sp { max-width:none; white-space:nowrap; }
-  #recent th { white-space:nowrap; }
+  #recent td.sp { max-width:0; width:100%; }
+  table:has(#recent) th { white-space:nowrap; }
   .soon { font-size:1.2rem; margin-top:.6rem; overflow:hidden; }
   .soon div { padding:.15rem 0; border-bottom:1px solid #edf0f3; display:flex; justify-content:space-between; }
   .soon .w { font-weight:800; }
@@ -366,10 +366,17 @@ function opt(name, list, cur) { return '<div class="opts" data-opt="' + name + '
 function optPick(b) { [].forEach.call(b.parentNode.children, function (x) { x.classList.toggle('on', x === b); }); }
 function optVal(name) { var b = document.querySelector('[data-opt="' + name + '"] .on'); return b ? b.getAttribute('data-v') : ''; }
 function clearNotice() { $('aNotice').value = ''; $('aUntil').value = ''; }
+// v16: 글씨 크기 (이 PC에만 기억, 상황판 전체에 한 번에)
+var FS = { S: 0.9, M: 1, L: 1.12 };
+function fsGet() { try { return localStorage.getItem('board_fs') || 'M'; } catch (e) { return 'M'; } }
+function fsApply(k) { document.documentElement.style.setProperty('--fs', FS[k] || 1); }
+function setFs(b) { var k = b.getAttribute('data-v'); optPick(b); fsApply(k); try { localStorage.setItem('board_fs', k); } catch (e) {} }
+fsApply(fsGet());
 function openAdmin() {
   if (!(D.me.admin || D.me.owner)) return;
   var c = C(), sh = c.show || {}, T = D.types || [];
   var h = '<h3>⚙ 상황판 관리 <small style="font-size:1rem;color:var(--sub);font-weight:400">코일 관리자·운영자만</small></h3>';
+  h += '<section><span class="fl">🔠 글씨 크기 <small style="font-weight:400;color:var(--sub)">상황판 전체 · 누르면 바로 바뀜 · 이 컴퓨터에만 기억 (저장 안 눌러도 됨)</small></span><div class="opts">' + [['S', '작게'], ['M', '보통'], ['L', '크게']].map(function (o) { return '<button type="button" data-v="' + o[0] + '"' + (o[0] === fsGet() ? ' class="on"' : '') + ' onclick="setFs(this)">' + o[1] + '</button>'; }).join('') + '</div></section>';
   h += '<section><span class="fl">📢 맨 위 알림 글 <small style="font-weight:400;color:var(--sub)">상황판 맨 위에 크게 뜸</small></span><input type="text" id="aNotice" maxlength="80" style="width:100%" placeholder="예) 12월 3일 오후 재고조사" value="' + esc(c.notice || '') + '">' +
     '<div style="margin-top:.4rem">이 날까지 보이기 (비우면 계속) <input type="date" id="aUntil" value="' + esc(c.noticeUntil || '') + '"> <button type="button" style="background:#eef1f5;padding:.3rem .8rem" onclick="clearNotice()">알림 글 지우기</button></div></section>';
   h += '<section><span class="fl">👁 상황판에 보일 것 <small style="font-weight:400;color:var(--sub)">파란색 = 보임, 눌러서 켜고 끄기</small></span><div class="opts" id="aShow">' + [['stock', '규격별 재고'], ['monthly', '월별 사용량'], ['recent', '작업 진행'], ['stk', '재고조사'], ['soon', '언제 다 쓸지']].map(function (o) { return '<button type="button" data-v="' + o[0] + '"' + (sh[o[0]] !== false ? ' class="on"' : '') + ' onclick="this.classList.toggle(\'on\')">' + o[1] + '</button>'; }).join('') + '</div></section>';
