@@ -1016,12 +1016,11 @@ function openRecent(k, id) {
 // 메뉴를 늘리려면 아래 목록에 { title, render } 를 하나 추가하면 됩니다. (서버 쪽은 Code.gs 의 ADMIN_ACTIONS)
 // owner: true = 운영자에게만 보임. 관리자에게는 나머지(기록 현황)만 보임
 var ADMIN_SECTIONS = [
-  { title: '👥 사람 등록·관리', open: true, owner: true, render: admUsers },
-  { title: '📊 기록 현황', render: admStats },
-  { title: '🔒 수정 권한', owner: true, render: admPerm },
-  { title: '📝 수정기록 (최근 80건)', owner: true, render: admLog },
-  { title: '💾 백업 (매일 밤 자동)', owner: true, render: admBackup },
-  { title: '🔗 바로가기 (엑셀·사진 폴더·숨길 칸)', owner: true, render: admLinks }
+  // v33: 사람·권한·수정 권한·백업은 대문 ⚙ 설정방(운영자 메뉴)으로 옮김. 여기는 작업기록 자료만
+  { title: '📊 기록 현황', open: true, render: admStats },
+  { title: '📝 수정기록 (최근 80건)', render: admLog },
+  { title: '📊 엑셀 · 🖼️ 사진 폴더', render: admLinks },
+  { title: '🧩 숨길 칸 · 버튼 목록 (운영자 메뉴)', owner: true, render: admListsBox }
 ];
 function roleName(u) { return u.owner ? '운영자' : u.admin ? '관리자' : '팀원'; }
 function admPerm(el) {
@@ -1069,7 +1068,7 @@ function admErr(el) { return function (e) { el.innerHTML = '<div class="err">' +
 function buildAdmin() {
   var box = document.getElementById('adminBox'); box.innerHTML = '';
   var list = ADMIN_SECTIONS.filter(function (s) { return !s.owner || (ME && ME.owner); });
-  if (!(ME && ME.owner)) box.innerHTML = '<div class="note" style="margin-bottom:8px">관리자는 기록 현황을 보고, 남이 쓴 기록도 고칠 수 있습니다. 다른 관리 기능은 운영자만 씁니다.</div>';
+  box.innerHTML = '<div class="note" style="margin-bottom:8px">여기는 작업기록 자료(기록 현황·수정기록·엑셀·사진)만 관리합니다. 사람 등록·PIN·권한, 남의 기록 수정 권한, 백업은 <a href="../settings/">대문 ⚙ 설정방 (운영자 메뉴)</a>에서 합니다.</div>';
   list.forEach(function (s) {
     var d = document.createElement('details'); d.className = 'adm';
     d.innerHTML = '<summary>' + esc(s.title) + '</summary><div class="in"></div>';
@@ -1178,19 +1177,17 @@ function admRefresh() {
 function admLinks(el) {
   adm('links').then(function (l) {
     el.innerHTML = '<button class="btn sub" id="xlBtn" onclick="wlExcel()">📊 기록 엑셀로 내려받기</button>' +
-      (l.photos ? '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(l.photos) + '">🖼️ 사진 폴더 열기 (구글 드라이브)</a>' : '') +
-      '<h3 style="margin:16px 0 4px;font-size:16px">📱 앱 주소 (팀원에게 보낼 주소)</h3>' +
-      '<textarea readonly id="siteUrl" rows="2" onclick="this.select()">' + esc(l.site) + '</textarea>' +
-      '<button class="btn sub" style="margin-top:6px" onclick="copyMsg(\'siteUrl\')">📋 주소 복사 (카톡에 붙여넣기)</button>' +
-      '<h3 style="margin:16px 0 4px;font-size:16px">🧩 숨길 칸 · 버튼 목록</h3>' +
-      '<div class="note">예전 시트 \'설정\' 탭에서 고치던 것입니다. 숨길 칸은 한 줄에 하나 (한쪽만: 모터:리드수, 코일:제조사). 버튼 목록은 한 줄에 <b>칸 제목 = 값, 값</b>.</div>' +
-      '<label>숨길 칸</label><textarea id="lsHidden" rows="4"></textarea>' +
-      '<label>버튼 목록</label><textarea id="lsLists" rows="8"></textarea>' +
-      '<button class="btn sub" id="lsSave" style="margin-top:6px" onclick="admLists()">💾 저장하고 바로 반영</button>';
-    adm('getLists').then(function (r) {
-      document.getElementById('lsHidden').value = (r.hidden || []).join('\n');
-      document.getElementById('lsLists').value = Object.keys(r.lists || {}).map(function (k) { return k + ' = ' + r.lists[k].join(', '); }).join('\n');
-    });
+      (l.photos ? '<a class="linkbtn" target="_blank" rel="noopener" href="' + esc(l.photos) + '">🖼️ 사진 폴더 열기 (구글 드라이브)</a>' : '');
+  }).catch(admErr(el));
+}
+function admListsBox(el) {
+  el.innerHTML = '<div class="note">입력 화면에서 숨길 칸과 버튼으로 나오는 값입니다. 숨길 칸은 한 줄에 하나 (한쪽만: 모터:리드수, 코일:제조사). 버튼 목록은 한 줄에 <b>칸 제목 = 값, 값</b>.</div>' +
+    '<label>숨길 칸</label><textarea id="lsHidden" rows="4"></textarea>' +
+    '<label>버튼 목록</label><textarea id="lsLists" rows="8"></textarea>' +
+    '<button class="btn sub" id="lsSave" style="margin-top:6px" onclick="admLists()">💾 저장하고 바로 반영</button>';
+  adm('getLists').then(function (r) {
+    document.getElementById('lsHidden').value = (r.hidden || []).join('\n');
+    document.getElementById('lsLists').value = Object.keys(r.lists || {}).map(function (k) { return k + ' = ' + r.lists[k].join(', '); }).join('\n');
   }).catch(admErr(el));
 }
 function admLists() {

@@ -93,6 +93,10 @@
     </div>
 
     <div id="adminOnly">
+    <div class="card" style="background:#f1ecfb;border:2px solid #5b3fa8">
+      <h2 style="color:#5b3fa8;margin:0 0 4px">🛡️ 운영자 메뉴</h2>
+      <p class="help" style="margin:0">세 방(대문·작업기록·코일 관리)에 공통인 것은 모두 여기서 합니다. 운영자만 보입니다. 각 방 관리자는 그 방 자료(기록·입출고·재고조사)만 관리합니다.</p>
+    </div>
     <div class="card">
       <h2>➕ 사람 등록</h2>
       <div class="row"><input id="newName" placeholder="이름"><button id="addBtn">등록</button></div>
@@ -100,8 +104,8 @@
     </div>
 
     <div class="card">
-      <h2>👥 사람 명단</h2>
-      <p class="help" style="margin-top:-6px">버튼을 누르면 켜고 끕니다. <b style="color:var(--blue)">작업기록</b>·<b style="color:var(--org)">코일</b> = 그 방 관리자, <b style="color:#5b3fa8">운영자</b> = 이 설정방에 들어오는 사람 (작업기록 관리 전부)</p>
+      <h2>👥 사람 명단 · 방별 권한 주기</h2>
+      <p class="help" style="margin-top:-6px">버튼을 누르면 켜고 끕니다.<br><b style="color:var(--blue)">작업기록 관리자</b> = 작업기록 방의 기록 현황·수정기록·엑셀, 남의 기록 고치기<br><b style="color:var(--org)">코일 관리자</b> = 코일 등록·입출고·무게 맞추기·재고조사·기록 고치기·수정 요청 처리<br><b style="color:#5b3fa8">운영자</b> = 모든 방 + 이 운영자 메뉴</p>
       <div id="list"></div>
     </div>
 
@@ -110,12 +114,31 @@
       <p class="help" style="margin-top:-6px">코일 재고가 알림 기준보다 적어지면 이 주소로 메일이 갑니다. 발주 담당자 주소를 넣으세요. 여러 명이면 쉼표(,)로 이어서.</p>
       <div class="row"><input id="coilMail" inputmode="email" placeholder="예: order@회사.com"><button id="mailBtn">저장</button></div>
     </div>
+
+    <div class="card">
+      <h2>✏️ 작업기록: 남이 쓴 기록 고치기</h2>
+      <p class="help" style="margin-top:-6px">작업기록 방에서 잘못 적힌 기록을 누가 고칠 수 있는지 정합니다. 고친 내용은 어느 쪽이든 수정기록에 모두 남습니다.</p>
+      <div class="chips" style="grid-template-columns:1fr 1fr"><button class="chip sup" id="eo0">👥 누구나</button><button class="chip sup" id="eo1">🔒 관리자만</button></div>
+    </div>
+
+    <div class="card">
+      <h2>💾 백업 (매일 밤 자동)</h2>
+      <p class="help" style="margin-top:-6px">매일 밤 작업기록·코일·사람 자료를 구글 드라이브 '백업' 폴더에 날짜별로 저장합니다 (사진 제외). 최근 30일 + 매달 1일은 계속 보관.</p>
+      <div class="help" id="bkInfo">-</div>
+      <button class="ghost" id="bkBtn" style="width:100%;margin-top:6px">💾 지금 백업하기</button>
+    </div>
+
+    <div class="card">
+      <h2>🔒 모든 휴대폰 로그아웃</h2>
+      <p class="help" style="margin-top:-6px">휴대폰을 잃어버렸을 때 씁니다. 이 휴대폰만 빼고 세 방 모두 로그아웃됩니다. 다들 이름과 PIN으로 다시 들어오면 됩니다.</p>
+      <button id="loBtn" style="width:100%;background:#fde8e8;color:var(--red);font-weight:700">🔒 모두 로그아웃</button>
+    </div>
     </div>
 
     <div class="card">
       <h2>🚪 방으로 가기</h2>
       <div class="links" id="links"></div>
-      <p class="help">방 안의 나머지 설정(작업기록 통계·수정 권한, 코일 입고·실사 등)은 그 방 관리자가 그 방 안에서 합니다.</p>
+      <p class="help">방 안의 자료 관리(작업기록 현황·수정기록, 코일 등록·입출고·재고조사 등)는 그 방 관리자가 그 방 안에서 합니다.</p>
     </div>
     <p class="help" style="text-align:center">바꾼 내용은 작업기록 시트 '설정방기록' 탭에 남습니다. <span id="ver"></span></p>
   </div>
@@ -155,7 +178,7 @@ function render(){
       '<div class="chips">'+
         '<button class="chip wl'+(u.wl?' on':'')+'" data-i="'+i+'" data-a="setWorklogAdmin">작업기록<br>관리자</button>'+
         '<button class="chip coil'+(u.coil?' on':'')+'" data-i="'+i+'" data-a="setCoilAdmin">코일<br>관리자</button>'+
-        '<button class="chip sup'+(u.sup?' on':'')+'" data-i="'+i+'" data-a="setSuper">전체<br>관리자</button>'+
+        '<button class="chip sup'+(u.sup?' on':'')+'" data-i="'+i+'" data-a="setSuper">운영자</button>'+
       '</div><div class="acts">'+
         (u.off?'<button data-i="'+i+'" data-a="on">다시 사용</button>'
               :'<button data-i="'+i+'" data-a="resetPin">PIN 초기화</button><button class="danger" data-i="'+i+'" data-a="off">사용 안 함</button>')+
@@ -169,7 +192,7 @@ $('list').addEventListener('click',function(e){
   if(a==='off'){if(!confirm(u.name+' 님을 사용 안 함으로 바꿀까요?\n(기록은 그대로 남고, 두 앱 로그인만 막힙니다)'))return;return doAct('setOff',{name:u.name,off:true})}
   if(a==='on'){if(!confirm(u.name+' 님을 다시 사용하게 할까요? (임시 PIN)'))return;return doAct('setOff',{name:u.name,off:false})}
   var key={setWorklogAdmin:'wl',setCoilAdmin:'coil',setSuper:'sup'}[a];
-  var on=!u[key],nm={wl:'작업기록 관리자',coil:'코일 관리자',sup:'전체 관리자'}[key];
+  var on=!u[key],nm={wl:'작업기록 관리자',coil:'코일 관리자',sup:'운영자'}[key];
   if(!confirm(u.name+' 님을 '+nm+(on?'로 정할까요?':'에서 뺄까요?')))return;
   doAct(a,{name:u.name,on:on});
 });
@@ -180,6 +203,7 @@ function load(){call('getAll',[token],function(r){
   var L=function(u,t){return '<a href="'+u+'">'+t+'</a>'};
   $('links').innerHTML=L(r.sites.home,'🏠 대문')+L(r.sites.worklog,'📒 작업기록')+L(r.sites.coil,'🧵 코일 관리');
   $('coilMail').value=r.coilMail||'';
+  eoShow(r.editOwnOnly);bkShow(r.backup);
   render();
   if(mustChange){$('pinTitle').textContent='임시 PIN이라 먼저 내 PIN을 정해 주세요';$('pCancel').style.display='none';$('pOld').value=pinTmp;show('pin')}else show('main');
 })}
@@ -216,6 +240,12 @@ $('mailBtn').onclick=function(){
   if(!confirm(v?'코일 부족 알림 메일을 '+v+' (으)로 보낼까요?':'메일 주소를 비우면 부족 알림 메일이 안 갑니다. 비울까요?'))return;
   call('act',[token,'setCoilMail',{mail:v}],function(r){$('coilMail').value=r.coilMail||'';users=r.users;render();toast(r.msg)});
 };
+function eoShow(on){$('eo0').className='chip sup'+(on?'':' on');$('eo1').className='chip sup'+(on?' on':'')}
+$('eo0').onclick=function(){if(confirm('누구나 남의 작업기록을 고칠 수 있게 할까요?'))call('act',[token,'setEditOwnOnly',{on:false}],function(r){users=r.users;render();eoShow(r.editOwnOnly);toast(r.msg)})};
+$('eo1').onclick=function(){if(confirm('남의 작업기록은 관리자만 고치게 할까요?'))call('act',[token,'setEditOwnOnly',{on:true}],function(r){users=r.users;render();eoShow(r.editOwnOnly);toast(r.msg)})};
+function bkShow(b){if(!b)return;$('bkInfo').innerHTML='마지막 백업: <b>'+esc(b.last||'아직 없음')+'</b>'+(b.url?' · <a href="'+esc(b.url)+'" target="_blank" rel="noopener">📁 백업 폴더 열기 ('+(b.count||0)+'개)</a>':'')}
+$('bkBtn').onclick=function(){if(!confirm('지금 백업할까요? (1분쯤 걸릴 수 있어요)'))return;call('act',[token,'backupNow',{}],function(r){users=r.users;render();bkShow(r.backup);toast(r.msg)})};
+$('loBtn').onclick=function(){if(!confirm('이 휴대폰만 빼고 모든 휴대폰을 로그아웃할까요?\n다들 이름과 PIN으로 다시 들어와야 합니다.'))return;call('act',[token,'logoutAll',{}],function(r){users=r.users;render();toast(r.msg)})};
 $('lName').value=GW.name();
 token=GW.stToken();
 if(token)load();else show('login');

@@ -172,7 +172,8 @@ const RANGES = {
   motor: { kw: [0.1, 2000], rpm: [100, 3600], slots: [6, 200], strands: [1, 40], turns: [1, 300], leads: [3, 12], coilKg: [0.05, 1000], wire: [0.1, 3.0] },
   coil: { turns: [10, 30000], ohm: [0.01, 10000], wire: [0.05, 3.0], coilG: [1, 100000], ringID: [1, 1000], ringOD: [1, 1500], ringH: [1, 1000], mpID: [1, 1000], mpOD: [1, 1500], mpH: [1, 1000] },
 };
-const ADMIN_LITE = ['stats'];
+// v9: 작업기록 관리자는 그 방 자료(현황·수정기록·엑셀·사진)까지. 사람·권한·백업은 설정방(운영자)
+const ADMIN_LITE = ['stats', 'changeLog', 'links', 'exportAll', 'recent'];
 const GUIDE_URL: any = { mp: 'https://s2badaro-tech.github.io/gwonseon-home/worklog/guide_mp.jpg' };
 function kindDef(k: string) { const d = KINDS[k]; if (!d) err('알 수 없는 종류: ' + k); return d; }
 function cellTxt(v: any) { const s = String(v ?? ''); return /^[=+\-@]/.test(s) ? "'" + s : s; }
@@ -443,7 +444,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v55';
+const CO_VERSION = 'v56';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -1105,9 +1106,12 @@ const CO_ADMIN: any = {
     return r.map((x) => [x.at, x.who, x.no, x.field, x.before, x.after]);
   },
 };
+// v9: 사람·권한·백업·로그아웃·알림 메일은 설정방(운영자 메뉴)으로 옮김
+const CO_OWNER_ONLY = ['setCoilAdmins', 'logoutAll', 'backupNow', 'setMail'];
 async function coAdmin(token: any, action: string, args: any) {
   const m = await me(token, 'co');
   if (!m.admin) err('관리자만 쓸 수 있는 기능입니다.');
+  if (CO_OWNER_ONLY.indexOf(action) >= 0 && !m.owner) err('이 기능은 운영자만, 대문 ⚙ 설정방에서 합니다.');
   const fn = CO_ADMIN[action]; if (!fn) err('앱이 옛날 화면입니다. 새로고침한 뒤 다시 해보세요. (' + action + ')');
   return fn(m, args || {});
 }
@@ -1120,9 +1124,29 @@ function stView(P: Person[]) {
 }
 async function stGetAll(token: any) {
   const m = await me(token, 'st');
-  return { me: { name: m.name, mustChange: m.mustChange, token: m.token, sup: m.owner }, version: 'sb1', sites: SITES, tempPin: TEMP_PIN, users: m.owner ? stView(m.P) : [], coilMail: m.owner ? String((await coSet()).mail || '') : '' };
+  return { me: { name: m.name, mustChange: m.mustChange, token: m.token, sup: m.owner }, version: 'sb1', sites: SITES, tempPin: TEMP_PIN, users: m.owner ? stView(m.P) : [], coilMail: m.owner ? String((await coSet()).mail || '') : '',
+    editOwnOnly: (await getSetting('wl.editOwnOnly', false)) === true, backup: m.owner ? await backupInfo() : null };
 }
 const ST_ACT: any = {
+  // v9: 각 방에서 옮겨 온 공통 기능 (운영자 메뉴)
+  setEditOwnOnly: async (m: Me, a: any) => {
+    const old = (await getSetting('wl.editOwnOnly', false)) === true, on = !!a.on;
+    await putSetting('wl.editOwnOnly', on);
+    await stLog(m.name, '작업기록 남의 기록 수정', '(작업기록)', old ? '관리자만' : '누구나', on ? '관리자만' : '누구나');
+    return { editOwnOnly: on, msg: on ? '이제 남의 작업기록은 관리자만 고칩니다.' : '이제 누구나 작업기록을 고칠 수 있습니다.' };
+  },
+  backupNow: async (m: Me) => { const r = await backupNow(); await stLog(m.name, '지금 백업', '(전체)', '', r && r.info || ''); return { backup: await backupInfo(), msg: '💾 백업했습니다.' }; },
+  logoutAll: async (m: Me) => {
+    const th = await sha256hex(m.token);
+    const cur: any = await q(db.from('sessions').select('*').eq('token_hash', th).maybeSingle());
+    const all: any[] = await q(db.from('sessions').select('token_hash,person_id,created_ms'));
+    // 이 휴대폰(지금 로그인할 때 같이 받은 세 방 출입증)만 남김
+    const keep = (x: any) => cur && x.person_id === cur.person_id && Math.abs(Number(x.created_ms) - Number(cur.created_ms)) < 120000;
+    const del = all.filter((x) => !keep(x)).map((x) => x.token_hash);
+    for (let i = 0; i < del.length; i += 200) await q(db.from('sessions').delete().in('token_hash', del.slice(i, i + 200)));
+    await stLog(m.name, '모든 휴대폰 로그아웃', '(전체)', del.length + '개', '0개');
+    return { msg: '🔒 이 휴대폰만 빼고 ' + del.length + '개 출입증을 로그아웃했습니다.' };
+  },
   setCoilMail: async (m: Me, a: any) => { const r = await coilMailSet(m.name, a.mail); return { coilMail: r.mail, msg: r.mail ? '코일 부족 알림 메일: ' + r.mail : '코일 부족 알림 메일을 껐습니다.' }; },
   addUser: async (m: Me, a: any) => {
     const name = String(a.name || '').trim().replace(/^[=+\-@']+/, '');
