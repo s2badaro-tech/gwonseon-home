@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>사무실 상황판</title>
-<!-- 6단계 사무실 상황판 v13 (2026-11-29, 작업자 칸 빼고 진행 표시 옆에 한 사람 이름: 데이터기록 완료(이름) · 코일등록 완료(이름)) · v12 (2026-11-29, 작업 진행 제목 옆 설명 대신 빠진 작업 요약) · v11 (2026-11-29, 막대 20개 넘으면 쪽 나눠 10초마다 넘김, 부족 줄 6개까지 + 외 N개) · v10 (2026-11-29, 인롤도 그래프 막대(보라), 아래 줄은 부족한 것만 ⚠, 없으면 안 보임) · v9 (2026-11-29, 종류별 색: AIW 파랑·인버터 초록·인롤 보라·기타 회색, 부족은 빨간 테두리 ⚠, 색 설명) · v8 (2026-11-29, 인롤은 재고 0이어도 종류마다 보임, 시험 인롤 🧪) · v7 (2026-11-29, 시험(TEST) 데이터는 🧪 줄무늬로 구분, 발주서·발주 필요 수에서 뺌) · v6 (2026-11-28, ⚙ 관리에 부족 알림 메일(관리자·운영자, 대문과 같은 값) · 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<!-- 6단계 사무실 상황판 v14 (2026-11-29, 작업 진행에서 회사 이름 뺌: 작업번호·날짜·kW·진행) · v13 (2026-11-29, 작업자 칸 빼고 진행 표시 옆에 한 사람 이름: 데이터기록 완료(이름) · 코일등록 완료(이름)) · v12 (2026-11-29, 작업 진행 제목 옆 설명 대신 빠진 작업 요약) · v11 (2026-11-29, 막대 20개 넘으면 쪽 나눠 10초마다 넘김, 부족 줄 6개까지 + 외 N개) · v10 (2026-11-29, 인롤도 그래프 막대(보라), 아래 줄은 부족한 것만 ⚠, 없으면 안 보임) · v9 (2026-11-29, 종류별 색: AIW 파랑·인버터 초록·인롤 보라·기타 회색, 부족은 빨간 테두리 ⚠, 색 설명) · v8 (2026-11-29, 인롤은 재고 0이어도 종류마다 보임, 시험 인롤 🧪) · v7 (2026-11-29, 시험(TEST) 데이터는 🧪 줄무늬로 구분, 발주서·발주 필요 수에서 뺌) · v6 (2026-11-28, ⚙ 관리에 부족 알림 메일(관리자·운영자, 대문과 같은 값) · 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
 <link rel="icon" href="../icon-192.png">
 <meta name="theme-color" content="#1f6fb2">
 <style>
@@ -312,7 +312,7 @@ function render() {
   var nRec = R.filter(function (j) { return !j.rec; }).length, nCoil = R.filter(function (j) { return !j.coil; }).length;
   $('rsum').innerHTML = !R.length ? '최근 작업 없음' : (nRec || nCoil) ? '최근 ' + R.length + '건 중 ' + [nRec ? '<b style="color:var(--org)">⬜ 데이터기록 안 한 작업 ' + nRec + '건</b>' : '', nCoil ? '<b style="color:var(--org)">⬜ 코일등록 안 한 작업 ' + nCoil + '건</b>' : ''].filter(String).join(' · ') : '<b style="color:var(--grn)">✅ 최근 ' + R.length + '건 모두 데이터기록·코일등록 완료</b>';
   $('recent').innerHTML = R.length ? R.map(function (j) {
-    return '<tr' + (j.rec && j.coil ? ' class="done"' : '') + '><td><b>' + esc(j.no) + '</b>' + (isTestNo(j.no) ? '<span class="tbadge">🧪</span>' : '') + ' <span style="color:var(--sub)">' + esc(j.desc) + '</span></td><td>' + esc(String(j.at).slice(5, 10)) + '</td><td>' + esc(j.kw) + '</td>' +
+    return '<tr' + (j.rec && j.coil ? ' class="done"' : '') + '><td><b>' + esc(j.no) + '</b>' + (isTestNo(j.no) ? '<span class="tbadge">🧪</span>' : '') + '</td><td>' + esc(String(j.at).slice(5, 10)) + '</td><td>' + esc(j.kw) + '</td>' +
       '<td class="pg">' + (j.rec ? '<span class="st ok">✅ 데이터기록 완료' + who(j.recBy) + '</span>' : '<span class="st no">⬜ 데이터기록 전</span>') + ' · ' + (j.coil ? '<span class="st ok">✅ 코일등록 완료' + who(j.coilBy) + '</span>' : '<span class="st no">⬜ 코일등록 전</span>') + '</td>' +
       '<td class="n">' + (j.coil ? nf(j.used) + 'kg' : '') + '</td><td class="sp" style="color:var(--sub)">' + esc(j.specs) + '</td></tr>';
   }).join('') : '<tr><td colspan="6" class="empty">아직 작업 기록이 없습니다</td></tr>';
