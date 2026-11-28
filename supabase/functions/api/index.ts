@@ -1384,7 +1384,7 @@ function testMotor(no: string) {
   const poles = wpick([['2', 2], ['4', 6], ['6', 2], ['8', 1]]), P = Number(poles);
   const slots = String(P * 3 * pick(P <= 4 ? [2, 3, 4] : [2, 3]));
   const full = Math.round(Number(slots) / P), two = Math.random() < 0.8;
-  const wk = kw >= 55 && Math.random() < 0.3 ? '인롤' : wpick([['AIW', 8], ['인버터', 2]]); // 큰 모터 일부는 인롤
+  const wk = kw >= 55 && Math.random() < 0.1 ? '인롤' : wpick([['AIW', 8], ['인버터', 2]]); // 큰 모터 일부는 인롤
   const wire = wk === '인롤' ? pick(TEST_INROLL).spec : pick(['0.7', '0.75', '0.8', '0.85', '0.9', '1.0', '1.1', '1.2', '1.3']);
   const strands = wk === '인롤' ? '' : String(Math.max(1, Math.round(rnd(1, 3) + kw / 25)));
   const conn = wpick([['1Y', 2], ['2Y', 2], ['1Δ', 3], ['2Δ', 2], ['1Y-Δ', 2], ['2Y-Δ', 1]]);
