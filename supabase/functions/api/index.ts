@@ -704,12 +704,12 @@ async function saveMove(token: any, a: any) {
   return { id, no, before, after, delta, status, low, tare: c.tare, tareMsg };
 }
 async function checkLow(spec: string, kind: string, type: string) {
+  if (String(kind).toUpperCase() === TEST_KIND) return ''; // v64: 시험용 코일은 부족 확인·메일 없음 (읽는 양도 줄임)
   const all = await stockCalc(String(kind || '') || undefined), x = all.find((s) => specKey(s.spec, s.kind, s.type) === specKey(spec, kind, type));
   if (!x || !x.low) return '';
   const dae = (kg: number) => x.unit ? Math.floor(kg / x.unit + 1e-9) + '대분 · ' : '';
   const msg = spec + 'mm ' + (kind || '') + (x.type && x.type !== TYPE_DEF ? ' ' + x.type : '') + ' 재고 ' + dae(x.total) + x.total + 'kg — 알림 기준 ' + dae(x.safety) + x.safety + 'kg 아래입니다.' + (x.order ? ' (발주완료 ' + x.orderAt + ')' : '');
   if (x.order) return msg;
-  if (String(kind).toUpperCase() === TEST_KIND) return msg; // v64: 시험용 코일은 부족 알림 메일을 절대 안 보냄
   const S = await coSet(), k = specKey(spec, kind, type), sent = await getSetting('coil.mailed', {});
   if (S.mail && !(sent[k] && Date.now() - sent[k] < 6 * 3600000)) {
     sent[k] = Date.now(); await putSetting('coil.mailed', sent);
@@ -1419,7 +1419,7 @@ async function testNextNo() {
   return 'TEST-' + (max + 1);
 }
 async function testStock(spec: string) {
-  const r: any[] = await q(db.from('coils').select('no,rem,status').eq('kind', TEST_KIND).eq('spec', spec).neq('status', ST_VOID).order('rem'));
+  const r: any[] = await q(db.from('coils').select('no,rem,status').eq('kind', TEST_KIND).eq('spec', spec).neq('status', ST_VOID).gt('rem', 0.2).order('rem').limit(50));
   return r.filter((c) => Number(c.rem) > 0.2);
 }
 async function testFeed(key: any, who: any, nRec: any, nUse: any, reads: any) {
