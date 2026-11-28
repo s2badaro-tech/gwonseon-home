@@ -129,6 +129,13 @@
     </div>
 
     <div class="card">
+      <h2>📤 주소 보내기 (카카오톡)</h2>
+      <p class="help" style="margin-top:-6px">휴대폰에서 누르면 공유하기 창이 뜹니다. 카카오톡을 고르고 받을 사람·방을 고르면 주소와 안내 글이 같이 갑니다. PC에서는 주소와 안내 글이 복사되니 카톡 창에 붙여 넣으세요. PIN은 들어가지 않으니 따로 알려 주세요.</p>
+      <button class="big" style="margin-top:4px" onclick="shareLink('home')">📤 홈 화면 주소 보내기</button>
+      <button class="big" style="margin-top:10px;background:#5b3fa8" onclick="shareLink('board')">📤 상황판 주소 보내기</button>
+    </div>
+
+    <div class="card">
       <h2>🔒 모든 휴대폰 로그아웃</h2>
       <p class="help" style="margin-top:-6px">휴대폰을 잃어버렸을 때 씁니다. 이 휴대폰만 빼고 세 방 모두 로그아웃됩니다. 다들 이름과 PIN으로 다시 들어오면 됩니다.</p>
       <button id="loBtn" style="width:100%;background:#fde8e8;color:var(--red);font-weight:700">🔒 모두 로그아웃</button>
@@ -150,6 +157,15 @@
 var $=function(id){return document.getElementById(id)};
 var token='', mustChange=false, users=[], isSup=false, pinTmp='';
 function ls(k,v){try{if(v===undefined)return localStorage.getItem(k);if(v===null)localStorage.removeItem(k);else localStorage.setItem(k,v)}catch(e){return null}}
+// 주소 보내기: 휴대폰은 공유하기 창(카카오톡 고르기), PC는 복사
+var SHARE={home:{title:'권선 작업실',url:'https://s2badaro-tech.github.io/gwonseon-home/',
+  text:'[권선 작업실] 현장 앱 주소입니다.\n\n1) 아래 주소를 크롬으로 여세요.\n2) 이름과 PIN으로 들어가세요. (PIN은 따로 알려 드려요)\n3) 크롬 오른쪽 위 ⋮ 메뉴 → \'홈 화면에 추가\'를 누르면 앱처럼 바로 열립니다.\n\n'},
+  board:{title:'사무실 상황판',url:'https://s2badaro-tech.github.io/gwonseon-home/board/',
+  text:'[사무실 상황판] PC·큰 모니터용 주소입니다.\n\n1) PC 크롬으로 아래 주소를 여세요.\n2) 이름과 PIN으로 들어가면 재고·사용량이 1분마다 저절로 새로 보입니다.\n3) F11을 누르면 화면 가득 볼 수 있어요.\n\n'}};
+function shareLink(k){var o=SHARE[k],all=o.text+o.url;
+  if(navigator.share&&/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent)){navigator.share({title:o.title,text:all}).catch(function(e){if(!e||e.name!=='AbortError')copyTxt(all)});return}
+  copyTxt(all)}
+function copyTxt(t){(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){toast('주소와 안내 글을 복사했어요. 카카오톡 창에 붙여 넣으세요.')},function(){prompt('아래 글을 길게 눌러 복사하세요',t)})}
 var tmT;function toast(m,err){var t=$('toast');t.textContent=m;t.className='toast on'+(err?' err':'');clearTimeout(tmT);tmT=setTimeout(function(){t.className='toast'},err?4000:2600)}
 // 깃허브판: 설정방 서버(doPost)와 자료만 주고받음. 운영자 확인은 서버에서 함
 function call(fn,args,ok){
