@@ -448,7 +448,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v62';
+const CO_VERSION = 'v63';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -847,7 +847,7 @@ async function board(token: any) {
   (await q(db.rpc('coil_monthly', { p_from: m7[6] + '-01' })) as any[]).forEach((o) => { if (past6.indexOf(o.month) < 0) return; const k = specTxt(o.spec) + '|' + o.kind; u6[k] = (u6[k] || 0) + Number(o.used); });
   mon.rows.forEach((r: any) => { r.avg6 = r2((u6[r.spec + '|' + r.kind] || 0) / 6); r.cover6 = r.avg6 > 0 ? Math.round(r.stock / r.avg6 * 10) / 10 : null; });
   const cfg = Object.assign({}, BOARD_DEF, await getSetting('board.cfg', {}));
-  return { at: nowStr(), month, me: { name: m.name, admin: m.admin, owner: m.owner }, stock, monthly: mon, recent, stk, cfg, types: m.admin ? await coTypes() : [] };
+  return { at: nowStr(), month, me: { name: m.name, admin: m.admin, owner: m.owner }, stock, monthly: mon, recent, stk, cfg, types: m.admin ? await coTypes() : [], mail: m.admin ? String((await coSet()).mail || '') : null };
 }
 // v61: 상황판 관리 (코일 관리자·운영자만). 알림 기준 무게는 코일 앱과 같은 coil_types.alert (adminCall setTypes로 바꿈)
 const BOARD_DEF: any = { notice: '', noticeUntil: '', show: { stock: true, monthly: true, recent: true, stk: true, soon: true }, orderTo: '', orderMode: 'month', orderRound: 5, basis: 3, redWeeks: 4 };
@@ -1169,7 +1169,8 @@ const CO_ADMIN: any = {
   },
 };
 // v9: 사람·권한·백업·로그아웃·알림 메일은 설정방(운영자 메뉴)으로 옮김
-const CO_OWNER_ONLY = ['setCoilAdmins', 'logoutAll', 'backupNow', 'setMail'];
+// v63: 부족 알림 메일은 코일(상황판) 관리자도 바꿀 수 있음 (경선 님 11-28)
+const CO_OWNER_ONLY = ['setCoilAdmins', 'logoutAll', 'backupNow'];
 async function coAdmin(token: any, action: string, args: any) {
   const m = await me(token, 'co');
   if (!m.admin) err('관리자만 쓸 수 있는 기능입니다.');

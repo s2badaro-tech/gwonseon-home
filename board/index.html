@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>사무실 상황판</title>
-<!-- 6단계 사무실 상황판 v5 (2026-11-28, 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<!-- 6단계 사무실 상황판 v6 (2026-11-28, ⚙ 관리에 부족 알림 메일(관리자·운영자, 대문과 같은 값) · 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
 <link rel="icon" href="../icon-192.png">
 <meta name="theme-color" content="#1f6fb2">
 <style>
@@ -326,6 +326,7 @@ function openAdmin() {
   h += '<section><span class="fl">🔔 부족 알림 무게 (kg) <small style="font-weight:400;color:var(--sub)">남은 무게가 이보다 적으면 빨간색 · 코일 앱 관리 탭과 같은 값 · 비우면 알림 없음</small></span><table>' + T.map(function (t, i) {
     return '<tr><td>' + esc(t.name === '일반 환선' ? '일반 환선 (AIW·인버터 모든 규격)' : t.name) + (t.unit ? ' <small style="color:var(--sub)">1대 ' + t.unit + 'kg</small>' : '') + '</td><td><input type="number" min="0" step="1" style="width:8rem" data-al="' + i + '" value="' + (t.alert == null ? '' : t.alert) + '" placeholder="알림 없음"> kg</td></tr>';
   }).join('') + '</table></section>';
+  if (D.mail != null) h += '<section><span class="fl">📧 부족 알림 메일 <small style="font-weight:400;color:var(--sub)">코일 재고가 알림 무게보다 적어지면 이 주소로 메일 · 대문 운영자 메뉴와 같은 값 · 여러 명은 쉼표(,)로 · 비우면 메일 안 보냄</small></span><input type="text" id="aMail" inputmode="email" style="width:100%" placeholder="예: order@회사.com" value="' + esc(D.mail) + '"></section>';
   h += '<section><span class="fl">🧾 발주서에 적을 주문량 ' + '<small style="font-weight:400;color:var(--sub)">알림 무게보다 모자란 만큼 채움</small></span>' + opt('mode', [['month', '모자란 만큼 + 한 달 쓸 양 더'], ['base', '모자란 만큼만']], c.orderMode || 'month') +
     '<span class="fl">🔢 주문량 끝자리 맞추기 <small style="font-weight:400;color:var(--sub)">모자란 양이 23kg이면 → 1kg: 23kg · 5kg: 25kg · 10kg: 30kg</small></span>' + opt('round', [[1, '1kg 단위'], [5, '5kg 단위'], [10, '10kg 단위']], c.orderRound || 5) + '</section>';
   h += '<section><span class="fl">⏳ 언제 다 쓸지 계산 <small style="font-weight:400;color:var(--sub)">몇 달 동안 쓴 양을 보고 계산할지</small></span>' + opt('basis', [[3, '최근 3달 쓴 양으로'], [6, '최근 6달 쓴 양으로']], c.basis || 3) +
@@ -337,7 +338,9 @@ function saveAdmin() {
   var cfg = { notice: $('aNotice').value.trim(), noticeUntil: $('aUntil').value, show: show, orderMode: optVal('mode'), orderRound: Number(optVal('round')), basis: Number(optVal('basis')), redWeeks: Number($('aRed').value) };
   var rows = [], T = D.types || [];
   [].forEach.call(document.querySelectorAll('[data-al]'), function (el) { var i = Number(el.getAttribute('data-al')), v = el.value.trim(), o = T[i].alert == null ? '' : String(T[i].alert); if (v !== o) rows.push({ old: T[i].name, name: T[i].name, alert: v }); });
+  var mailEl = $('aMail'), mail = mailEl ? mailEl.value.trim() : null;
   call('boardSet', [tok(), cfg]).then(function () { return rows.length ? call('adminCall', [tok(), 'setTypes', { rows: rows }]) : null; })
+    .then(function () { return mail != null && mail !== (D.mail || '') ? call('adminCall', [tok(), 'setMail', { mail: mail }]) : null; })
     .then(function () { closeOv(); msg('저장했어요'); load(); }, function (e) { msg('저장 못 했어요: ' + e.message, 5000); });
 }
 // 포스코 자재 등록용 표 (칸 순서는 포스코 등록 화면을 확인한 뒤 맞춤)
