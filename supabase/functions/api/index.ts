@@ -153,7 +153,7 @@ const KINDS: any = {
     ['wire', '코일선경(mm)', 'wire', ['0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.1', '1.2', '1.3', '1.4']],
     ['strands', '가닥수', 'step'], ['turns', '코일턴수', 'step'], ['series', '직렬수', 'step'], ['parallel', '병렬수', 'text'],
     ['pitch', '피치', 'pitch'], ['conn', '결선', 'pick', ['1Y', '2Y', '3Y', '4Y', '1Δ', '2Δ', '3Δ', '4Δ', '1Y-Δ', '2Y-Δ', '3Y-Δ', '4Y-Δ']],
-    ['leads', '리드수', 'num'], ['coilKg', '폐코일 무게(kg)', 'num'], ['memo', '메모', 'area'],
+    ['leads', '리드수', 'pick', ['3', '6', '9']], ['coilKg', '폐코일 무게(kg)', 'num'], ['memo', '메모', 'area'],
   ] },
   coil: { sheet: '마그네틱코일', title: '마그네틱 코일', fields: [
     ['ledgerNo', '작업번호', 'text'], ['maker', '제조사', 'text'], ['model', '모델명', 'text'], ['kw', '출력(kW)', 'num'],
@@ -448,7 +448,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v58';
+const CO_VERSION = 'v59';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {

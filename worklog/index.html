@@ -434,7 +434,7 @@ function buildForm() {
         '<button type="button" onclick="wireClear(\'' + key + '\')">✕ 지우기</button></div>';
     }
     else if (typ === 'pick') {
-      h += '<input id="i_' + key + '" autocomplete="off" placeholder="아래에서 고르세요 (직접 적어도 됨)" oninput="pickRefresh(\'' + key + '\');saveDraft()">' +
+      h += '<input id="i_' + key + '"' + (key === 'leads' ? ' inputmode="numeric"' : '') + ' autocomplete="off" placeholder="아래에서 고르세요 (직접 적어도 됨)" oninput="' + (key === 'leads' ? 'this.removeAttribute(\'data-auto\');' : '') + 'pickRefresh(\'' + key + '\');saveDraft()">' +
         '<div class="wbtns' + (opts.some(function (o) { return String(o).length > 4; }) ? ' w2' : '') + '" id="pb_' + key + '">' + opts.map(function (o) { return '<button type="button" data-v="' + esc(o) + '" onclick="pickSet(\'' + key + '\',this)">' + esc(o) + '</button>'; }).join('') + '</div>';
     }
     else if (typ === 'step') { // 빼기·더하기 (가닥수 0부터, 직렬수 1부터)
@@ -456,7 +456,8 @@ function buildForm() {
       var im = typ === 'num' ? (key === 'turns' || key === 'leads' ? ' inputmode="numeric"' : ' inputmode="decimal"') : '';
       var dl = opts.length ? ' list="d_' + key + '"' : '';
       if (typ === 'list' && opts.every(function (o) { return /^[0-9.\/]+$/.test(o); })) im = ' inputmode="decimal"';
-      h += '<input id="i_' + key + '"' + im + dl + ' enterkeyhint="next" autocomplete="off" oninput="' + (key === 'leads' ? 'this.removeAttribute(\'data-auto\');' : '') + 'saveDraft()">';
+      var ph = PLACEHOLDER[kind] && PLACEHOLDER[kind][key] ? ' placeholder="' + esc(PLACEHOLDER[kind][key]) + '"' : '';
+      h += '<input id="i_' + key + '"' + im + dl + ph + ' enterkeyhint="next" autocomplete="off" oninput="' + (key === 'leads' ? 'this.removeAttribute(\'data-auto\');' : '') + 'saveDraft()">';
       if (opts.length) h += '<datalist id="d_' + key + '">' + opts.map(function (o) { return '<option value="' + esc(o) + '">'; }).join('') + '</datalist>';
     }
     h += '</div>';
@@ -473,7 +474,9 @@ function buildForm() {
 }
 // ───── v34 (5단계) 기본값·자동 계산 ─────
 // 새 기록일 때 비어 있으면 채움 (작업자가 바꿀 수 있음). 고치기·복사할 때는 원래 값 그대로
-var DEFAULTS = { motor: { poles: '4', volt: '440', hz: '60', wireKind: 'AIW', strands: '0', series: '1' } };
+var DEFAULTS = { motor: { customer: '포스코', poles: '4', volt: '440', hz: '60', wireKind: 'AIW', strands: '0', series: '1' } };
+// v39: 빈칸 흐린 안내 글자
+var PLACEHOLDER = { motor: { maker: '예) 현대' }, coil: { maker: '예) 현대' } };
 function applyDefaults() {
   var D = DEFAULTS[kind] || {};
   Object.keys(D).forEach(function (k) { var el = document.getElementById('i_' + k); if (el && !el.value) el.value = D[k]; });
@@ -520,7 +523,7 @@ function leadsAuto() {
   var c = (document.getElementById('i_conn') || {}).value || '', el = document.getElementById('i_leads'); if (!el) return;
   if (!c) return;
   var n = /Y\s*-\s*Δ/i.test(c) ? '6' : /[YΔ]/i.test(c) ? '3' : '';
-  if (n && (!el.value || el.getAttribute('data-auto') === el.value)) { el.value = n; el.setAttribute('data-auto', n); }
+  if (n && (!el.value || el.getAttribute('data-auto') === el.value)) { el.value = n; el.setAttribute('data-auto', n); pickRefresh('leads'); }
 }
 // 키패드의 '다음'(엔터)으로 다음 칸
 document.addEventListener('keydown', function (e) {
