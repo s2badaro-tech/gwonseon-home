@@ -4,11 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>사무실 상황판</title>
-<!-- 6단계 사무실 상황판 v8 (2026-11-29, 인롤은 재고 0이어도 종류마다 보임, 시험 인롤 🧪) · v7 (2026-11-29, 시험(TEST) 데이터는 🧪 줄무늬로 구분, 발주서·발주 필요 수에서 뺌) · v6 (2026-11-28, ⚙ 관리에 부족 알림 메일(관리자·운영자, 대문과 같은 값) · 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<!-- 6단계 사무실 상황판 v9 (2026-11-29, 종류별 색: AIW 파랑·인버터 초록·인롤 보라·기타 회색, 부족은 빨간 테두리 ⚠, 색 설명) · v8 (2026-11-29, 인롤은 재고 0이어도 종류마다 보임, 시험 인롤 🧪) · v7 (2026-11-29, 시험(TEST) 데이터는 🧪 줄무늬로 구분, 발주서·발주 필요 수에서 뺌) · v6 (2026-11-28, ⚙ 관리에 부족 알림 메일(관리자·운영자, 대문과 같은 값) · 작업 진행: 코일기록·코일등록 완료를 한 줄에 같이): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
 <link rel="icon" href="../icon-192.png">
 <meta name="theme-color" content="#1f6fb2">
 <style>
-  :root { --bg:#eef1f5; --card:#fff; --ink:#1d2430; --sub:#5b6677; --line:#d5dae1; --blue:#1f6fb2; --blue2:#6fa8dc; --org:#d9730d; --grn:#2e7d32; --red:#c62828; }
+  :root { --bg:#eef1f5; --card:#fff; --ink:#1d2430; --sub:#5b6677; --line:#d5dae1; --blue:#1f6fb2; --blue2:#6fa8dc; --org:#d9730d; --grn:#2e7d32; --red:#c62828; --aiw:#1f6fb2; --inv:#2e9d5a; --inr:#7b4fb3; --etc:#8a94a3; }
   * { box-sizing:border-box; }
   /* 화면 크기에 맞춰 모든 글씨·칸이 같이 커짐 (1920×1080 기준 1rem ≈ 19px) */
   html { font-size:min(1vw, 1.78vh); }
@@ -45,8 +45,9 @@
   .bars { flex:1; display:flex; align-items:flex-end; gap:.35rem; min-height:0; padding-top:1.6rem; border-bottom:2px solid var(--line); position:relative; }
   .bar { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; min-width:0; position:relative; }
   .bar .col { width:78%; background:var(--blue); border-radius:.3rem .3rem 0 0; position:relative; }
-  .bar.inv .col { background:var(--blue2); }
-  .bar.low .col { background:var(--red); }
+  .bar.inv .col { background:var(--inv); }
+  .bar.etc .col { background:var(--etc); }
+  .bar.low .col { outline:.22rem solid var(--red); outline-offset:.1rem; }
   .bar.test .col { background:repeating-linear-gradient(45deg,#c9a227 0 .35rem,#e8d27a .35rem .7rem); }
   .bar.test .val { color:#9a7a10; }
   .xl div.test { color:#9a7a10; }
@@ -56,12 +57,17 @@
   .bar .safe { position:absolute; left:4%; right:4%; border-top:2px dashed var(--org); }
   .xl { display:flex; gap:.35rem; }
   .xl div { flex:1; text-align:center; font-size:.95rem; font-weight:700; min-width:0; white-space:nowrap; overflow:hidden; }
-  .xl div.inv { color:#3d7fb8; }
+  .xl div.inv { color:var(--inv); }
+  .xl div.etc { color:var(--etc); }
+  .klg { font-size:.95rem; color:var(--sub); display:flex; gap:1rem; flex-wrap:wrap; margin-top:.25rem; }
+  .klg i { display:inline-block; width:.95rem; height:.95rem; border-radius:.2rem; vertical-align:-.12rem; margin-right:.25rem; }
   .legend { font-size:1rem; color:var(--sub); display:flex; gap:1.2rem; flex-wrap:wrap; margin-top:.35rem; }
   .legend i { display:inline-block; width:1rem; height:1rem; border-radius:.2rem; vertical-align:-.15rem; margin-right:.3rem; }
   .inroll { font-size:1.15rem; margin-top:.35rem; }
-  .inroll b { font-size:1.3rem; }
-  .inroll .low { color:var(--red); }
+  .inroll b { font-size:1.3rem; color:var(--inr); }
+  .inroll > span { display:inline-block; border:2px solid transparent; border-radius:.4rem; padding:0 .3rem; }
+  .inroll .low { border-color:var(--red); }
+  .inroll .low::after { content:' ⚠'; color:var(--red); font-weight:700; }
   /* 월별 사용량 (쌓은 막대) */
   .mbig { font-size:2.4rem; font-weight:800; }
   .mbig small { font-size:1.2rem; color:var(--sub); font-weight:400; margin-left:.5rem; }
@@ -148,10 +154,11 @@
   </div>
   <div class="row r1" id="r1">
     <div class="card" id="cStock">
-      <h2>규격별 재고 <small>AIW·인버터 · 주황 점선 = 알림 기준 · 빨강 = 기준 아래</small></h2>
+      <h2>규격별 재고 <small>주황 점선 = 알림 기준 · 빨간 테두리 ⚠ = 기준 아래</small></h2>
       <div class="bars" id="bars"></div>
       <div class="xl" id="xl"></div>
       <div class="inroll" id="inroll"></div>
+      <div class="klg"><span><i style="background:var(--aiw)"></i>AIW</span><span><i style="background:var(--inv)"></i>인버터</span><span><i style="background:var(--inr)"></i>🌀 인롤</span><span><i style="background:var(--etc)"></i>기타</span><span><i style="background:repeating-linear-gradient(45deg,#c9a227 0 .3rem,#e8d27a .3rem .6rem)"></i>🧪 시험</span></div>
     </div>
     <div class="card" id="cMonthly">
       <h2>월별 사용량</h2>
@@ -209,6 +216,8 @@ function specNum(s) { var n = parseFloat(String(s).replace(/[^0-9.]/g, '')); ret
 // v7: 시험용(TEST) 코일·작업 — 보이게 두되 구분. 발주서·발주 필요 수·소진 예측에는 안 넣음
 function isTest(s) { return String(s && s.kind || '').toUpperCase() === 'TEST'; }
 function isTestNo(no) { return /^TEST-/i.test(String(no || '')); }
+// v9: 종류별 색 — AIW 파랑, 인버터 초록, 인롤 보라, 기타 회색 (부족은 빨간 테두리 ⚠)
+function kindCls(s) { var k = String(s.kind || '').toUpperCase(); return k === 'AIW' ? '' : s.kind === '인버터' ? 'inv' : 'etc'; }
 function lows() { return (D.stock || []).filter(function (s) { return s.low && !isTest(s); }); }
 function C() { return D.cfg || {}; }
 function todayStr() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
@@ -249,13 +258,15 @@ function render() {
   var L = lows(); $('k3').innerHTML = L.length + '<small>개</small>'; $('k3box').classList.toggle('red', L.length > 0);
   // 규격별 재고 (AIW·인버터 한 그래프)
   round.sort(function (a, b) { return (KIND_ORDER[a.kind] == null ? 9 : KIND_ORDER[a.kind]) - (KIND_ORDER[b.kind] == null ? 9 : KIND_ORDER[b.kind]) || specNum(a.spec) - specNum(b.spec); });
-  var mx = Math.max.apply(null, round.map(function (s) { return Math.max(Number(s.total) || 0, Number(s.safety) || 0); }).concat([1]));
+  // v9: 높이 기준은 진짜 재고로 (시험 막대가 너무 커서 진짜 막대가 안 보이는 일 막기). 넘치는 시험 막대는 맨 위에서 자름
+  var real = round.filter(function (s) { return !isTest(s); });
+  var mx = Math.max.apply(null, (real.length ? real : round).map(function (s) { return Math.max(Number(s.total) || 0, Number(s.safety) || 0); }).concat([1]));
   $('bars').innerHTML = round.length ? round.map(function (s) {
-    var h = (Number(s.total) || 0) / mx * 88, sf = s.safety != null ? (Number(s.safety) / mx * 88) : null, inv = s.kind !== 'AIW', tt = isTest(s);
-    return '<div class="bar' + (tt ? ' test' : inv ? ' inv' : '') + (s.low && !tt ? ' low' : '') + '" title="' + esc(s.kind + ' ' + s.spec) + '"><div class="val">' + nf(s.total, 0) + '</div><div class="col" style="height:' + h + '%"></div>' +
+    var h = Math.min(92, (Number(s.total) || 0) / mx * 88), sf = s.safety != null ? (Number(s.safety) / mx * 88) : null, tt = isTest(s), kc = kindCls(s);
+    return '<div class="bar' + (tt ? ' test' : kc ? ' ' + kc : '') + (s.low && !tt ? ' low' : '') + '" title="' + esc(s.kind + ' ' + s.spec) + '"><div class="val">' + (s.low && !tt ? '⚠' : '') + nf(s.total, 0) + '</div><div class="col" style="height:' + h + '%"></div>' +
       (sf != null ? '<div class="safe" style="bottom:' + sf + '%"></div>' : '') + '</div>';
   }).join('') : '<div class="empty">아직 재고가 없습니다</div>';
-  $('xl').innerHTML = round.map(function (s) { return '<div class="' + (isTest(s) ? 'test' : s.kind !== 'AIW' ? 'inv' : '') + '">' + esc(s.spec) + (s.kind !== 'AIW' ? '<br>' + (isTest(s) ? '🧪TEST' : esc(s.kind === '인버터' ? '인버터' : s.kind)) : '') + '</div>'; }).join('');
+  $('xl').innerHTML = round.map(function (s) { return '<div class="' + (isTest(s) ? 'test' : kindCls(s)) + '">' + esc(s.spec) + (s.kind !== 'AIW' ? '<br>' + (isTest(s) ? '🧪TEST' : esc(s.kind === '인버터' ? '인버터' : s.kind)) : '') + '</div>'; }).join('');
   // v8: 인롤은 재고가 0이어도 종류마다 한 줄에 보임 (진짜 먼저, 시험은 🧪)
   var real = inr.filter(function (s) { return !isTest(s); }), tst = inr.filter(isTest);
   (D.inrollTypes || []).forEach(function (t) { if (!real.some(function (s) { return s.type === t.type; })) real.push({ type: t.type, unit: t.unit, units: 0, total: 0, low: t.safety != null && t.safety > 0 }); });
