@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>사무실 상황판</title>
-<!-- 6단계 사무실 상황판 v4 (2026-11-28, ⚙ 관리 메뉴 쉬운 말): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
+<!-- 6단계 사무실 상황판 v5 (2026-11-28, 작업 진행: 코일기록·코일등록 완료): PC·큰 모니터용. 스크롤 없이 한 화면, 1분마다 새로고침, 화면 크기에 맞춰 글씨가 커짐. 보기만 하는 화면 -->
 <link rel="icon" href="../icon-192.png">
 <meta name="theme-color" content="#1f6fb2">
 <style>
@@ -78,6 +78,9 @@
   .stk { font-size:1.4rem; padding:.6rem .8rem; border-radius:.7rem; background:#f4f7fb; cursor:pointer; border:2px solid var(--line); text-align:left; width:100%; }
   .stk b.bad { color:var(--red); }
   .stk b.ok { color:var(--grn); }
+  .st { font-weight:800; }
+  .st.ok { color:var(--grn); }
+  .st.no { color:var(--org); }
   .soon { font-size:1.2rem; margin-top:.6rem; overflow:hidden; }
   .soon div { padding:.15rem 0; border-bottom:1px solid #edf0f3; display:flex; justify-content:space-between; }
   .soon .w { font-weight:800; }
@@ -153,8 +156,8 @@
   </div>
   <div class="row r2" id="r2">
     <div class="card" id="cRecent">
-      <h2>최근 작업</h2>
-      <div style="flex:1;min-height:0;overflow:hidden"><table><thead><tr><th>작업번호</th><th>날짜</th><th>작업자</th><th>kW</th><th style="text-align:right">코일 사용량</th><th>선경</th></tr></thead><tbody id="recent"></tbody></table></div>
+      <h2>작업 진행 <small>작업번호로 맞춤 · 작업기록 앱에 기록 → 코일 앱에서 코일 쓰기</small></h2>
+      <div style="flex:1;min-height:0;overflow:hidden"><table><thead><tr><th>작업번호</th><th>날짜</th><th>작업자</th><th>kW</th><th>코일기록</th><th>코일등록</th><th>선경</th></tr></thead><tbody id="recent"></tbody></table></div>
     </div>
     <div class="card" id="cSide">
       <h2 id="sideH">재고조사 · 소진 예측</h2>
@@ -260,9 +263,10 @@ function render() {
   // 최근 작업
   var R = D.recent || [];
   $('recent').innerHTML = R.length ? R.map(function (j) {
-    var p = String(j.target).split(/\s+/);
-    return '<tr><td><b>' + esc(p[0]) + '</b> <span style="color:var(--sub)">' + esc(p.slice(1).join(' ')) + '</span></td><td>' + esc(String(j.at).slice(5, 10)) + '</td><td>' + esc(j.worker) + '</td><td>' + esc(j.kw) + '</td><td class="n">' + nf(j.used) + ' kg</td><td style="color:var(--sub)">' + esc(j.specs) + '</td></tr>';
-  }).join('') : '<tr><td colspan="6" class="empty">아직 코일 사용 기록이 없습니다</td></tr>';
+    return '<tr><td><b>' + esc(j.no) + '</b> <span style="color:var(--sub)">' + esc(j.desc) + '</span></td><td>' + esc(String(j.at).slice(5, 10)) + '</td><td>' + esc(j.worker) + '</td><td>' + esc(j.kw) + '</td>' +
+      '<td>' + (j.rec ? '<span class="st ok">✅ 완료</span>' : '<span class="st no">⏳ 아직</span>') + '</td>' +
+      '<td>' + (j.coil ? '<span class="st ok">✅ 완료</span> <b>' + nf(j.used) + 'kg</b>' : '<span class="st no">⏳ 아직</span>') + '</td><td style="color:var(--sub)">' + esc(j.specs) + '</td></tr>';
+  }).join('') : '<tr><td colspan="7" class="empty">아직 작업 기록이 없습니다</td></tr>';
   // 재고조사 한 줄
   var k = D.stk || {}, mn = k.month ? Number(k.month.slice(5)) + '월' : '';
   var line = k.total ? (k.done >= k.total ? mn + ' 재고조사 <b class="ok">완료</b>' : mn + ' 재고조사 ' + k.done + ' / ' + k.total + '개 확인') +
@@ -315,7 +319,7 @@ function openAdmin() {
   var h = '<h3>⚙ 상황판 관리 <small style="font-size:1rem;color:var(--sub);font-weight:400">코일 관리자·운영자만</small></h3>';
   h += '<section><span class="fl">📢 맨 위 알림 글 <small style="font-weight:400;color:var(--sub)">상황판 맨 위에 크게 뜸</small></span><input type="text" id="aNotice" maxlength="80" style="width:100%" placeholder="예) 12월 3일 오후 재고조사" value="' + esc(c.notice || '') + '">' +
     '<div style="margin-top:.4rem">이 날까지 보이기 (비우면 계속) <input type="date" id="aUntil" value="' + esc(c.noticeUntil || '') + '"> <button type="button" style="background:#eef1f5;padding:.3rem .8rem" onclick="clearNotice()">알림 글 지우기</button></div></section>';
-  h += '<section><span class="fl">👁 상황판에 보일 것 <small style="font-weight:400;color:var(--sub)">파란색 = 보임, 눌러서 켜고 끄기</small></span><div class="opts" id="aShow">' + [['stock', '규격별 재고'], ['monthly', '월별 사용량'], ['recent', '최근 작업'], ['stk', '재고조사'], ['soon', '언제 다 쓸지']].map(function (o) { return '<button type="button" data-v="' + o[0] + '"' + (sh[o[0]] !== false ? ' class="on"' : '') + ' onclick="this.classList.toggle(\'on\')">' + o[1] + '</button>'; }).join('') + '</div></section>';
+  h += '<section><span class="fl">👁 상황판에 보일 것 <small style="font-weight:400;color:var(--sub)">파란색 = 보임, 눌러서 켜고 끄기</small></span><div class="opts" id="aShow">' + [['stock', '규격별 재고'], ['monthly', '월별 사용량'], ['recent', '작업 진행'], ['stk', '재고조사'], ['soon', '언제 다 쓸지']].map(function (o) { return '<button type="button" data-v="' + o[0] + '"' + (sh[o[0]] !== false ? ' class="on"' : '') + ' onclick="this.classList.toggle(\'on\')">' + o[1] + '</button>'; }).join('') + '</div></section>';
   h += '<section><span class="fl">🔔 부족 알림 무게 (kg) <small style="font-weight:400;color:var(--sub)">남은 무게가 이보다 적으면 빨간색 · 코일 앱 관리 탭과 같은 값 · 비우면 알림 없음</small></span><table>' + T.map(function (t, i) {
     return '<tr><td>' + esc(t.name === '일반 환선' ? '일반 환선 (AIW·인버터 모든 규격)' : t.name) + (t.unit ? ' <small style="color:var(--sub)">1대 ' + t.unit + 'kg</small>' : '') + '</td><td><input type="number" min="0" step="1" style="width:8rem" data-al="' + i + '" value="' + (t.alert == null ? '' : t.alert) + '" placeholder="알림 없음"> kg</td></tr>';
   }).join('') + '</table></section>';
