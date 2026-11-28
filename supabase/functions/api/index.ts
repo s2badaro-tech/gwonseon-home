@@ -448,7 +448,7 @@ const SPECS_DEF: any = {
   AIW: ['0.1', '0.12', '0.15', '0.18', '0.2', '0.23', '0.25', '0.28', '0.3', '0.32', '0.35', '0.37', '0.4', '0.45', '0.5', '0.55', '0.6', '0.65', '0.7', '0.75', '0.8', '0.85', '0.9', '0.95', '1.0', '1.05', '1.1', '1.15', '1.2', '1.25', '1.3', '1.35', '1.4', '1.45', '1.5', '1.6', '1.7', '1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'],
   '인버터': ['0.8', '0.9', '1.1', '1.2', '1.3', '1.4'],
 };
-const CO_VERSION = 'v64';
+const CO_VERSION = 'v65';
 const QR_APP_URL = 'https://s2badaro-tech.github.io/gwonseon-home/coil/';
 const COIL_DEF = { safety: 50, mail: '', kinds: KIND_DEF, specsBy: SPECS_DEF, locs: [], specs: [], prefix: 'C-', emptyKg: 0.2, defTare: 1, bobbinTxt: '' };
 async function coSet() {
@@ -823,23 +823,25 @@ async function board(token: any) {
   const wr: any[] = await q(db.from('work_records').select('*').gte('recorded_at', from).order('seq', { ascending: false }).limit(400));
   wr.forEach((r) => {
     const no = vget(r, 'ledgerNo').trim(); if (!no) return;
-    const j = J[no] = J[no] || { no, at: '', desc: '', workers: [], kw: '', rec: '', used: null, specs: {} };
+    const j = J[no] = J[no] || { no, at: '', desc: '', workers: [], rw: [], cw: [], kw: '', rec: '', used: null, specs: {} };
     if (!j.rec || r.recorded_at > j.rec) j.rec = r.recorded_at;
     if (r.recorded_at > j.at) j.at = r.recorded_at;
     if (!j.desc) j.desc = (r.kind === 'motor' ? ['customer', 'target'] : ['maker', 'model']).map((k) => vget(r, k).trim()).filter(String).join(' ');
     if (!j.kw) j.kw = vget(r, 'kw').trim();
     if (r.author && j.workers.indexOf(r.author) < 0) j.workers.push(r.author);
+    if (r.author && j.rw.indexOf(r.author) < 0) j.rw.push(r.author);
   });
   (await history({ type: '출고', from }, 3000)).forEach((o) => {
     if (o.cancelled) return; const no = jno(o.target); if (!no) return;
-    const j = J[no] = J[no] || { no, at: '', desc: String(o.target).trim().split(/\s+/).slice(1).join(' '), workers: [], kw: '', rec: '', used: null, specs: {} };
+    const j = J[no] = J[no] || { no, at: '', desc: String(o.target).trim().split(/\s+/).slice(1).join(' '), workers: [], rw: [], cw: [], kw: '', rec: '', used: null, specs: {} };
     if (o.at > j.at) j.at = o.at;
     if (!j.kw && o.kw) j.kw = o.kw;
     if (o.worker && j.workers.indexOf(o.worker) < 0) j.workers.push(o.worker);
+    if (o.worker && j.cw.indexOf(o.worker) < 0) j.cw.push(o.worker);
     const u = -num(o.delta); if (isFinite(u)) { j.used = r2((j.used || 0) + u); j.specs[o.spec] = r2((j.specs[o.spec] || 0) + u); }
   });
   const recent = Object.keys(J).map((k) => J[k]).sort((x, y) => (x.at < y.at ? 1 : -1)).slice(0, 15).map((j) => ({
-    no: j.no, desc: j.desc, at: j.at, worker: j.workers.join(', '), kw: j.kw, rec: !!j.rec, coil: j.used !== null, used: j.used,
+    no: j.no, desc: j.desc, at: j.at, worker: j.workers.join(', '), recBy: j.rw.join(', '), coilBy: j.cw.join(', '), kw: j.kw, rec: !!j.rec, coil: j.used !== null, used: j.used,
     specs: Object.keys(j.specs).map((s) => s + ' ' + j.specs[s] + 'kg').join(', ') }));
   // 재고조사 이번 달
   const st = await CO_ADMIN.stocktake(m, {});
