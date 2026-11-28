@@ -84,6 +84,12 @@
   .qbadge { display:inline-block; margin-left:8px; font-size:13px; background:#fff4e5; color:#8a4b00; border-radius:10px; padding:1px 8px; vertical-align:2px; }
   .f.rw input, .f.rw select { border-color:#e08a00; background:#fffaf0; }
   .rhint { font-size:13px; color:#b26a00; margin:3px 2px 0; }
+  .lhint { font-size:13px; font-weight:400; color:var(--mut, #777); }
+  .wsum.bad { color:#b26a00; }
+  .phbtns { display:grid; grid-template-columns:2fr 1fr; gap:8px; margin-top:8px; }
+  .phbtns button { min-height:60px; font-size:19px; font-weight:700; border-radius:12px; border:1px solid var(--pri); background:var(--pri2); color:var(--pri); }
+  .phbtns button.big { background:var(--pri); color:#fff; }
+  .phnote { font-size:16px; font-weight:700; color:var(--pri); }
   .hist { margin-top:8px; font-size:14px; }
   .hist div { border-top:1px dashed #e3e7ee; padding:5px 0; }
   .lock { font-size:13px; color:var(--sub); margin-top:8px; }
@@ -165,8 +171,12 @@
     <div id="editBar" class="editbar hide"><button onclick="resetForm()">취소</button><span id="editMsg">기존 기록을 수정하는 중입니다.</span></div>
     <form id="form" class="grid" onsubmit="return false"></form>
     <div class="photo">
-      <label for="photoIn">📷 사진 (명판·코일, 선택)</label>
-      <input type="file" id="photoIn" accept="image/*" onchange="pickPhoto(this)">
+      <div class="phnote">📷 명판, 코일, 특이사항 남겨두세요!</div>
+      <!-- v40: 촬영 버튼 = 휴대폰 카메라 앱을 바로 엶(capture). 실시간 카메라가 아니라 막힐 일이 적음 -->
+      <input type="file" id="photoIn" accept="image/*" capture="environment" onchange="pickPhoto(this)" style="display:none">
+      <input type="file" id="photoPick" accept="image/*" onchange="pickPhoto(this)" style="display:none">
+      <div class="phbtns"><button type="button" class="big" id="camBtn" onclick="document.getElementById('photoIn').click()">📷 사진 촬영</button><button type="button" onclick="document.getElementById('photoPick').click()">🖼️ 앨범</button></div>
+      <div class="note" id="photoMsg"></div>
       <img id="photoPrev" class="hide" alt="">
     </div>
     <button class="btn" id="saveBtn" onclick="save()">저장하기</button>
@@ -423,7 +433,7 @@ function buildForm() {
     var wide = (typ === 'area' || typ === 'wire' || typ === 'pick' || typ === 'slots' || typ === 'pitch' || typ === 'step' || key === 'customer' || key === 'model' || key === 'bobbin' || key === 'memo') ? ' wide' : '';
     var cond = f[4] ? ' data-when="' + esc(f[4].when) + '" data-is="' + esc(f[4].is) + '"' : '';
     if (GUIDE_AT[key]) h += '<div class="f wide"' + cond + '><button type="button" class="gbtn" onclick="showGuide(\'' + GUIDE_AT[key] + '\')">📏 치수 재는 법 (그림 보기)</button></div>';
-    h += '<div class="f' + wide + '"' + cond + '><label for="i_' + key + '">' + esc(lab) + '</label>';
+    h += '<div class="f' + wide + '"' + cond + '><label for="i_' + key + '">' + esc(lab) + (LABEL_HINT[key] ? ' <span class="lhint">' + esc(LABEL_HINT[key]) + '</span>' : '') + '</label>';
     if (typ === 'area') h += '<textarea id="i_' + key + '" oninput="saveDraft()"></textarea>';
     else if (typ === 'wire') { // v36: 선경 버튼 자리에 숫자 키패드 (1~0 · × .) — 휴대폰 키패드 안 띄움
       h += '<input id="i_' + key + '" inputmode="none" autocomplete="off" placeholder="아래 숫자를 누르세요 예) 1.2×8" oninput="wireRefresh(\'' + key + '\');saveDraft()">' +
@@ -465,8 +475,9 @@ function buildForm() {
   document.getElementById('form').innerHTML = h;
   document.getElementById('editBar').classList.add('hide');
   document.getElementById('saveBtn').textContent = '저장하기';
-  document.getElementById('photoIn').value = '';
+  document.getElementById('photoIn').value = ''; document.getElementById('photoPick').value = '';
   document.getElementById('photoPrev').classList.add('hide');
+  document.getElementById('photoMsg').textContent = ''; document.getElementById('camBtn').textContent = '📷 사진 촬영';
   loadDraft();
   applyDefaults();
   applyShow();
@@ -476,6 +487,7 @@ function buildForm() {
 // 새 기록일 때 비어 있으면 채움 (작업자가 바꿀 수 있음). 고치기·복사할 때는 원래 값 그대로
 var DEFAULTS = { motor: { customer: '포스코', poles: '4', volt: '440', hz: '60', wireKind: 'AIW', strands: '0', series: '1' } };
 // v39: 빈칸 흐린 안내 글자
+var LABEL_HINT = { maker: '모르면 넘어가세요' };
 var PLACEHOLDER = { motor: { maker: '예) 현대' }, coil: { maker: '예) 현대' } };
 function applyDefaults() {
   var D = DEFAULTS[kind] || {};
@@ -544,6 +556,11 @@ function wireParse(s) {
   });
   return out;
 }
+// v40: 선경 단위 확인 (0.05 단위). 안 맞으면 경고만, 저장은 적은 그대로
+var WIRE_STEP = 0.05;
+function wireOdd(v) {
+  return wireParse(v).filter(function (e) { if (e[1] === null) return false; var d = parseFloat(e[0]), q = d / WIRE_STEP; return Math.abs(q - Math.round(q)) > 1e-6; }).map(function (e) { return e[0]; });
+}
 function wkNow() { var e = document.getElementById('i_wireKind'); return e ? e.value.trim() : ''; }
 function isInroll() { return kind === 'motor' && wkNow() === '인롤'; }
 function wireKey(key, c) {
@@ -561,10 +578,13 @@ function wireRefresh(key) {
   var v = document.getElementById('i_' + key).value, n = 0, a = 0, ir = key === 'wire' && isInroll();
   if (ir) {
     String(v).split(/[,，\/+]/).forEach(function (p) { var m = p.trim().match(/^([0-9]*\.?[0-9]+)\s*(?:[×xX*]\s*([0-9]*\.?[0-9]+))?$/); if (m) a += m[2] ? parseFloat(m[1]) * parseFloat(m[2]) : Math.PI / 4 * Math.pow(parseFloat(m[1]), 2); });
+    el.classList.remove('bad');
     el.textContent = a ? ('인롤 사이즈 · 가닥수 0 · 단면적 ' + a.toFixed(2) + ' mm²') : '';
   } else {
     wireParse(v).forEach(function (e) { if (e[1] !== null) { n += e[1]; a += Math.PI / 4 * Math.pow(parseFloat(e[0]), 2) * e[1]; } });
-    el.textContent = n ? ('총 ' + n + '가닥 · 단면적 합계 ' + a.toFixed(3) + ' mm²') : '';
+    var odd = (kind !== 'motor' || /[.×]$/.test(v.trim())) ? [] : wireOdd(v); // 전자브레이크는 가는 선이 많아 단위 확인 안 함
+    el.classList.toggle('bad', !!odd.length);
+    el.textContent = odd.length ? ('⚠ ' + odd[0] + ' — ' + WIRE_STEP + ' 단위가 아니에요 (그래도 저장은 됨)') : n ? ('총 ' + n + '가닥 · 단면적 합계 ' + a.toFixed(3) + ' mm²') : '';
   }
   var st = document.getElementById('i_strands');
   if (st && key === 'wire') {
@@ -646,6 +666,8 @@ function pickPhoto(inp) {
       var url = c.toDataURL('image/jpeg', 0.82);
       photo = { name: 'photo.jpg', type: 'image/jpeg', data: url.split(',')[1] };
       var pv = document.getElementById('photoPrev'); pv.src = url; pv.classList.remove('hide');
+      document.getElementById('photoMsg').textContent = '✅ 사진이 들어갔어요. [저장하기]를 누르면 기록과 같이 저장됩니다.';
+      document.getElementById('camBtn').textContent = '📷 다시 찍기';
     };
     img.src = rd.result;
   };
@@ -767,6 +789,7 @@ function labelOf(k, key) { var f = CFG.kinds[k].fields.filter(function (x) { ret
 function rangeMsg(k, key, val) {
   var r = rangeOf(k, key); if (!r || val === '' || val == null) return '';
   if (key === 'wire' && k === 'motor' && wkNow() === '인롤') return ''; // 인롤 사이즈는 범위 안 봄
+  if (key === 'wire' && k === 'motor') { var odd = wireOdd(val); if (odd.length) return labelOf(k, key) + ': ' + odd.join(', ') + ' (' + WIRE_STEP + ' 단위가 아님)'; }
   var nums = key === 'wire' ? wireParse(val).map(function (e) { return parseFloat(e[0]); }) : [parseFloat(String(val).replace(/,/g, ''))];
   var bad = nums.filter(function (n) { return isNaN(n) || n < r[0] || n > r[1]; });
   if (!bad.length) return '';
